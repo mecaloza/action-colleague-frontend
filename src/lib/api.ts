@@ -16,6 +16,49 @@ function getToken(): string | null {
   return localStorage.getItem("ac_token");
 }
 
+function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("ac_refresh_token");
+}
+
+function clearAuth() {
+  localStorage.removeItem("ac_token");
+  localStorage.removeItem("ac_refresh_token");
+  localStorage.removeItem("ac_user");
+}
+
+// Module-level promise to deduplicate concurrent refresh calls
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) throw new Error("No refresh token");
+
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!res.ok) {
+      clearAuth();
+      throw new Error("Refresh failed");
+    }
+
+    const data = await res.json();
+    localStorage.setItem("ac_token", data.access_token);
+    localStorage.setItem("ac_refresh_token", data.refresh_token);
+    return data.access_token as string;
+  })().finally(() => {
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+}
+
 async function fetchAPI<T>(
   endpoint: string,
   options?: RequestInit & { skipAuth?: boolean }
@@ -33,6 +76,30 @@ async function fetchAPI<T>(
     ...options,
     headers,
   });
+
+  // On 401, attempt token refresh and retry once
+  if (res.status === 401 && !options?.skipAuth) {
+    try {
+      const newToken = await refreshAccessToken();
+      headers["Authorization"] = `Bearer ${newToken}`;
+      const retryRes = await fetch(url, { ...options, headers });
+      if (!retryRes.ok) {
+        const errorBody = await retryRes.text().catch(() => "");
+        throw new Error(
+          `API Error: ${retryRes.status} ${retryRes.statusText} ${errorBody}`
+        );
+      }
+      return retryRes.json();
+    } catch {
+      // Refresh failed — redirect to login
+      clearAuth();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+      throw new Error("Session expired");
+    }
+  }
+
   if (!res.ok) {
     const errorBody = await res.text().catch(() => "");
     throw new Error(
@@ -59,16 +126,39 @@ export const api = {
         throw new Error(`Login failed: ${res.status}`);
       }
       const tokenData = await res.json();
-      // Store token temporarily to fetch user profile
+      // Store tokens
       localStorage.setItem("ac_token", tokenData.access_token);
+      if (tokenData.refresh_token) {
+        localStorage.setItem("ac_refresh_token", tokenData.refresh_token);
+      }
       // Fetch full user data
       const meRes = await fetch(`${API_BASE}/auth/me`, {
         headers: { "Authorization": `Bearer ${tokenData.access_token}` },
       });
       const user = meRes.ok ? await meRes.json() : { id: tokenData.user_id, role: tokenData.role, name: "", email: data.email };
-      return { access_token: tokenData.access_token, token_type: "bearer", user };
+      return { access_token: tokenData.access_token, refresh_token: tokenData.refresh_token, token_type: "bearer", user };
     } catch (error) {
       throw error;
+    }
+  },
+
+  logout: async () => {
+    try {
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        await fetch(`${API_BASE}/auth/logout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      }
+    } catch {
+      // Best-effort server-side revocation
+    } finally {
+      clearAuth();
     }
   },
 
@@ -285,4 +375,3 @@ export const api = {
   getCollaboratorDashboard: (userId: string) =>
     fetchAPI<any>(`/dashboards/collaborator/${userId}`),
 };
-

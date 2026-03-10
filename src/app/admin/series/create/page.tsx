@@ -67,11 +67,9 @@ interface Episode {
 }
 
 interface GeneratedScript {
-  series: {
-    title: string;
-    description: string;
-    category: string;
-  };
+  title: string;
+  description: string;
+  category: string;
   episodes: Episode[];
 }
 
@@ -182,23 +180,14 @@ export default function CreateSeriesPage() {
 
   const triggerGeneration = async (id: string, token: string) => {
     try {
-      // Trigger video and audio generation in parallel
-      await Promise.all([
-        fetch(`${API_BASE}/series/ai/generate-videos/${id}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-        fetch(`${API_BASE}/series/ai/generate-audio/${id}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-      ]);
+      // Trigger full pipeline: video + audio + merge (all in one)
+      await fetch(`${API_BASE}/series/ai/generate-videos/${id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
     } catch (err) {
       console.error("Error triggering generation:", err);
     }
@@ -426,6 +415,7 @@ export default function CreateSeriesPage() {
                 disabled={
                   !title || !caseDescription || generatingScript
                 }
+                size="lg"
               >
                 {generatingScript ? (
                   <>
@@ -435,10 +425,35 @@ export default function CreateSeriesPage() {
                 ) : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Generar Guión
+                    Generar Guión con IA
                   </>
                 )}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+      )}
+
+      {/* Generating overlay */}
+      {generatingScript && (
+        <Card className="border-violet-500/30 bg-violet-500/5">
+          <CardContent className="py-12 flex flex-col items-center gap-4">
+            <div className="relative">
+              <div className="h-16 w-16 rounded-full border-4 border-violet-500/20 border-t-violet-500 animate-spin" />
+              <Sparkles className="h-6 w-6 text-violet-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+            </div>
+            <h3 className="text-lg font-semibold text-violet-300">
+              Generando guión con IA...
+            </h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md">
+              Estamos creando {numEpisodes} episodios con escenas cinematográficas, 
+              prompts de video y narración. Esto puede tomar 15-30 segundos.
+            </p>
+            <div className="flex gap-1 mt-2">
+              <div className="h-2 w-2 rounded-full bg-violet-400 animate-bounce" style={{animationDelay: '0ms'}} />
+              <div className="h-2 w-2 rounded-full bg-violet-400 animate-bounce" style={{animationDelay: '150ms'}} />
+              <div className="h-2 w-2 rounded-full bg-violet-400 animate-bounce" style={{animationDelay: '300ms'}} />
             </div>
           </CardContent>
         </Card>
@@ -608,18 +623,18 @@ export default function CreateSeriesPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-muted-foreground">Título</p>
-                  <p className="font-medium">{generatedScript.series.title}</p>
+                  <p className="font-medium">{generatedScript.title}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Categoría</p>
                   <Badge variant="secondary">
-                    {generatedScript.series.category}
+                    {generatedScript.category}
                   </Badge>
                 </div>
                 <div className="col-span-2">
                   <p className="text-xs text-muted-foreground">Descripción</p>
                   <p className="text-sm text-muted-foreground">
-                    {generatedScript.series.description}
+                    {generatedScript.description}
                   </p>
                 </div>
               </div>

@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Card,
@@ -129,11 +130,7 @@ export default function SeriesDetailPage() {
   const [regeneratingVideos, setRegeneratingVideos] = useState(false);
   const [regeneratingAudio, setRegeneratingAudio] = useState(false);
 
-  useEffect(() => {
-    fetchSeries();
-  }, [id]);
-
-  const fetchSeries = async () => {
+  const fetchSeries = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/series/ai/${id}`, {
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -146,7 +143,12 @@ export default function SeriesDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  useEffect(() => {
+    fetchSeries();
+  }, [fetchSeries]);
 
   const toggleEpisode = (idx: number) => {
     setExpandedEpisodes((prev) => {
