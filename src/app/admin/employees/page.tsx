@@ -32,6 +32,7 @@ import {
   UserCheck,
   Loader2,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type FormMode = "create" | "edit";
 
@@ -56,6 +57,7 @@ const emptyForm: UserForm = {
 };
 
 export default function AdminEmployeesPage() {
+  const t = useTranslations("adminEmployees");
   const [users, setUsers] = useState<User[]>([]);
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -143,7 +145,7 @@ export default function AdminEmployeesPage() {
       await loadUsers();
     } catch (err) {
       setFormError(
-        err instanceof Error ? err.message : "Failed to save user"
+        err instanceof Error ? err.message : t("errors.failedSave")
       );
     } finally {
       setSaving(false);
@@ -171,21 +173,21 @@ export default function AdminEmployeesPage() {
     <div className="space-y-6 animate-slide-up">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">User Management</h1>
+          <h1 className="text-3xl font-bold">{t("title")}</h1>
           <p className="text-muted-foreground">
-            Create, edit, and manage user accounts
+            {t("subtitle")}
           </p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          Create User
+          {t("createUser")}
         </Button>
       </div>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search users..."
+          placeholder={t("searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
@@ -196,15 +198,15 @@ export default function AdminEmployeesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead className="hidden sm:table-cell">Email</TableHead>
-              <TableHead className="hidden md:table-cell">Position</TableHead>
+              <TableHead>{t("table.name")}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t("table.email")}</TableHead>
+              <TableHead className="hidden md:table-cell">{t("table.position")}</TableHead>
               <TableHead className="hidden lg:table-cell">
-                Department
+                {t("table.department")}
               </TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead className="hidden lg:table-cell">Leader</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>{t("table.role")}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t("table.leader")}</TableHead>
+              <TableHead>{t("table.status")}</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
@@ -250,12 +252,12 @@ export default function AdminEmployeesPage() {
                   {user.is_active === false ? (
                     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-400">
                       <span className="h-2 w-2 rounded-full bg-red-500/50" />
-                      Inactive
+                      {t("status.inactive")}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400">
                       <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />
-                      Active
+                      {t("status.active")}
                     </span>
                   )}
                 </TableCell>
@@ -265,7 +267,7 @@ export default function AdminEmployeesPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => openEdit(user)}
-                      title="Edit user"
+                      title={t("actions.editUser")}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -275,8 +277,8 @@ export default function AdminEmployeesPage() {
                       onClick={() => toggleActive(user)}
                       title={
                         user.is_active === false
-                          ? "Reactivate user"
-                          : "Deactivate user"
+                          ? t("actions.reactivateUser")
+                          : t("actions.deactivateUser")
                       }
                     >
                       {user.is_active === false ? (
@@ -295,7 +297,7 @@ export default function AdminEmployeesPage() {
                   colSpan={8}
                   className="text-center text-muted-foreground py-8"
                 >
-                  No users found
+                  {t("empty")}
                 </TableCell>
               </TableRow>
             )}
@@ -309,7 +311,7 @@ export default function AdminEmployeesPage() {
           <DialogClose onClose={() => setFormOpen(false)} />
           <DialogHeader>
             <DialogTitle>
-              {formMode === "create" ? "Create User" : "Edit User"}
+              {formMode === "create" ? t("modal.createTitle") : t("modal.editTitle")}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -321,7 +323,7 @@ export default function AdminEmployeesPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="form-name">Full Name</Label>
+                <Label htmlFor="form-name">{t("form.fullName")}</Label>
                 <Input
                   id="form-name"
                   value={form.name}
@@ -332,7 +334,7 @@ export default function AdminEmployeesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="form-email">Email</Label>
+                <Label htmlFor="form-email">{t("form.email")}</Label>
                 <Input
                   id="form-email"
                   type="email"
@@ -347,7 +349,7 @@ export default function AdminEmployeesPage() {
 
             {formMode === "create" && (
               <div className="space-y-2">
-                <Label htmlFor="form-password">Password</Label>
+                <Label htmlFor="form-password">{t("form.password")}</Label>
                 <Input
                   id="form-password"
                   type="password"
@@ -363,7 +365,7 @@ export default function AdminEmployeesPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="form-position">Position</Label>
+                <Label htmlFor="form-position">{t("form.position")}</Label>
                 <Input
                   id="form-position"
                   value={form.position}
@@ -373,7 +375,7 @@ export default function AdminEmployeesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="form-department">Department</Label>
+                <Label htmlFor="form-department">{t("form.department")}</Label>
                 <Input
                   id="form-department"
                   value={form.department}
@@ -386,7 +388,7 @@ export default function AdminEmployeesPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="form-role">Role</Label>
+                <Label htmlFor="form-role">{t("form.role")}</Label>
                 <Select
                   id="form-role"
                   value={form.role}
@@ -397,12 +399,12 @@ export default function AdminEmployeesPage() {
                     }))
                   }
                 >
-                  <option value="collaborator">Collaborator</option>
-                  <option value="admin">Admin</option>
+                  <option value="collaborator">{t("role.collaborator")}</option>
+                  <option value="admin">{t("role.admin")}</option>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="form-leader">Leader</Label>
+                <Label htmlFor="form-leader">{t("form.leader")}</Label>
                 <Select
                   id="form-leader"
                   value={form.leader_id}
@@ -413,7 +415,7 @@ export default function AdminEmployeesPage() {
                     }))
                   }
                 >
-                  <option value="">No leader</option>
+                  <option value="">{t("form.noLeader")}</option>
                   {leaders.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.name} — {l.position}
@@ -429,18 +431,18 @@ export default function AdminEmployeesPage() {
                 variant="outline"
                 onClick={() => setFormOpen(false)}
               >
-                Cancel
+                {t("actions.cancel")}
               </Button>
               <Button type="submit" disabled={saving}>
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
+                    {t("actions.saving")}
                   </>
                 ) : formMode === "create" ? (
-                  "Create User"
+                  t("createUser")
                 ) : (
-                  "Save Changes"
+                  t("actions.saveChanges")
                 )}
               </Button>
             </div>

@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 // Count total people in a subtree
 function countNodes(node: OrgChartNode): number {
@@ -364,6 +365,7 @@ function OrgNode({
 
 // ─── Main Page ───────────────────────────────────────────────────────
 export default function OrgChartPage() {
+  const t = useTranslations("adminOrgChart");
   const [tree, setTree] = useState<OrgChartNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -437,9 +439,9 @@ export default function OrgChartPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Organigrama</h1>
+          <h1 className="text-3xl font-bold">{t("title")}</h1>
           <p className="text-muted-foreground">
-            {totalPeople} personas · {departments.length} departamentos
+            {t("summary", { people: totalPeople, departments: departments.length })}
           </p>
         </div>
       </div>
@@ -449,7 +451,7 @@ export default function OrgChartPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nombre, cargo, departamento..."
+            placeholder={t("searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -478,7 +480,7 @@ export default function OrgChartPage() {
             className="border-violet-500/30 text-violet-400"
           >
             <ArrowLeft className="h-3 w-3 mr-1" />
-            Ver todo
+            {t("viewAll")}
           </Button>
         )}
         {departments.map((dept) => {
@@ -512,7 +514,7 @@ export default function OrgChartPage() {
           <User className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold">Sin datos de jerarquía</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Asigna líderes directos en Empleados para construir el organigrama
+            {t("empty")}
           </p>
         </Card>
       ) : (

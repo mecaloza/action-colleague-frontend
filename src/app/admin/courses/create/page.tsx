@@ -32,6 +32,7 @@ import {
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -94,6 +95,7 @@ interface VoiceOption {
 }
 
 export default function CreateCoursePage() {
+  const t = useTranslations("adminCourseCreate");
   const router = useRouter();
   const [step, setStep] = useState(0);
 
@@ -142,13 +144,13 @@ export default function CreateCoursePage() {
         headers: { Authorization: `Bearer ${getToken()}` },
         body: formData,
       });
-      if (!res.ok) throw new Error("Analysis failed");
+      if (!res.ok) throw new Error(t("errors.analysisFailed"));
       const data = await res.json();
       setSessionId(data.session_id);
       setBreakdown(data.breakdown);
       setStep(1);
     } catch {
-      alert("Error analizando materiales. Intenta de nuevo.");
+      alert(t("errors.analysisRetry"));
     } finally {
       setAnalyzing(false);
     }
@@ -172,7 +174,7 @@ export default function CreateCoursePage() {
           language: "es",
         }),
       });
-      if (!res.ok) throw new Error("Script generation failed");
+      if (!res.ok) throw new Error(t("errors.scriptGenerationFailed"));
       const data = await res.json();
       setScripts(data.scripts);
     } catch {
@@ -259,7 +261,7 @@ export default function CreateCoursePage() {
       setCloneFile(null);
       setCloneName("");
     } catch {
-      alert("Error clonando voz");
+      alert(t("errors.cloneVoice"));
     } finally {
       setCloning(false);
     }
@@ -303,7 +305,7 @@ export default function CreateCoursePage() {
         }
       }
     } catch {
-      alert("Error generando curso");
+      alert(t("errors.generateCourse"));
     } finally {
       setGenerating(false);
     }
@@ -346,9 +348,9 @@ export default function CreateCoursePage() {
     <div className="max-w-4xl mx-auto space-y-6 animate-slide-up pb-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Crear Curso con IA</h1>
+        <h1 className="text-3xl font-bold">{t("title")}</h1>
         <p className="text-muted-foreground">
-          Wizard de creación asistida por inteligencia artificial
+          {t("subtitle")}
         </p>
       </div>
 

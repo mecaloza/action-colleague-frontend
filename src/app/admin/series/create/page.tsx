@@ -32,6 +32,7 @@ import {
   Video,
   Volume2,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -88,6 +89,7 @@ interface GenerationStatus {
 }
 
 export default function CreateSeriesPage() {
+  const t = useTranslations("adminSeriesCreate");
   const router = useRouter();
   const [step, setStep] = useState(0);
 
@@ -138,13 +140,13 @@ export default function CreateSeriesPage() {
           num_episodes: numEpisodes,
         }),
       });
-      if (!res.ok) throw new Error("Error generando guión");
+      if (!res.ok) throw new Error(t("errors.generateScript"));
       const data: GeneratedScript = await res.json();
       setGeneratedScript(data);
       setStep(1);
     } catch (err) {
       console.error(err);
-      alert("Error generando el guión. Intenta de nuevo.");
+      alert(t("errors.generateScriptRetry"));
     } finally {
       setGeneratingScript(false);
     }
@@ -163,7 +165,7 @@ export default function CreateSeriesPage() {
         },
         body: JSON.stringify(generatedScript),
       });
-      if (!res.ok) throw new Error("Error creando serie");
+      if (!res.ok) throw new Error(t("errors.createSeries"));
       const data = await res.json();
       const id = data.id || data.series_id;
       setSeriesId(id);
@@ -172,7 +174,7 @@ export default function CreateSeriesPage() {
       triggerGeneration(id, token);
     } catch (err) {
       console.error(err);
-      alert("Error creando la serie. Intenta de nuevo.");
+      alert(t("errors.createSeriesRetry"));
     } finally {
       setCreating(false);
     }
@@ -285,9 +287,9 @@ export default function CreateSeriesPage() {
     <div className="space-y-6 animate-slide-up max-w-4xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Crear Micro-Serie</h1>
+        <h1 className="text-3xl font-bold">{t("title")}</h1>
         <p className="text-muted-foreground">
-          Genera una micro-serie de episodios con IA
+          {t("subtitle")}
         </p>
       </div>
 

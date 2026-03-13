@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { api } from "@/lib/api";
 import { BookOpen, CheckCircle, Clock, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type MyCourse = {
   enrollment_id: number;
@@ -21,6 +22,7 @@ type MyCourse = {
 };
 
 export default function MyCoursesPage() {
+  const t = useTranslations("collaboratorCourses");
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +60,9 @@ export default function MyCoursesPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Mis Cursos</h1>
+        <h1 className="text-2xl font-bold">{t("title")}</h1>
         <p className="text-muted-foreground mt-1">
-          Tus cursos asignados y tu progreso
+          {t("subtitle")}
         </p>
       </div>
 
@@ -68,7 +70,7 @@ export default function MyCoursesPage() {
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No tienes cursos asignados aún.</p>
+            <p>{t("empty")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -95,12 +97,12 @@ export default function MyCoursesPage() {
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Progreso</span>
+                        <span className="text-muted-foreground">{t("progress")}</span>
                         <span className="font-medium">{c.progress_pct.toFixed(0)}%</span>
                       </div>
                       <Progress value={c.progress_pct} className="h-2" />
                       <p className="text-xs text-muted-foreground">
-                        {c.completed_modules}/{c.total_modules} módulos completados
+                        {t("completedModules", { completed: c.completed_modules, total: c.total_modules })}
                       </p>
                     </div>
                   </CardContent>

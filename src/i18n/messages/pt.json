@@ -1,0 +1,287 @@
+{
+  "common": { "loading": "Carregando..." },
+  "language": { "label": "Idioma", "switchTo": "Mudar para {locale}" },
+  "appShell": { "loading": "Carregando..." },
+  "header": { "welcome": "Bem-vindo", "logout": "Sair" },
+  "sidebar": {
+    "adminDashboard": "Painel Principal",
+    "courses": "Cursos",
+    "employees": "Funcionários",
+    "orgChart": "Organograma",
+    "documents": "Documentos",
+    "communications": "Comunicações",
+    "myDashboard": "Meu Painel",
+    "myDocuments": "Meus Documentos",
+    "profile": "Perfil",
+    "admin": "Administrador",
+    "collaborator": "Colaborador"
+  },
+  "login": {
+    "title": "Entrar",
+    "subtitle": "Plataforma de RH e Treinamento com IA — entre para continuar",
+    "email": "E-mail",
+    "password": "Senha",
+    "emailPlaceholder": "seu@email.com",
+    "passwordPlaceholder": "Digite sua senha",
+    "signingIn": "Entrando...",
+    "errors": { "failed": "Falha no login. Tente novamente." },
+    "demo": { "title": "Credenciais de demonstração:", "admin": "Admin", "collaborator": "Colaborador" }
+  },
+  "adminDashboard": {
+    "loadError": "Não foi possível carregar os dados do painel.",
+    "welcome": "Bem-vindo",
+    "adminFallback": "Admin",
+    "subtitle": "Resumo da sua plataforma de treinamento",
+    "stats": {
+      "courses": "Cursos",
+      "coursesSub": "Cursos de capacitação",
+      "employees": "Funcionários",
+      "employeesSub": "Usuários cadastrados",
+      "activeEnrollments": "Inscrições Ativas",
+      "activeEnrollmentsSub": "Atualmente em andamento",
+      "completionRate": "Taxa de Conclusão",
+      "completionRateSub": "{completed} de {total} inscrições"
+    },
+    "enrollmentSummary": {
+      "title": "Resumo de Inscrições",
+      "completed": "Concluídas",
+      "inProgress": "Em Progresso",
+      "total": "Total",
+      "completedPct": "{percent}% concluído"
+    },
+    "certificates": { "title": "Certificados", "issued": "Certificados emitidos" }
+  },
+  "adminCourses": {
+    "title": "Cursos",
+    "subtitle": "Gerenciar cursos de treinamento",
+    "createAi": "Criar com IA ✨",
+    "manual": "Manual",
+    "searchPlaceholder": "Buscar cursos...",
+    "enrolled": "{count} inscritos",
+    "completion": "Conclusão",
+    "modal": {
+      "title": "Criar Novo Curso",
+      "courseTitle": "Título",
+      "courseTitlePlaceholder": "Título do curso",
+      "description": "Descrição",
+      "descriptionPlaceholder": "Descrição do curso",
+      "category": "Categoria",
+      "durationHours": "Duração (horas)",
+      "createCourse": "Criar Curso"
+    }
+  },
+  "adminCourseCreate": {
+    "title": "Criar Curso com IA",
+    "subtitle": "Assistente de criação com inteligência artificial",
+    "errors": {
+      "analysisFailed": "Falha na análise",
+      "analysisRetry": "Erro ao analisar materiais. Tente novamente.",
+      "scriptGenerationFailed": "Falha na geração de roteiro",
+      "cloneVoice": "Erro ao clonar voz",
+      "generateCourse": "Erro ao gerar curso"
+    }
+  },
+  "adminCourseDetail": {
+    "tabs": { "modules": "Módulos", "details": "Detalhes", "analytics": "Análises" },
+    "courseModules": "Módulos do Curso ({count})",
+    "modulesHint": "Os vídeos são gerados automaticamente ao criar o curso. Use os botões por módulo para regenerar.",
+    "noModules": "Ainda não há módulos.",
+    "module": {
+      "mustPassPrevious": "Você deve aprovar o módulo anterior primeiro",
+      "video": "Vídeo",
+      "generatingVideo": "Gerando vídeo...",
+      "narrationAudio": "Áudio de Narração",
+      "regenerate": "Regenerar",
+      "audio": "Áudio",
+      "viewScript": "Ver roteiro",
+      "loadingEvaluation": "Carregando avaliação...",
+      "evaluation": "Avaliação",
+      "noContent": "Este módulo ainda não tem conteúdo."
+    },
+    "details": {
+      "title": "Detalhes do Curso",
+      "creationDate": "Data de Criação",
+      "totalModules": "Total de Módulos",
+      "createdBy": "Criado por (ID)"
+    },
+    "analytics": { "modules": "Módulos", "evaluations": "Avaliações", "enrolled": "Inscritos" }
+  },
+  "adminEmployees": {
+    "title": "Gestão de Usuários",
+    "subtitle": "Criar, editar e gerenciar contas de usuário",
+    "createUser": "Criar Usuário",
+    "searchPlaceholder": "Buscar usuários...",
+    "empty": "Nenhum usuário encontrado",
+    "errors": { "failedSave": "Falha ao salvar usuário" },
+    "table": {
+      "name": "Nome",
+      "email": "E-mail",
+      "position": "Cargo",
+      "department": "Departamento",
+      "role": "Função",
+      "leader": "Líder",
+      "status": "Status"
+    },
+    "status": { "active": "Ativo", "inactive": "Inativo" },
+    "role": { "admin": "Admin", "collaborator": "Colaborador" },
+    "actions": {
+      "editUser": "Editar usuário",
+      "reactivateUser": "Reativar usuário",
+      "deactivateUser": "Desativar usuário",
+      "cancel": "Cancelar",
+      "saving": "Salvando...",
+      "saveChanges": "Salvar Alterações"
+    },
+    "modal": { "createTitle": "Criar Usuário", "editTitle": "Editar Usuário" },
+    "form": {
+      "fullName": "Nome Completo",
+      "email": "E-mail",
+      "password": "Senha",
+      "position": "Cargo",
+      "department": "Departamento",
+      "role": "Função",
+      "leader": "Líder",
+      "noLeader": "Sem líder"
+    }
+  },
+  "adminDocuments": {
+    "title": "Documentos",
+    "subtitle": "Gerar e gerenciar documentos de RH",
+    "generateDocument": "Gerar Documento",
+    "table": { "document": "Documento", "type": "Tipo", "employee": "Funcionário", "status": "Status", "date": "Data" },
+    "modal": {
+      "title": "Gerar Documento",
+      "documentType": "Tipo de Documento",
+      "employeeName": "Nome do Funcionário",
+      "employeeNamePlaceholder": "Digite o nome do funcionário",
+      "additionalNotes": "Notas Adicionais",
+      "additionalNotesPlaceholder": "Informações adicionais para a IA considerar...",
+      "generateWithAi": "Gerar com IA"
+    }
+  },
+  "adminOrgChart": {
+    "title": "Organograma",
+    "summary": "{people} pessoas · {departments} departamentos",
+    "searchPlaceholder": "Buscar por nome, cargo, departamento...",
+    "viewAll": "Ver tudo",
+    "empty": "Defina líderes diretos em Funcionários para montar o organograma"
+  },
+  "adminSeries": {
+    "title": "Microséries",
+    "subtitle": "Séries de microepisódios geradas com IA",
+    "create": "Criar Microsérie",
+    "searchPlaceholder": "Buscar microséries...",
+    "loading": "Carregando microséries...",
+    "emptyTitle": "Não há microséries",
+    "emptySubtitle": "Crie sua primeira microsérie com IA",
+    "confirmDelete": "Tem certeza de que deseja excluir esta microsérie?",
+    "episodes": "{count} episódios"
+  },
+  "adminSeriesCreate": {
+    "title": "Criar Microsérie",
+    "subtitle": "Gere uma microsérie de episódios com IA",
+    "errors": {
+      "generateScript": "Erro ao gerar roteiro",
+      "generateScriptRetry": "Erro ao gerar o roteiro. Tente novamente.",
+      "createSeries": "Erro ao criar série",
+      "createSeriesRetry": "Erro ao criar a série. Tente novamente."
+    }
+  },
+  "adminSeriesDetail": {
+    "loading": "Carregando microsérie...",
+    "notFound": "Série não encontrada",
+    "backToSeries": "Voltar para Séries",
+    "regenerateVideos": "Regenerar Vídeos",
+    "regenerateAudio": "Regenerar Áudio",
+    "errors": { "regenerateVideos": "Erro ao regenerar vídeos.", "regenerateAudio": "Erro ao regenerar áudio." }
+  },
+  "adminCommunications": {
+    "title": "Comunicações",
+    "subtitle": "Publique comunicados internos para sua equipe",
+    "create": "Novo Comunicado",
+    "searchPlaceholder": "Buscar comunicados...",
+    "emptyTitle": "Não há comunicados",
+    "emptySubtitle": "Crie seu primeiro comunicado interno",
+    "confirmDelete": "Tem certeza de que deseja excluir este comunicado?",
+    "delete": "Excluir",
+    "modal": {
+      "title": "Novo Comunicado",
+      "commTitle": "Título",
+      "titlePlaceholder": "Título do comunicado",
+      "message": "Mensagem",
+      "messagePlaceholder": "Escreva o conteúdo do comunicado...",
+      "image": "Imagem",
+      "uploadUrl": "URL",
+      "generateAi": "Gerar com IA",
+      "urlPlaceholder": "https://exemplo.com/imagem.png",
+      "promptPlaceholder": "Descreva a imagem que deseja gerar...",
+      "preview": "Pré-visualização",
+      "noImage": "Sem imagem (opcional)",
+      "publish": "Publicar",
+      "publishing": "Publicando..."
+    }
+  },
+  "collaboratorDashboard": {
+    "loading": "Carregando...",
+    "title": "Meu Painel",
+    "subtitle": "Acompanhe seu progresso de aprendizado",
+    "myCourses": "Meus Cursos",
+    "recentActivity": "Atividade Recente",
+    "stats": {
+      "inProgress": "Em Progresso",
+      "activeCourses": "Cursos ativos",
+      "completed": "Concluídos",
+      "finishedCourses": "Cursos finalizados",
+      "totalHours": "Horas Totais",
+      "learningTime": "Tempo de aprendizagem",
+      "totalEnrolled": "Total Inscrito",
+      "allCourses": "Todos os cursos"
+    }
+  },
+  "collaboratorCourses": {
+    "title": "Meus Cursos",
+    "subtitle": "Seus cursos atribuídos e seu progresso",
+    "empty": "Você ainda não tem cursos atribuídos.",
+    "progress": "Progresso",
+    "completedModules": "{completed}/{total} módulos concluídos"
+  },
+  "collaboratorCourseDetail": {
+    "backToCourses": "← Voltar para Meus Cursos",
+    "courseProgress": "Progresso do Curso",
+    "approvedModules": "{completed}/{total} módulos aprovados",
+    "completedTitle": "Curso Concluído!",
+    "completedSubtitle": "Você aprovou todos os módulos com sucesso."
+  },
+  "collaboratorDocuments": {
+    "title": "Meus Documentos",
+    "subtitle": "Veja seus documentos de RH e certificados",
+    "empty": "Ainda não há documentos.",
+    "table": { "document": "Documento", "type": "Tipo", "status": "Status", "date": "Data", "actions": "Ações" },
+    "actions": { "view": "Ver", "download": "Baixar" }
+  },
+  "profile": {
+    "title": "Perfil",
+    "subtitle": "Informações da sua conta",
+    "emptyValue": "—",
+    "leader": "Líder",
+    "none": "Nenhum",
+    "rolePermissions": "Função e Permissões",
+    "role": "Função",
+    "permissions": "Permissões",
+    "permission": {
+      "manageUsers": "Gerenciar Usuários",
+      "manageCourses": "Gerenciar Cursos",
+      "viewReports": "Ver Relatórios",
+      "generateDocuments": "Gerar Documentos",
+      "viewCourses": "Ver Cursos",
+      "takeQuizzes": "Fazer Avaliações",
+      "viewDocuments": "Ver Documentos"
+    },
+    "enrolledCourses": "Cursos Inscritos",
+    "noCourses": "Nenhum curso inscrito ainda.",
+    "completed": "Concluído",
+    "inProgress": "Em Progresso",
+    "done": "Concluído",
+    "enrolled": "Inscrito"
+  }
+}

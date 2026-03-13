@@ -14,22 +14,11 @@ import {
   GraduationCap,
   X,
   Network,
+  Megaphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const adminNav = [
-  { href: "/admin/dashboard", label: "Panel Principal", icon: LayoutDashboard },
-  { href: "/admin/courses", label: "Cursos", icon: BookOpen },
-  { href: "/admin/employees", label: "Empleados", icon: Users },
-  { href: "/admin/org-chart", label: "Organigrama", icon: Network },
-  { href: "/admin/documents", label: "Documentos", icon: FileText },
-];
-
-const collaboratorNav = [
-  { href: "/dashboard", label: "Mi Panel", icon: LayoutDashboard },
-  { href: "/documents", label: "Mis Documentos", icon: FileText },
-  { href: "/profile", label: "Perfil", icon: User },
-];
+import { useTranslations } from "next-intl";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 interface SidebarProps {
   open: boolean;
@@ -37,8 +26,24 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
+  const t = useTranslations("sidebar");
   const pathname = usePathname();
   const { user } = useAuth();
+  const adminNav = [
+    { href: "/admin/dashboard", label: t("adminDashboard"), icon: LayoutDashboard },
+    { href: "/admin/courses", label: t("courses"), icon: BookOpen },
+    { href: "/admin/employees", label: t("employees"), icon: Users },
+    { href: "/admin/org-chart", label: t("orgChart"), icon: Network },
+    { href: "/admin/documents", label: t("documents"), icon: FileText },
+    { href: "/admin/communications", label: t("communications"), icon: Megaphone },
+  ];
+
+  const collaboratorNav = [
+    { href: "/dashboard", label: t("myDashboard"), icon: LayoutDashboard },
+    { href: "/documents", label: t("myDocuments"), icon: FileText },
+    { href: "/profile", label: t("profile"), icon: User },
+  ];
+
   const nav = user?.role === "admin" ? adminNav : collaboratorNav;
 
   return (
@@ -108,7 +113,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           })}
         </nav>
 
-        <div className="border-t border-white/[0.06] p-4">
+        <div className="border-t border-white/[0.06] p-4 space-y-3">
+          <LanguageSwitcher />
           <div className="flex items-center gap-3 rounded-lg bg-white/[0.04] p-3 transition-all duration-200 hover:bg-white/[0.06]">
             <div className="relative">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white text-sm font-semibold">
@@ -118,7 +124,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </div>
             <div className="flex-1 truncate">
               <p className="text-sm font-medium truncate">{user?.name}</p>
-              <p className="text-xs text-muted-foreground capitalize">{user?.role === "admin" ? "Administrador" : "Colaborador"}</p>
+              <p className="text-xs text-muted-foreground capitalize">{user?.role === "admin" ? t("admin") : t("collaborator")}</p>
             </div>
           </div>
         </div>

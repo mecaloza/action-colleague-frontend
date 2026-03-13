@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { BookOpen, Users, TrendingUp, Award, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { useTranslations } from "next-intl";
 
 const statIcons = [
   { icon: BookOpen, bg: "bg-violet-500/10", color: "text-violet-400" },
@@ -24,6 +25,7 @@ interface DashboardData {
 }
 
 export default function AdminDashboard() {
+  const t = useTranslations("adminDashboard");
   const [stats, setStats] = useState<DashboardData | null>(null);
   const [error, setError] = useState(false);
   const { user } = useAuth();
@@ -47,7 +49,7 @@ export default function AdminDashboard() {
   if (error) {
     return (
       <div className="flex items-center justify-center p-12">
-        <p className="text-muted-foreground">Could not load dashboard data.</p>
+        <p className="text-muted-foreground">{t("loadError")}</p>
       </div>
     );
   }
@@ -66,10 +68,10 @@ export default function AdminDashboard() {
       : 0;
 
   const statCards = [
-    { label: "Cursos", value: stats.total_courses, sub: "Cursos de capacitación" },
-    { label: "Empleados", value: stats.total_users, sub: "Usuarios registrados" },
-    { label: "Inscripciones Activas", value: stats.active_enrollments, sub: "En progreso actualmente" },
-    { label: "Tasa de Completado", value: `${completionRate}%`, sub: `${stats.completed_enrollments} de ${stats.total_enrollments} inscripciones` },
+    { label: t("stats.courses"), value: stats.total_courses, sub: t("stats.coursesSub") },
+    { label: t("stats.employees"), value: stats.total_users, sub: t("stats.employeesSub") },
+    { label: t("stats.activeEnrollments"), value: stats.active_enrollments, sub: t("stats.activeEnrollmentsSub") },
+    { label: t("stats.completionRate"), value: `${completionRate}%`, sub: t("stats.completionRateSub", { completed: stats.completed_enrollments, total: stats.total_enrollments }) },
   ];
 
   return (
@@ -78,10 +80,10 @@ export default function AdminDashboard() {
       <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-r from-violet-600/20 via-purple-600/10 to-transparent p-6 backdrop-blur-xl">
         <div className="absolute top-0 right-0 h-full w-1/3 bg-gradient-to-l from-violet-500/10 to-transparent" />
         <h1 className="text-3xl font-bold">
-          Bienvenido, <span className="gradient-text">{user?.name || "Admin"}</span>
+          {t("welcome")}, <span className="gradient-text">{user?.name || t("adminFallback")}</span>
         </h1>
         <p className="text-muted-foreground mt-1">
-          Resumen de tu plataforma de capacitación
+          {t("subtitle")}
         </p>
       </div>
 
@@ -118,14 +120,14 @@ export default function AdminDashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Resumen de Inscripciones</CardTitle>
+            <CardTitle className="text-lg">{t("enrollmentSummary.title")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {[
-                { label: "Completadas", value: stats.completed_enrollments, color: "bg-emerald-500" },
-                { label: "En Progreso", value: stats.active_enrollments, color: "bg-amber-500" },
-                { label: "Total", value: stats.total_enrollments, color: "bg-violet-500" },
+                { label: t("enrollmentSummary.completed"), value: stats.completed_enrollments, color: "bg-emerald-500" },
+                { label: t("enrollmentSummary.inProgress"), value: stats.active_enrollments, color: "bg-amber-500" },
+                { label: t("enrollmentSummary.total"), value: stats.total_enrollments, color: "bg-violet-500" },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -144,7 +146,7 @@ export default function AdminDashboard() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 text-center">
-                  {completionRate}% completado
+                  {t("enrollmentSummary.completedPct", { percent: completionRate })}
                 </p>
               </div>
             </div>
@@ -153,7 +155,7 @@ export default function AdminDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Certificados</CardTitle>
+            <CardTitle className="text-lg">{t("certificates.title")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col items-center justify-center py-6">
@@ -162,7 +164,7 @@ export default function AdminDashboard() {
               </div>
               <p className="text-4xl font-bold">{stats.total_certificates}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Certificados emitidos
+                {t("certificates.issued")}
               </p>
             </div>
           </CardContent>

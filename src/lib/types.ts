@@ -170,7 +170,8 @@ export interface EvaluationQuestion {
 export interface BackendEvaluation {
   id: number | string;
   module_id: number | string;
-  questions_json: string;
+  questions_json?: string;
+  questions?: EvaluationQuestion[];
 }
 
 export interface CourseStats {
@@ -189,10 +190,112 @@ export interface DashboardStats {
   recent_completions: { employee: string; course: string; date: string }[];
 }
 
+export interface Communication {
+  id: number;
+  title: string;
+  message: string;
+  image_url?: string;
+  ai_generated: boolean;
+  created_at: string;
+}
+
+export interface CreateCommunicationRequest {
+  title: string;
+  message: string;
+  image_url?: string;
+  ai_generated?: boolean;
+}
+
+export interface GenerateImageResponse {
+  image_url: string;
+}
+
 export interface CollaboratorDashboard {
   enrollments: Enrollment[];
   completed_courses: number;
   in_progress_courses: number;
   total_hours: number;
   recent_activity: { action: string; course: string; date: string }[];
+}
+
+// ─── Evaluation Editor & Analytics Types ─────────────────────────────────────
+
+export type QuestionType = "multiple_choice" | "true_false" | "ordering" | "matching" | "fill_blank" | "scenario";
+
+export interface EvaluationQuestionFull {
+  type: QuestionType;
+  question: string;
+  // multiple_choice & scenario
+  options?: string[];
+  correct?: number;
+  // true_false
+  statement?: string;
+  // ordering
+  items?: string[];
+  correct_order?: number[];
+  // matching
+  pairs?: Array<{ left: string; right: string }>;
+  // fill_blank
+  answer?: string;
+  hint?: string;
+  // scenario
+  scenario?: string;
+  explanation?: string;
+}
+
+export interface Evaluation {
+  id: number | string;
+  module_id: number | string;
+  questions: EvaluationQuestionFull[];
+  max_attempts?: number;
+}
+
+export interface CreateEvaluationRequest {
+  module_id: number;
+  questions: EvaluationQuestionFull[];
+  max_attempts?: number;
+}
+
+export interface UpdateEvaluationRequest {
+  questions?: EvaluationQuestionFull[];
+  max_attempts?: number;
+}
+
+export interface QuestionAnalytics {
+  question_index: number;
+  question_text: string;
+  question_type: string;
+  correct_rate: number;
+  total_attempts: number;
+  most_common_wrong?: string;
+}
+
+export interface EvaluationAnalytics {
+  course_id: number;
+  total_submissions: number;
+  average_score: number;
+  pass_rate: number;
+  questions: QuestionAnalytics[];
+}
+
+export interface EmployeeResponse {
+  user_id: number;
+  user_name: string;
+  user_email: string;
+  average_score: number;
+  total_attempts: number;
+  passed: boolean;
+  last_attempt_at: string;
+}
+
+export interface UserResponseDetail {
+  attempt: number;
+  score: number;
+  passed: boolean;
+  submitted_at: string;
+  answers: Array<{
+    question_index: number;
+    selected: any;
+    correct: boolean;
+  }>;
 }

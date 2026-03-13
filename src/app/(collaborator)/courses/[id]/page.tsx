@@ -31,6 +31,7 @@ import {
   ArrowDown,
   Lightbulb,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type ModuleDetail = {
   id: number;
@@ -43,6 +44,7 @@ type ModuleDetail = {
   passed: boolean;
   score: number | null;
   attempts: number;
+  max_attempts?: number;
   completed_at: string | null;
 };
 
@@ -164,6 +166,17 @@ function OrderingQuestion({
 }) {
   const items: string[] = q.items || [];
   const order: number[] = selected || items.map((_: string, i: number) => i);
+  const initialized = useRef(false);
+
+  // Auto-initialize on first render if not yet answered
+  useEffect(() => {
+    if (!initialized.current && selected === undefined && !submitted) {
+      console.log(`[DEBUG] OrderingQuestion Q${qi}: Auto-initializing with default order`);
+      onSelect(qi, items.map((_: string, i: number) => i));
+      initialized.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const moveItem = (fromIdx: number, toIdx: number) => {
     if (submitted || toIdx < 0 || toIdx >= order.length) return;
@@ -544,10 +557,14 @@ function ModuleQuiz({
   moduleId,
   enrollmentId,
   onResult,
+  currentAttempts = 0,
+  maxAttempts,
 }: {
   moduleId: number;
   enrollmentId: number;
   onResult: (passed: boolean) => void;
+  currentAttempts?: number;
+  maxAttempts?: number;
 }) {
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -558,8 +575,13 @@ function ModuleQuiz({
     passed: boolean;
     correct: number;
     total: number;
+    attempts?: number;
+    attempts_remaining?: number;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [attemptsUsed, setAttemptsUsed] = useState(currentAttempts);
+
+  const outOfAttempts = maxAttempts != null && maxAttempts > 0 && attemptsUsed >= maxAttempts;
 
   useEffect(() => {
     api
@@ -568,16 +590,8 @@ function ModuleQuiz({
         if (evals.length > 0 && evals[0].questions) {
           const qs = evals[0].questions;
           setQuestions(qs);
-          // Initialize ordering answers with default index order
-          const initial: Record<number, any> = {};
-          qs.forEach((q: any, i: number) => {
-            if (q.type === "ordering" && q.items) {
-              initial[i] = q.items.map((_: string, idx: number) => idx);
-            }
-          });
-          if (Object.keys(initial).length > 0) {
-            setAnswers(initial);
-          }
+          // DO NOT initialize answers - user must interact with questions
+          // This ensures allAnswered validation works correctly
         }
       })
       .finally(() => setLoading(false));
@@ -621,6 +635,7 @@ function ModuleQuiz({
       });
       setResult(res);
       setSubmitted(true);
+      if (res.attempts != null) setAttemptsUsed(res.attempts);
       onResult(res.passed);
     } catch (err) {
       console.error("Error submitting:", err);
@@ -629,13 +644,8 @@ function ModuleQuiz({
   };
 
   const reset = () => {
-    const initial: Record<number, any> = {};
-    questions.forEach((q: any, i: number) => {
-      if (q.type === "ordering" && q.items) {
-        initial[i] = q.items.map((_: string, idx: number) => idx);
-      }
-    });
-    setAnswers(initial);
+    // Reset to empty state - user must interact with all questions again
+    setAnswers({});
     setSubmitted(false);
     setResult(null);
   };
@@ -644,6 +654,21 @@ function ModuleQuiz({
   const allAnswered = questions.every((q: any, qi: number) => {
     const qType = q.type || "multiple_choice";
     const val = answers[qi];
+    
+    // DEBUG: Log each question validation
+    console.log(`[DEBUG] Q${qi} (${qType}):`, {
+      value: val,
+      valueType: typeof val,
+      isValid: (() => {
+        if (qType === "scenario" || qType === "multiple_choice") return typeof val === "number";
+        if (qType === "ordering") return Array.isArray(val);
+        if (qType === "matching") return Array.isArray(val) && val.length === (q.pairs || []).length;
+        if (qType === "fill_blank") return typeof val === "string" && val.trim().length > 0;
+        if (qType === "true_false") return typeof val === "boolean";
+        return val !== undefined;
+      })()
+    });
+    
     if (qType === "scenario" || qType === "multiple_choice") return typeof val === "number";
     if (qType === "ordering") return Array.isArray(val);
     if (qType === "matching") return Array.isArray(val) && val.length === (q.pairs || []).length;
@@ -651,16 +676,44 @@ function ModuleQuiz({
     if (qType === "true_false") return typeof val === "boolean";
     return val !== undefined;
   });
+  
+  // DEBUG: Log final result
+  console.log(`[DEBUG] allAnswered: ${allAnswered}`, answers);
 
   if (loading) return <Loader2 className="h-5 w-5 animate-spin text-violet-400" />;
   if (questions.length === 0) return <p className="text-sm text-muted-foreground">No hay evaluación para este módulo.</p>;
 
+  if (outOfAttempts && !submitted) {
+    return (
+      <div className="space-y-3">
+        <h4 className="font-semibold flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-violet-400" />
+          Evaluación del Módulo
+        </h4>
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4 text-center space-y-2">
+          <Lock className="h-8 w-8 text-red-400 mx-auto" />
+          <p className="text-sm font-medium text-red-400">Sin intentos disponibles</p>
+          <p className="text-xs text-muted-foreground">
+            Has usado {attemptsUsed}/{maxAttempts} intentos permitidos.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <h4 className="font-semibold flex items-center gap-2">
-        <BookOpen className="h-4 w-4 text-violet-400" />
-        Evaluación del Módulo
-      </h4>
+      <div className="flex items-center justify-between">
+        <h4 className="font-semibold flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-violet-400" />
+          Evaluación del Módulo
+        </h4>
+        {maxAttempts != null && maxAttempts > 0 && (
+          <Badge variant="secondary" className="text-xs">
+            Intento {Math.min(attemptsUsed + 1, maxAttempts)}/{maxAttempts}
+          </Badge>
+        )}
+      </div>
       {questions.map((q: any, qi: number) => {
         const qType = q.type || "multiple_choice";
 
@@ -702,10 +755,13 @@ function ModuleQuiz({
                 ({result.correct}/{result.total})
               </Badge>
             )}
-            {result && !result.passed && (
+            {result && !result.passed && !(maxAttempts != null && maxAttempts > 0 && attemptsUsed >= maxAttempts) && (
               <Button size="sm" variant="outline" onClick={reset}>
                 Reintentar
               </Button>
+            )}
+            {result && !result.passed && maxAttempts != null && maxAttempts > 0 && attemptsUsed >= maxAttempts && (
+              <span className="text-xs text-red-400">Sin intentos restantes ({attemptsUsed}/{maxAttempts})</span>
             )}
           </>
         )}
@@ -818,6 +874,8 @@ function CollaboratorModule({
               <ModuleQuiz
                 moduleId={mod.id}
                 enrollmentId={enrollmentId}
+                currentAttempts={mod.attempts}
+                maxAttempts={mod.max_attempts}
                 onResult={(passed) => {
                   if (passed) onModulePassed();
                 }}
@@ -841,6 +899,7 @@ function CollaboratorModule({
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export default function CollaboratorCourseDetailPage() {
+  const t = useTranslations("collaboratorCourseDetail");
   const params = useParams();
   const courseId = params.id as string;
   const [data, setData] = useState<CourseData | null>(null);
@@ -873,7 +932,7 @@ export default function CollaboratorCourseDetailPage() {
       <div className="p-6 space-y-4">
         <p className="text-red-400">Error: {error}</p>
         <Link href="/courses">
-          <Button variant="outline">← Volver a Mis Cursos</Button>
+          <Button variant="outline">{t("backToCourses")}</Button>
         </Link>
       </div>
     );
@@ -904,14 +963,14 @@ export default function CollaboratorCourseDetailPage() {
       <Card>
         <CardContent className="py-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Progreso del Curso</span>
+            <span className="text-sm font-medium">{t("courseProgress")}</span>
             <span className="text-sm font-bold text-violet-400">
               {data.progress_pct.toFixed(0)}%
             </span>
           </div>
           <Progress value={data.progress_pct} className="h-3" />
           <p className="text-xs text-muted-foreground mt-2">
-            {data.completed_modules}/{data.total_modules} módulos aprobados
+            {t("approvedModules", { completed: data.completed_modules, total: data.total_modules })}
           </p>
         </CardContent>
       </Card>
@@ -921,9 +980,9 @@ export default function CollaboratorCourseDetailPage() {
         <Card className="border-green-500/40 bg-green-500/5">
           <CardContent className="py-6 text-center space-y-2">
             <Trophy className="h-12 w-12 text-yellow-400 mx-auto" />
-            <h3 className="text-lg font-bold text-green-400">¡Curso Completado!</h3>
+            <h3 className="text-lg font-bold text-green-400">{t("completedTitle")}</h3>
             <p className="text-sm text-muted-foreground">
-              Has aprobado todos los módulos exitosamente.
+              {t("completedSubtitle")}
             </p>
           </CardContent>
         </Card>

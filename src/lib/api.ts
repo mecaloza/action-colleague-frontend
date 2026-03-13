@@ -5,11 +5,22 @@ import {
   CreateUserRequest,
   UpdateUserRequest,
   OrgChartNode,
+  Communication,
+  CreateCommunicationRequest,
+  GenerateImageResponse,
+  Evaluation,
+  CreateEvaluationRequest,
+  UpdateEvaluationRequest,
+  EvaluationAnalytics,
+  EmployeeResponse,
+  UserResponseDetail,
 } from "@/lib/types";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://colleague-backend-production.up.railway.app/api/v1";
+
+const API_COMMS = API_BASE.replace(/\/v\d+$/, "/communications");
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -162,7 +173,7 @@ export const api = {
     }
   },
 
-  getMe: () => fetchAPI<User>("/auth/me/"),
+  getMe: () => fetchAPI<User>("/auth/me"),
 
   // Users (admin)
   getUsers: async (): Promise<User[]> => {
@@ -199,7 +210,7 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
-  getOrgChart: () => fetchAPI<OrgChartNode[]>("/users/org-chart/"),
+  getOrgChart: () => fetchAPI<OrgChartNode[]>("/users/org-chart"),
 
   // Courses
   getCourses: () => fetchAPI<any[]>("/courses/"),
@@ -257,6 +268,24 @@ export const api = {
 
   getEvaluations: (moduleId: string | number) =>
     fetchAPI<any[]>(`/evaluations/?module_id=${moduleId}`),
+
+  createEvaluation: (data: CreateEvaluationRequest) =>
+    fetchAPI<Evaluation>("/evaluations/", { method: "POST", body: JSON.stringify(data) }),
+
+  updateEvaluation: (id: number | string, data: UpdateEvaluationRequest) =>
+    fetchAPI<Evaluation>(`/evaluations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  deleteEvaluation: (id: number | string) =>
+    fetchAPI<void>(`/evaluations/${id}`, { method: "DELETE" }),
+
+  getEvaluationAnalytics: (courseId: string | number) =>
+    fetchAPI<EvaluationAnalytics>(`/evaluations/analytics/${courseId}`),
+
+  getEvaluationResponses: (courseId: string | number) =>
+    fetchAPI<EmployeeResponse[]>(`/evaluations/responses/${courseId}`),
+
+  getEvaluationResponsesUser: (userId: string | number, courseId: string | number) =>
+    fetchAPI<UserResponseDetail[]>(`/evaluations/responses/user/${userId}/${courseId}`),
 
   // AI Generation
   generateAudio: (courseId: string | number, voiceId?: string) =>
@@ -371,7 +400,51 @@ export const api = {
     }),
 
   // Dashboard
-  getAdminDashboard: () => fetchAPI<any>("/dashboards/admin/"),
+  getAdminDashboard: () => fetchAPI<any>("/dashboards/admin"),
   getCollaboratorDashboard: (userId: string) =>
     fetchAPI<any>(`/dashboards/collaborator/${userId}`),
+
+  // Communications
+  getCommunications: async (): Promise<Communication[]> => {
+    const token = getToken();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(API_COMMS, { headers });
+    if (!res.ok) throw new Error(`API Error: ${res.status}`);
+    return res.json();
+  },
+  createCommunication: async (data: CreateCommunicationRequest): Promise<Communication> => {
+    const token = getToken();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(API_COMMS, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`API Error: ${res.status}`);
+    return res.json();
+  },
+  deleteCommunication: async (id: number): Promise<void> => {
+    const token = getToken();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(`${API_COMMS}/${id}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!res.ok) throw new Error(`API Error: ${res.status}`);
+  },
+  generateCommunicationImage: async (prompt: string): Promise<GenerateImageResponse> => {
+    const token = getToken();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(`${API_COMMS}/generate-image`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) throw new Error(`API Error: ${res.status}`);
+    return res.json();
+  },
 };

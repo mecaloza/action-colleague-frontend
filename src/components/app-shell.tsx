@@ -7,8 +7,10 @@ import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { PageTransition } from "@/components/page-transition";
 import { GraduationCap } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("appShell");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
@@ -29,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="absolute inset-0 rounded-2xl bg-violet-500/20 blur-xl animate-pulse" />
           </div>
-          <p className="text-sm text-muted-foreground">Cargando...</p>
+          <p className="text-sm text-muted-foreground">{t("loading")}</p>
         </div>
       </div>
     );

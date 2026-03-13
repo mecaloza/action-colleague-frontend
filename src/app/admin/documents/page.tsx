@@ -13,8 +13,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@
 import { api } from "@/lib/api";
 import { Document } from "@/lib/types";
 import { Plus, FileText, Send, Check, PenLine } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export default function AdminDocumentsPage() {
+  const t = useTranslations("adminDocuments");
   const [documents, setDocuments] = useState<Document[]>([]);
   const [showGenerate, setShowGenerate] = useState(false);
   const [form, setForm] = useState({
@@ -65,11 +67,11 @@ export default function AdminDocumentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Documents</h1>
-          <p className="text-muted-foreground">Generate and manage HR documents</p>
+          <h1 className="text-3xl font-bold">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button onClick={() => setShowGenerate(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Generate Document
+          <Plus className="mr-2 h-4 w-4" /> {t("generateDocument")}
         </Button>
       </div>
 
@@ -77,11 +79,11 @@ export default function AdminDocumentsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Document</TableHead>
-              <TableHead className="hidden sm:table-cell">Type</TableHead>
-              <TableHead className="hidden md:table-cell">Employee</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden lg:table-cell">Date</TableHead>
+              <TableHead>{t("table.document")}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t("table.type")}</TableHead>
+              <TableHead className="hidden md:table-cell">{t("table.employee")}</TableHead>
+              <TableHead>{t("table.status")}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t("table.date")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -114,11 +116,11 @@ export default function AdminDocumentsPage() {
         <DialogContent>
           <DialogClose onClose={() => setShowGenerate(false)} />
           <DialogHeader>
-            <DialogTitle>Generate Document</DialogTitle>
+            <DialogTitle>{t("modal.title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label htmlFor="doc-type">Document Type</Label>
+              <Label htmlFor="doc-type">{t("modal.documentType")}</Label>
               <Select
                 id="doc-type"
                 value={form.type}
@@ -132,25 +134,25 @@ export default function AdminDocumentsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="doc-emp">Employee Name</Label>
+              <Label htmlFor="doc-emp">{t("modal.employeeName")}</Label>
               <Input
                 id="doc-emp"
                 value={form.employee_name}
                 onChange={(e) => setForm({ ...form, employee_name: e.target.value })}
-                placeholder="Enter employee name"
+                placeholder={t("modal.employeeNamePlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="doc-notes">Additional Notes</Label>
+              <Label htmlFor="doc-notes">{t("modal.additionalNotes")}</Label>
               <Textarea
                 id="doc-notes"
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Any additional information for the AI to consider..."
+                placeholder={t("modal.additionalNotesPlaceholder")}
               />
             </div>
             <Button className="w-full" onClick={handleGenerate} disabled={!form.employee_name}>
-              Generate with AI
+              {t("modal.generateWithAi")}
             </Button>
           </div>
         </DialogContent>

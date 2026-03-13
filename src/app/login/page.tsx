@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { GraduationCap, Loader2, AlertCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export default function LoginPage() {
+  const t = useTranslations("login");
   const { login } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -36,7 +38,7 @@ export default function LoginPage() {
       }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Login failed. Please try again."
+        err instanceof Error ? err.message : t("errors.failed")
       );
     } finally {
       setLoading(false);
@@ -63,12 +65,12 @@ export default function LoginPage() {
       </div>
 
       <p className="mb-8 text-center text-muted-foreground animate-fade-in relative z-10">
-        HR & AI Training Platform — Sign in to continue
+        {t("subtitle")}
       </p>
 
       <Card className="w-full max-w-md glass-strong glow-violet animate-slide-up relative z-10">
         <CardHeader>
-          <CardTitle className="text-center text-xl">Sign In</CardTitle>
+          <CardTitle className="text-center text-xl">{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,11 +82,11 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("email")}</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="your@email.com"
+                placeholder={t("emailPlaceholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -94,11 +96,11 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("password")}</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder={t("passwordPlaceholder")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -111,25 +113,25 @@ export default function LoginPage() {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  {t("signingIn")}
                 </>
               ) : (
-                "Sign In"
+                t("title")
               )}
             </Button>
           </form>
 
           <div className="mt-6 rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
             <p className="text-xs font-medium text-muted-foreground mb-2">
-              Demo credentials:
+              {t("demo.title")}
             </p>
             <div className="space-y-1 text-xs text-muted-foreground">
               <p>
-                <span className="font-medium text-violet-400">Admin:</span>{" "}
+                <span className="font-medium text-violet-400">{t("demo.admin")}:</span>{" "}
                 admin@actioncolleague.com / admin123
               </p>
               <p>
-                <span className="font-medium text-violet-400">Collaborator:</span>{" "}
+                <span className="font-medium text-violet-400">{t("demo.collaborator")}:</span>{" "}
                 carlos.lopez@actioncolleague.com / password123
               </p>
             </div>

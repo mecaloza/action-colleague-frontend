@@ -28,6 +28,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -115,6 +116,7 @@ const statusLabel = (status: string) => {
 };
 
 export default function SeriesDetailPage() {
+  const t = useTranslations("adminSeriesDetail");
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -183,7 +185,7 @@ export default function SeriesDetailPage() {
       setTimeout(fetchSeries, 2000);
     } catch (err) {
       console.error("Error regenerating videos:", err);
-      alert("Error al regenerar videos.");
+      alert(t("errors.regenerateVideos"));
     } finally {
       setRegeneratingVideos(false);
     }
@@ -203,7 +205,7 @@ export default function SeriesDetailPage() {
       setTimeout(fetchSeries, 2000);
     } catch (err) {
       console.error("Error regenerating audio:", err);
-      alert("Error al regenerar audio.");
+      alert(t("errors.regenerateAudio"));
     } finally {
       setRegeneratingAudio(false);
     }
@@ -215,7 +217,7 @@ export default function SeriesDetailPage() {
         <div className="flex flex-col items-center gap-3">
           <Clapperboard className="h-8 w-8 text-violet-400 animate-pulse" />
           <p className="text-sm text-muted-foreground">
-            Cargando micro-serie...
+            {t("loading")}
           </p>
         </div>
       </div>
@@ -226,14 +228,14 @@ export default function SeriesDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <Film className="h-12 w-12 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-medium">Serie no encontrada</h3>
+        <h3 className="text-lg font-medium">{t("notFound")}</h3>
         <Button
           variant="outline"
           className="mt-4"
           onClick={() => router.push("/admin/series")}
         >
           <ChevronLeft className="mr-2 h-4 w-4" />
-          Volver a Series
+          {t("backToSeries")}
         </Button>
       </div>
     );
@@ -254,7 +256,7 @@ export default function SeriesDetailPage() {
         className="text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="mr-1 h-4 w-4" />
-        Volver a Series
+        {t("backToSeries")}
       </Button>
 
       {/* Series Header */}
@@ -304,7 +306,7 @@ export default function SeriesDetailPage() {
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />
               )}
-              Regenerar Videos
+              {t("regenerateVideos")}
             </Button>
             <Button
               variant="outline"
@@ -317,7 +319,7 @@ export default function SeriesDetailPage() {
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />
               )}
-              Regenerar Audio
+              {t("regenerateAudio")}
             </Button>
           </div>
         </CardContent>

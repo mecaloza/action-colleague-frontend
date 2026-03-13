@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 interface HeaderProps {
   onMenuClick: () => void;
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
+  const t = useTranslations("header");
   const { user, logout } = useAuth();
   const router = useRouter();
 
@@ -27,13 +29,14 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       <div className="hidden lg:block">
         <h2 className="text-sm text-muted-foreground">
-          Welcome, <span className="font-medium text-foreground">{user?.name}</span>
+          {t("welcome")},{" "}
+          <span className="font-medium text-foreground">{user?.name}</span>
         </h2>
       </div>
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
+        <Button variant="ghost" size="icon" onClick={handleLogout} title={t("logout")}>
           <LogOut className="h-5 w-5" />
         </Button>
       </div>

@@ -17,8 +17,10 @@ import {
   Clock,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { useTranslations } from "next-intl";
 
 export default function ProfilePage() {
+  const t = useTranslations("profile");
   const { user } = useAuth();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
 
@@ -43,8 +45,8 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Profile</h1>
-        <p className="text-muted-foreground">Your account information</p>
+        <h1 className="text-3xl font-bold">{t("title")}</h1>
+        <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -67,15 +69,15 @@ export default function ProfilePage() {
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Building className="h-4 w-4 text-muted-foreground" />
-                <span>{user.department || "—"}</span>
+                <span>{user.department || t("emptyValue")}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Briefcase className="h-4 w-4 text-muted-foreground" />
-                <span>{user.position || "—"}</span>
+                <span>{user.position || t("emptyValue")}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Users className="h-4 w-4 text-muted-foreground" />
-                <span>Leader: {user.leader_name || "None"}</span>
+                <span>{t("leader")}: {user.leader_name || t("none")}</span>
               </div>
             </div>
           </CardContent>
@@ -88,43 +90,43 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                Role & Permissions
+                {t("rolePermissions")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Role</p>
+                  <p className="text-xs text-muted-foreground">{t("role")}</p>
                   <p className="text-sm font-medium capitalize">{user.role}</p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Permissions</p>
+                  <p className="text-xs text-muted-foreground">{t("permissions")}</p>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {user.role === "admin" ? (
                       <>
                         <Badge variant="outline" className="text-xs">
-                          Manage Users
+                          {t("permission.manageUsers")}
                         </Badge>
                         <Badge variant="outline" className="text-xs">
-                          Manage Courses
+                          {t("permission.manageCourses")}
                         </Badge>
                         <Badge variant="outline" className="text-xs">
-                          View Reports
+                          {t("permission.viewReports")}
                         </Badge>
                         <Badge variant="outline" className="text-xs">
-                          Generate Documents
+                          {t("permission.generateDocuments")}
                         </Badge>
                       </>
                     ) : (
                       <>
                         <Badge variant="outline" className="text-xs">
-                          View Courses
+                          {t("permission.viewCourses")}
                         </Badge>
                         <Badge variant="outline" className="text-xs">
-                          Take Quizzes
+                          {t("permission.takeQuizzes")}
                         </Badge>
                         <Badge variant="outline" className="text-xs">
-                          View Documents
+                          {t("permission.viewDocuments")}
                         </Badge>
                       </>
                     )}
@@ -139,13 +141,13 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5" />
-                Enrolled Courses
+                {t("enrolledCourses")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {enrollments.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No courses enrolled yet.
+                  {t("noCourses")}
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -158,7 +160,7 @@ export default function ProfilePage() {
                           {completedCourses.length}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Completed
+                          {t("completed")}
                         </p>
                       </div>
                     </div>
@@ -169,7 +171,7 @@ export default function ProfilePage() {
                           {inProgressCourses.length}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          In Progress
+                          {t("inProgress")}
                         </p>
                       </div>
                     </div>
@@ -204,10 +206,10 @@ export default function ProfilePage() {
                         className="ml-3 shrink-0"
                       >
                         {enrollment.status === "completed"
-                          ? "Done"
+                          ? t("done")
                           : enrollment.status === "in_progress"
-                          ? "In Progress"
-                          : "Enrolled"}
+                          ? t("inProgress")
+                          : t("enrolled")}
                       </Badge>
                     </div>
                   ))}

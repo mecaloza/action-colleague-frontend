@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@
 import { api } from "@/lib/api";
 import { Course } from "@/lib/types";
 import { Plus, Search, Users, Clock, ChevronRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const categoryColors: Record<string, string> = {
   Compliance: "bg-blue-500/20 text-blue-400 border-blue-500/20",
@@ -23,6 +24,7 @@ const categoryColors: Record<string, string> = {
 };
 
 export default function AdminCoursesPage() {
+  const t = useTranslations("adminCourses");
   const [courses, setCourses] = useState<Course[]>([]);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -72,17 +74,17 @@ export default function AdminCoursesPage() {
     <div className="space-y-6 animate-slide-up">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Courses</h1>
-          <p className="text-muted-foreground">Manage training courses</p>
+          <h1 className="text-3xl font-bold">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="flex gap-2">
           <Link href="/admin/courses/create">
             <Button variant="default">
-              <Plus className="mr-2 h-4 w-4" /> Crear con IA ✨
+              <Plus className="mr-2 h-4 w-4" /> {t("createAi")}
             </Button>
           </Link>
           <Button variant="outline" onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Manual
+            <Plus className="mr-2 h-4 w-4" /> {t("manual")}
           </Button>
         </div>
       </div>
@@ -90,7 +92,7 @@ export default function AdminCoursesPage() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search courses..."
+          placeholder={t("searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
@@ -119,7 +121,7 @@ export default function AdminCoursesPage() {
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Users className="h-3.5 w-3.5" />
-                    {course.enrolled_count} enrolled
+                    {t("enrolled", { count: course.enrolled_count })}
                   </div>
                   <div className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
@@ -128,7 +130,7 @@ export default function AdminCoursesPage() {
                 </div>
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-muted-foreground">Completion</span>
+                    <span className="text-muted-foreground">{t("completion")}</span>
                     <span className="text-violet-400">{course.completion_rate}%</span>
                   </div>
                   <div className="h-2 rounded-full bg-white/10">
@@ -151,30 +153,30 @@ export default function AdminCoursesPage() {
         <DialogContent>
           <DialogClose onClose={() => setShowCreate(false)} />
           <DialogHeader>
-            <DialogTitle>Create New Course</DialogTitle>
+            <DialogTitle>{t("modal.title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
+              <Label htmlFor="title">{t("modal.courseTitle")}</Label>
               <Input
                 id="title"
                 value={newCourse.title}
                 onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })}
-                placeholder="Course title"
+                placeholder={t("modal.courseTitlePlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t("modal.description")}</Label>
               <Textarea
                 id="description"
                 value={newCourse.description}
                 onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })}
-                placeholder="Course description"
+                placeholder={t("modal.descriptionPlaceholder")}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
+                <Label htmlFor="category">{t("modal.category")}</Label>
                 <Select
                   id="category"
                   value={newCourse.category}
@@ -188,7 +190,7 @@ export default function AdminCoursesPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="duration">Duration (hours)</Label>
+                <Label htmlFor="duration">{t("modal.durationHours")}</Label>
                 <Input
                   id="duration"
                   type="number"
@@ -198,7 +200,7 @@ export default function AdminCoursesPage() {
               </div>
             </div>
             <Button className="w-full" onClick={handleCreate} disabled={!newCourse.title}>
-              Create Course
+              {t("modal.createCourse")}
             </Button>
           </div>
         </DialogContent>

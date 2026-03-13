@@ -36,6 +36,9 @@ import {
   ScrollText,
   RefreshCw,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { EvaluationEditorTab } from "@/components/evaluation-editor";
+import { EvaluationResultsTab } from "@/components/evaluation-analytics";
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
@@ -164,9 +167,14 @@ function EvaluationQuiz({
     setServerResult(null);
   };
 
+  if (!questions || !Array.isArray(questions) || questions.length === 0) {
+    return <p className="text-sm text-muted-foreground">No hay preguntas disponibles.</p>;
+  }
+
   return (
     <div className="space-y-4">
       {questions.map((q, qi) => {
+        if (!q || !q.options) return null;
         const selected = answers[qi];
         const isCorrect = submitted && selected === q.correct;
         const isWrong = submitted && selected !== undefined && selected !== q.correct;
@@ -232,7 +240,7 @@ function EvaluationQuiz({
           <Button
             size="sm"
             onClick={handleSubmit}
-            disabled={Object.keys(answers).length < questions.length || submitting}
+            disabled={!questions.every((q, qi) => !q || !q.options ? true : answers[qi] !== undefined) || submitting}
           >
             {submitting ? "Enviando..." : "Enviar respuestas"}
           </Button>
@@ -265,6 +273,7 @@ function ModuleCard({
   locked = false,
   progress,
   onSubmitEvaluation,
+  t,
 }: {
   mod: BackendModule;
   isExpanded: boolean;
@@ -272,6 +281,7 @@ function ModuleCard({
   locked?: boolean;
   progress?: { score: number | null; passed: boolean; attempts: number } | null;
   onSubmitEvaluation?: (moduleId: number | string, answers: Array<{ question_index: number; selected: string }>) => Promise<{ score: number; passed: boolean; correct: number; total: number } | null>;
+  t: ReturnType<typeof useTranslations>;
 }) {
   const [evaluation, setEvaluation] = useState<EvaluationQuestion[] | null>(null);
   const [evalLoading, setEvalLoading] = useState(false);
@@ -321,13 +331,20 @@ function ModuleCard({
       api
         .getEvaluations(String(mod.id))
         .then((evals: BackendEvaluation[]) => {
-          if (evals && evals.length > 0 && evals[0].questions_json) {
-            try {
-              const parsed: EvaluationQuestion[] = JSON.parse(evals[0].questions_json);
-              setEvaluation(parsed);
-            } catch {
-              // invalid JSON — ignore
+          if (evals && evals.length > 0) {
+            // Backend returns `questions` (parsed array) or legacy `questions_json` (string)
+            const ev = evals[0];
+            let parsed: EvaluationQuestion[] | null = null;
+            if (ev.questions && Array.isArray(ev.questions)) {
+              parsed = ev.questions;
+            } else if (ev.questions_json) {
+              try {
+                parsed = JSON.parse(ev.questions_json);
+              } catch {
+                // invalid JSON — ignore
+              }
             }
+            if (parsed && parsed.length > 0) setEvaluation(parsed);
           }
         })
         .catch(() => {})
@@ -341,7 +358,7 @@ function ModuleCard({
         type="button"
         className={`w-full text-left ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
         onClick={locked ? undefined : onToggle}
-        title={locked ? "Debes aprobar el módulo anterior primero" : ""}
+        title={locked ? t("module.mustPassPrevious") : ""}
       >
         <CardContent className="flex items-center gap-4 py-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 font-bold">
@@ -402,8 +419,8 @@ function ModuleCard({
             <section>
               <div className="flex items-center gap-2 mb-2">
                 <Video className="h-4 w-4 text-violet-400" />
-                <span className="text-xs font-medium text-violet-400 uppercase tracking-wide">
-                  Video
+                  <span className="text-xs font-medium text-violet-400 uppercase tracking-wide">
+                  {t("module.video")}
                 </span>
               </div>
               {hasVideo ? (
@@ -415,7 +432,7 @@ function ModuleCard({
               ) : (
                 <div className="flex items-center gap-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 text-sm text-yellow-400">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Generando video...
+                  {t("module.generatingVideo")}
                 </div>
               )}
             </section>
@@ -427,7 +444,7 @@ function ModuleCard({
               <div className="flex items-center gap-2 mb-2">
                 <Volume2 className="h-4 w-4 text-violet-400" />
                 <span className="text-xs font-medium text-violet-400 uppercase tracking-wide">
-                  Audio Narración
+                  {t("module.narrationAudio")}
                 </span>
               </div>
               <AudioPlayer src={mod.audio_url!} />
@@ -436,7 +453,7 @@ function ModuleCard({
 
           {/* Regenerate Buttons (per module) */}
           <section className="flex items-center gap-2 pt-2 border-t border-white/[0.06]">
-            <span className="text-xs text-muted-foreground mr-2">Regenerar:</span>
+            <span className="text-xs text-muted-foreground mr-2">{t("module.regenerate")}:</span>
             <Button
               size="sm"
               variant="outline"
@@ -450,7 +467,7 @@ function ModuleCard({
               className="text-xs h-7"
             >
               <RefreshCw className="mr-1 h-3 w-3" />
-              Audio
+              {t("module.audio")}
             </Button>
             <Button
               size="sm"
@@ -465,7 +482,7 @@ function ModuleCard({
               className="text-xs h-7"
             >
               <RefreshCw className="mr-1 h-3 w-3" />
-              Video
+              {t("module.video")}
             </Button>
           </section>
 
@@ -481,7 +498,7 @@ function ModuleCard({
                 className="flex items-center gap-2 text-xs font-medium text-violet-400 uppercase tracking-wide hover:text-violet-300 transition-colors"
               >
                 <ScrollText className="h-4 w-4" />
-                Ver guión
+                {t("module.viewScript")}
                 {scriptOpen ? (
                   <ChevronDown className="h-3 w-3" />
                 ) : (
@@ -500,7 +517,7 @@ function ModuleCard({
           {evalLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Cargando evaluación...
+              {t("module.loadingEvaluation")}
             </div>
           )}
           {evaluation && evaluation.length > 0 && (
@@ -508,7 +525,7 @@ function ModuleCard({
               <div className="flex items-center gap-2 mb-3">
                 <GraduationCap className="h-4 w-4 text-violet-400" />
                 <span className="text-xs font-medium text-violet-400 uppercase tracking-wide">
-                  Evaluación
+                  {t("module.evaluation")}
                 </span>
               </div>
               <EvaluationQuiz questions={evaluation} onSubmit={onSubmitEvaluation} moduleId={mod.id} />
@@ -518,7 +535,7 @@ function ModuleCard({
           {/* Empty state */}
           {!hasVideo && !videoPending && !hasAudio && !hasContent && !evaluation && !evalLoading && (
             <p className="text-sm text-muted-foreground">
-              Este módulo aún no tiene contenido.
+              {t("module.noContent")}
             </p>
           )}
         </div>
@@ -530,6 +547,7 @@ function ModuleCard({
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function CourseDetailPage() {
+  const t = useTranslations("adminCourseDetail");
   const params = useParams();
   const id = params.id as string;
   const [course, setCourse] = useState<BackendCourse | null>(null);
@@ -602,9 +620,10 @@ export default function CourseDetailPage() {
 
       <Tabs defaultValue="modules">
         <TabsList>
-          <TabsTrigger value="modules">Módulos</TabsTrigger>
-          <TabsTrigger value="details">Detalles</TabsTrigger>
-          <TabsTrigger value="analytics">Analíticas</TabsTrigger>
+          <TabsTrigger value="modules">{t("tabs.modules")}</TabsTrigger>
+          <TabsTrigger value="evaluations">Evaluaciones</TabsTrigger>
+          <TabsTrigger value="results">Resultados</TabsTrigger>
+          <TabsTrigger value="details">{t("tabs.details")}</TabsTrigger>
         </TabsList>
 
         {/* Modules Tab */}
@@ -612,10 +631,10 @@ export default function CourseDetailPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h2 className="text-xl font-semibold">
-                Módulos del Curso ({sortedModules.length})
+                {t("courseModules", { count: sortedModules.length })}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Los videos se generan automáticamente al crear el curso. Usa los botones por módulo para regenerar.
+                {t("modulesHint")}
               </p>
             </div>
 
@@ -623,7 +642,7 @@ export default function CourseDetailPage() {
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <FileText className="mb-3 h-10 w-10" />
-                  <p>No hay módulos aún.</p>
+                  <p>{t("noModules")}</p>
                 </CardContent>
               </Card>
             ) : (
@@ -636,6 +655,7 @@ export default function CourseDetailPage() {
                     onToggle={() => toggleModule(mod.id)}
                     locked={false} /* Admin always has full access */
                     progress={moduleProgress[mod.id]}
+                    t={t}
                     onSubmitEvaluation={async (moduleId, answers) => {
                       try {
                         // For now, use enrollment_id=1 (admin testing)
@@ -669,7 +689,7 @@ export default function CourseDetailPage() {
         <TabsContent value="details">
           <Card>
             <CardHeader>
-              <CardTitle>Detalles del Curso</CardTitle>
+              <CardTitle>{t("details.title")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -681,7 +701,7 @@ export default function CourseDetailPage() {
                 </div>
                 <div className="rounded-lg bg-white/[0.04] p-3">
                   <span className="text-muted-foreground text-xs">
-                    Fecha de Creación
+                    {t("details.creationDate")}
                   </span>
                   <p className="font-medium mt-1">
                     {new Date(course.created_at).toLocaleDateString("es-ES", {
@@ -693,13 +713,13 @@ export default function CourseDetailPage() {
                 </div>
                 <div className="rounded-lg bg-white/[0.04] p-3">
                   <span className="text-muted-foreground text-xs">
-                    Total de Módulos
+                    {t("details.totalModules")}
                   </span>
                   <p className="font-medium mt-1">{modules.length}</p>
                 </div>
                 <div className="rounded-lg bg-white/[0.04] p-3">
                   <span className="text-muted-foreground text-xs">
-                    Creado por (ID)
+                    {t("details.createdBy")}
                   </span>
                   <p className="font-medium mt-1">{course.created_by}</p>
                 </div>
@@ -708,93 +728,14 @@ export default function CourseDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Analytics Tab */}
-        <TabsContent value="analytics">
-          {stats ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card className="gradient-border">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Módulos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10">
-                      <BookOpen className="h-4 w-4 text-violet-400" />
-                    </div>
-                    <span className="text-3xl font-bold">
-                      {stats.total_modules}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
+        {/* Evaluations Editor Tab */}
+        <TabsContent value="evaluations">
+          <EvaluationEditorTab modules={modules} />
+        </TabsContent>
 
-              <Card className="gradient-border">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Evaluaciones
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10">
-                      <GraduationCap className="h-4 w-4 text-violet-400" />
-                    </div>
-                    <span className="text-3xl font-bold">
-                      {stats.total_evaluations}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="gradient-border">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Inscritos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10">
-                      <Users className="h-4 w-4 text-violet-400" />
-                    </div>
-                    <span className="text-3xl font-bold">
-                      {stats.total_enrollments}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="gradient-border">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Tasa de Completitud
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10">
-                      <BarChart3 className="h-4 w-4 text-violet-400" />
-                    </div>
-                    <span className="text-3xl font-bold text-violet-400">
-                      {stats.completion_rate}%
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 rounded-full bg-white/10">
-                    <div
-                      className="h-2 rounded-full bg-gradient-to-r from-violet-500 to-purple-500"
-                      style={{ width: `${stats.completion_rate}%` }}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center p-12">
-              <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
-            </div>
-          )}
+        {/* Results / Analytics Tab */}
+        <TabsContent value="results">
+          <EvaluationResultsTab courseId={id} stats={stats} />
         </TabsContent>
       </Tabs>
     </div>

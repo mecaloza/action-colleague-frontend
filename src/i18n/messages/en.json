@@ -1,0 +1,287 @@
+{
+  "common": { "loading": "Loading..." },
+  "language": { "label": "Language", "switchTo": "Switch to {locale}" },
+  "appShell": { "loading": "Loading..." },
+  "header": { "welcome": "Welcome", "logout": "Logout" },
+  "sidebar": {
+    "adminDashboard": "Main Panel",
+    "courses": "Courses",
+    "employees": "Employees",
+    "orgChart": "Org Chart",
+    "documents": "Documents",
+    "communications": "Communications",
+    "myDashboard": "My Dashboard",
+    "myDocuments": "My Documents",
+    "profile": "Profile",
+    "admin": "Administrator",
+    "collaborator": "Collaborator"
+  },
+  "login": {
+    "title": "Sign In",
+    "subtitle": "HR & AI Training Platform — Sign in to continue",
+    "email": "Email",
+    "password": "Password",
+    "emailPlaceholder": "your@email.com",
+    "passwordPlaceholder": "Enter your password",
+    "signingIn": "Signing in...",
+    "errors": { "failed": "Login failed. Please try again." },
+    "demo": { "title": "Demo credentials:", "admin": "Admin", "collaborator": "Collaborator" }
+  },
+  "adminDashboard": {
+    "loadError": "Could not load dashboard data.",
+    "welcome": "Welcome",
+    "adminFallback": "Admin",
+    "subtitle": "Summary of your training platform",
+    "stats": {
+      "courses": "Courses",
+      "coursesSub": "Training courses",
+      "employees": "Employees",
+      "employeesSub": "Registered users",
+      "activeEnrollments": "Active Enrollments",
+      "activeEnrollmentsSub": "Currently in progress",
+      "completionRate": "Completion Rate",
+      "completionRateSub": "{completed} of {total} enrollments"
+    },
+    "enrollmentSummary": {
+      "title": "Enrollment Summary",
+      "completed": "Completed",
+      "inProgress": "In Progress",
+      "total": "Total",
+      "completedPct": "{percent}% completed"
+    },
+    "certificates": { "title": "Certificates", "issued": "Certificates issued" }
+  },
+  "adminCourses": {
+    "title": "Courses",
+    "subtitle": "Manage training courses",
+    "createAi": "Create with AI ✨",
+    "manual": "Manual",
+    "searchPlaceholder": "Search courses...",
+    "enrolled": "{count} enrolled",
+    "completion": "Completion",
+    "modal": {
+      "title": "Create New Course",
+      "courseTitle": "Title",
+      "courseTitlePlaceholder": "Course title",
+      "description": "Description",
+      "descriptionPlaceholder": "Course description",
+      "category": "Category",
+      "durationHours": "Duration (hours)",
+      "createCourse": "Create Course"
+    }
+  },
+  "adminCourseCreate": {
+    "title": "Create Course with AI",
+    "subtitle": "AI-assisted creation wizard",
+    "errors": {
+      "analysisFailed": "Analysis failed",
+      "analysisRetry": "Error analyzing materials. Try again.",
+      "scriptGenerationFailed": "Script generation failed",
+      "cloneVoice": "Error cloning voice",
+      "generateCourse": "Error generating course"
+    }
+  },
+  "adminCourseDetail": {
+    "tabs": { "modules": "Modules", "details": "Details", "analytics": "Analytics" },
+    "courseModules": "Course Modules ({count})",
+    "modulesHint": "Videos are generated automatically when creating the course. Use the per-module buttons to regenerate.",
+    "noModules": "No modules yet.",
+    "module": {
+      "mustPassPrevious": "You must pass the previous module first",
+      "video": "Video",
+      "generatingVideo": "Generating video...",
+      "narrationAudio": "Narration Audio",
+      "regenerate": "Regenerate",
+      "audio": "Audio",
+      "viewScript": "View script",
+      "loadingEvaluation": "Loading evaluation...",
+      "evaluation": "Evaluation",
+      "noContent": "This module has no content yet."
+    },
+    "details": {
+      "title": "Course Details",
+      "creationDate": "Creation Date",
+      "totalModules": "Total Modules",
+      "createdBy": "Created by (ID)"
+    },
+    "analytics": { "modules": "Modules", "evaluations": "Evaluations", "enrolled": "Enrolled" }
+  },
+  "adminEmployees": {
+    "title": "User Management",
+    "subtitle": "Create, edit, and manage user accounts",
+    "createUser": "Create User",
+    "searchPlaceholder": "Search users...",
+    "empty": "No users found",
+    "errors": { "failedSave": "Failed to save user" },
+    "table": {
+      "name": "Name",
+      "email": "Email",
+      "position": "Position",
+      "department": "Department",
+      "role": "Role",
+      "leader": "Leader",
+      "status": "Status"
+    },
+    "status": { "active": "Active", "inactive": "Inactive" },
+    "role": { "admin": "Admin", "collaborator": "Collaborator" },
+    "actions": {
+      "editUser": "Edit user",
+      "reactivateUser": "Reactivate user",
+      "deactivateUser": "Deactivate user",
+      "cancel": "Cancel",
+      "saving": "Saving...",
+      "saveChanges": "Save Changes"
+    },
+    "modal": { "createTitle": "Create User", "editTitle": "Edit User" },
+    "form": {
+      "fullName": "Full Name",
+      "email": "Email",
+      "password": "Password",
+      "position": "Position",
+      "department": "Department",
+      "role": "Role",
+      "leader": "Leader",
+      "noLeader": "No leader"
+    }
+  },
+  "adminDocuments": {
+    "title": "Documents",
+    "subtitle": "Generate and manage HR documents",
+    "generateDocument": "Generate Document",
+    "table": { "document": "Document", "type": "Type", "employee": "Employee", "status": "Status", "date": "Date" },
+    "modal": {
+      "title": "Generate Document",
+      "documentType": "Document Type",
+      "employeeName": "Employee Name",
+      "employeeNamePlaceholder": "Enter employee name",
+      "additionalNotes": "Additional Notes",
+      "additionalNotesPlaceholder": "Any additional information for the AI to consider...",
+      "generateWithAi": "Generate with AI"
+    }
+  },
+  "adminOrgChart": {
+    "title": "Org Chart",
+    "summary": "{people} people · {departments} departments",
+    "searchPlaceholder": "Search by name, role, department...",
+    "viewAll": "View all",
+    "empty": "Assign direct leaders in Employees to build the org chart"
+  },
+  "adminSeries": {
+    "title": "Micro-Series",
+    "subtitle": "AI-generated micro-episode series",
+    "create": "Create Micro-Series",
+    "searchPlaceholder": "Search micro-series...",
+    "loading": "Loading micro-series...",
+    "emptyTitle": "No micro-series",
+    "emptySubtitle": "Create your first AI micro-series",
+    "confirmDelete": "Are you sure you want to delete this micro-series?",
+    "episodes": "{count} episodes"
+  },
+  "adminSeriesCreate": {
+    "title": "Create Micro-Series",
+    "subtitle": "Generate an AI micro-series with episodes",
+    "errors": {
+      "generateScript": "Error generating script",
+      "generateScriptRetry": "Error generating script. Please try again.",
+      "createSeries": "Error creating series",
+      "createSeriesRetry": "Error creating series. Please try again."
+    }
+  },
+  "adminSeriesDetail": {
+    "loading": "Loading micro-series...",
+    "notFound": "Series not found",
+    "backToSeries": "Back to Series",
+    "regenerateVideos": "Regenerate Videos",
+    "regenerateAudio": "Regenerate Audio",
+    "errors": { "regenerateVideos": "Error regenerating videos.", "regenerateAudio": "Error regenerating audio." }
+  },
+  "adminCommunications": {
+    "title": "Communications",
+    "subtitle": "Publish internal communications for your team",
+    "create": "New Communication",
+    "searchPlaceholder": "Search communications...",
+    "emptyTitle": "No communications",
+    "emptySubtitle": "Create your first internal communication",
+    "confirmDelete": "Are you sure you want to delete this communication?",
+    "delete": "Delete",
+    "modal": {
+      "title": "New Communication",
+      "commTitle": "Title",
+      "titlePlaceholder": "Communication title",
+      "message": "Message",
+      "messagePlaceholder": "Write the communication content...",
+      "image": "Image",
+      "uploadUrl": "URL",
+      "generateAi": "Generate with AI",
+      "urlPlaceholder": "https://example.com/image.png",
+      "promptPlaceholder": "Describe the image you want to generate...",
+      "preview": "Preview",
+      "noImage": "No image (optional)",
+      "publish": "Publish",
+      "publishing": "Publishing..."
+    }
+  },
+  "collaboratorDashboard": {
+    "loading": "Loading...",
+    "title": "My Dashboard",
+    "subtitle": "Track your learning progress",
+    "myCourses": "My Courses",
+    "recentActivity": "Recent Activity",
+    "stats": {
+      "inProgress": "In Progress",
+      "activeCourses": "Active courses",
+      "completed": "Completed",
+      "finishedCourses": "Finished courses",
+      "totalHours": "Total Hours",
+      "learningTime": "Learning time",
+      "totalEnrolled": "Total Enrolled",
+      "allCourses": "All courses"
+    }
+  },
+  "collaboratorCourses": {
+    "title": "My Courses",
+    "subtitle": "Your assigned courses and your progress",
+    "empty": "You don't have assigned courses yet.",
+    "progress": "Progress",
+    "completedModules": "{completed}/{total} modules completed"
+  },
+  "collaboratorCourseDetail": {
+    "backToCourses": "← Back to My Courses",
+    "courseProgress": "Course Progress",
+    "approvedModules": "{completed}/{total} approved modules",
+    "completedTitle": "Course Completed!",
+    "completedSubtitle": "You have successfully passed all modules."
+  },
+  "collaboratorDocuments": {
+    "title": "My Documents",
+    "subtitle": "View your HR documents and certificates",
+    "empty": "No documents yet.",
+    "table": { "document": "Document", "type": "Type", "status": "Status", "date": "Date", "actions": "Actions" },
+    "actions": { "view": "View", "download": "Download" }
+  },
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Your account information",
+    "emptyValue": "—",
+    "leader": "Leader",
+    "none": "None",
+    "rolePermissions": "Role & Permissions",
+    "role": "Role",
+    "permissions": "Permissions",
+    "permission": {
+      "manageUsers": "Manage Users",
+      "manageCourses": "Manage Courses",
+      "viewReports": "View Reports",
+      "generateDocuments": "Generate Documents",
+      "viewCourses": "View Courses",
+      "takeQuizzes": "Take Quizzes",
+      "viewDocuments": "View Documents"
+    },
+    "enrolledCourses": "Enrolled Courses",
+    "noCourses": "No courses enrolled yet.",
+    "completed": "Completed",
+    "inProgress": "In Progress",
+    "done": "Done",
+    "enrolled": "Enrolled"
+  }
+}

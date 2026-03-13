@@ -21,6 +21,7 @@ import {
   Clapperboard,
   Trash2,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -86,6 +87,7 @@ const statusLabel = (status: string) => {
 };
 
 export default function AdminSeriesPage() {
+  const t = useTranslations("adminSeries");
   const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -112,7 +114,7 @@ export default function AdminSeriesPage() {
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm("¿Estás seguro de eliminar esta micro-serie?")) return;
+    if (!confirm(t("confirmDelete"))) return;
     try {
       await fetch(`${API_BASE}/series/ai/${id}`, {
         method: "DELETE",
@@ -134,14 +136,14 @@ export default function AdminSeriesPage() {
     <div className="space-y-6 animate-slide-up">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Micro-Series</h1>
+          <h1 className="text-3xl font-bold">{t("title")}</h1>
           <p className="text-muted-foreground">
-            Series de micro-episodios generados con IA
+            {t("subtitle")}
           </p>
         </div>
         <Link href="/admin/series/create">
           <Button variant="default">
-            <Plus className="mr-2 h-4 w-4" /> Crear Micro-Serie
+            <Plus className="mr-2 h-4 w-4" /> {t("create")}
           </Button>
         </Link>
       </div>
@@ -149,7 +151,7 @@ export default function AdminSeriesPage() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Buscar micro-series..."
+          placeholder={t("searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
@@ -161,20 +163,20 @@ export default function AdminSeriesPage() {
           <div className="flex flex-col items-center gap-3">
             <Clapperboard className="h-8 w-8 text-violet-400 animate-pulse" />
             <p className="text-sm text-muted-foreground">
-              Cargando micro-series...
+              {t("loading")}
             </p>
           </div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Film className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">No hay micro-series</h3>
+          <h3 className="text-lg font-medium">{t("emptyTitle")}</h3>
           <p className="text-sm text-muted-foreground mt-1 mb-4">
-            Crea tu primera micro-serie con IA
+            {t("emptySubtitle")}
           </p>
           <Link href="/admin/series/create">
             <Button>
-              <Plus className="mr-2 h-4 w-4" /> Crear Micro-Serie
+              <Plus className="mr-2 h-4 w-4" /> {t("create")}
             </Button>
           </Link>
         </div>
@@ -210,7 +212,7 @@ export default function AdminSeriesPage() {
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Layers className="h-3.5 w-3.5" />
-                      {series.episodes?.length || 0} episodios
+                      {t("episodes", { count: series.episodes?.length || 0 })}
                     </div>
                   </div>
                   <div
