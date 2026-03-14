@@ -247,7 +247,7 @@ export const api = {
       total: number;
       attempts: number;
       next_module_unlocked: boolean;
-    }>("/evaluations/submit/", { method: "POST", body: JSON.stringify(data) }),
+    }>("/evaluations/submit", { method: "POST", body: JSON.stringify(data) }),
 
   getCourseProgress: (enrollmentId: number) =>
     fetchAPI<Array<{
