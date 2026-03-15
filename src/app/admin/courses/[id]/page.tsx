@@ -23,15 +23,12 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
-  GraduationCap,
   Play,
   Pause,
   Volume2,
-  CheckCircle2,
-  XCircle,
-  CircleDot,
   ScrollText,
   RefreshCw,
+  BookOpen,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { EvaluationEditorTab } from "@/components/evaluation-editor";
@@ -118,149 +115,6 @@ function AudioPlayer({ src }: { src: string }) {
   );
 }
 
-// ─── Evaluation Quiz Component ───────────────────────────────────────────────
-
-function EvaluationQuiz({
-  questions,
-  onSubmit,
-  moduleId,
-}: {
-  questions: EvaluationQuestion[];
-  onSubmit?: (moduleId: number | string, answers: Array<{ question_index: number; selected: string }>) => Promise<{ score: number; passed: boolean; correct: number; total: number } | null>;
-  moduleId?: number | string;
-}) {
-  const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [submitted, setSubmitted] = useState(false);
-  const [serverResult, setServerResult] = useState<{ score: number; passed: boolean; correct: number; total: number } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const select = (qi: number, oi: number) => {
-    if (submitted) return;
-    setAnswers((prev) => ({ ...prev, [qi]: oi }));
-  };
-
-  const score = questions.reduce(
-    (acc, q, i) => acc + (answers[i] === q.correct ? 1 : 0),
-    0
-  );
-
-  const handleSubmit = async () => {
-    setSubmitted(true);
-    if (onSubmit && moduleId) {
-      setSubmitting(true);
-      const formattedAnswers = Object.entries(answers).map(([qi, oi]) => ({
-        question_index: parseInt(qi),
-        selected: String.fromCharCode(97 + oi), // 0→a, 1→b, 2→c, 3→d
-      }));
-      const result = await onSubmit(moduleId, formattedAnswers);
-      if (result) setServerResult(result);
-      setSubmitting(false);
-    }
-  };
-
-  const reset = () => {
-    setAnswers({});
-    setSubmitted(false);
-    setServerResult(null);
-  };
-
-  if (!questions || !Array.isArray(questions) || questions.length === 0) {
-    return <p className="text-sm text-muted-foreground">No hay preguntas disponibles.</p>;
-  }
-
-  return (
-    <div className="space-y-4">
-      {questions.map((q, qi) => {
-        if (!q || !q.options) return null;
-        const selected = answers[qi];
-        const isCorrect = submitted && selected === q.correct;
-        const isWrong = submitted && selected !== undefined && selected !== q.correct;
-
-        return (
-          <div
-            key={qi}
-            className="rounded-lg bg-white/[0.04] p-4 space-y-3"
-          >
-            <p className="text-sm font-medium">
-              {qi + 1}. {q.question}
-            </p>
-            <div className="space-y-2">
-              {q.options.map((opt, oi) => {
-                const isSelected = selected === oi;
-                const isTheCorrect = q.correct === oi;
-                let ring = "border-white/10";
-                if (submitted && isTheCorrect) ring = "border-emerald-500/60 bg-emerald-500/10";
-                else if (submitted && isSelected && !isTheCorrect) ring = "border-red-500/60 bg-red-500/10";
-                else if (isSelected) ring = "border-violet-500/60 bg-violet-500/10";
-
-                return (
-                  <button
-                    key={oi}
-                    type="button"
-                    onClick={() => select(qi, oi)}
-                    className={`w-full text-left flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${ring} ${
-                      submitted ? "cursor-default" : "hover:border-violet-500/40 cursor-pointer"
-                    }`}
-                  >
-                    {submitted && isTheCorrect && (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                    )}
-                    {submitted && isSelected && !isTheCorrect && (
-                      <XCircle className="h-4 w-4 text-red-400 shrink-0" />
-                    )}
-                    {!submitted && (
-                      <CircleDot
-                        className={`h-4 w-4 shrink-0 ${
-                          isSelected ? "text-violet-400" : "text-muted-foreground"
-                        }`}
-                      />
-                    )}
-                    <span>{opt}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {submitted && isCorrect && (
-              <p className="text-xs text-emerald-400">Correcto</p>
-            )}
-            {submitted && isWrong && (
-              <p className="text-xs text-red-400">
-                Incorrecto — la respuesta correcta es: {q.options[q.correct]}
-              </p>
-            )}
-          </div>
-        );
-      })}
-
-      <div className="flex items-center gap-3 pt-2">
-        {!submitted ? (
-          <Button
-            size="sm"
-            onClick={handleSubmit}
-            disabled={!questions.every((q, qi) => !q || !q.options ? true : answers[qi] !== undefined) || submitting}
-          >
-            {submitting ? "Enviando..." : "Enviar respuestas"}
-          </Button>
-        ) : (
-          <>
-            <Badge variant={score === questions.length ? "default" : "secondary"}>
-              {score}/{questions.length} correctas
-            </Badge>
-            {serverResult && (
-              <Badge className={serverResult.passed ? "bg-green-600 text-white" : "bg-red-600 text-white"}>
-                {serverResult.passed ? "✅ Aprobado" : "❌ Reprobado"} — {serverResult.score.toFixed(0)}%
-              </Badge>
-            )}
-            <Button size="sm" variant="outline" onClick={reset}>
-              Reintentar
-            </Button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Module Card Component ───────────────────────────────────────────────────
 
 function ModuleCard({
@@ -268,23 +122,20 @@ function ModuleCard({
   isExpanded,
   onToggle,
   locked = false,
-  progress,
-  onSubmitEvaluation,
+  onNavigateToEvaluations,
   t,
 }: {
   mod: BackendModule;
   isExpanded: boolean;
   onToggle: () => void;
   locked?: boolean;
-  progress?: { score: number | null; passed: boolean; attempts: number } | null;
-  onSubmitEvaluation?: (moduleId: number | string, answers: Array<{ question_index: number; selected: string }>) => Promise<{ score: number; passed: boolean; correct: number; total: number } | null>;
+  onNavigateToEvaluations?: (moduleId: number | string) => void;
   t: ReturnType<typeof useTranslations>;
 }) {
   const [evaluation, setEvaluation] = useState<EvaluationQuestion[] | null>(null);
   const [evalLoading, setEvalLoading] = useState(false);
   const [evalLoaded, setEvalLoaded] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(false);
-  // submitting/lastResult managed by EvaluationQuiz component
 
   const hasContent = !!mod.content_text;
   const hasVideo = !!mod.video_url && !mod.video_url.startsWith("heygen://pending");
@@ -375,18 +226,6 @@ function ModuleCard({
             </div>
             <h3 className={`font-medium truncate ${locked ? "opacity-50" : ""}`}>{mod.title}</h3>
           </div>
-
-          {/* Progress badge */}
-          {progress?.passed && (
-            <Badge variant="default" className="bg-green-600 text-white">
-              ✅ Aprobado ({progress.score?.toFixed(0)}%)
-            </Badge>
-          )}
-          {progress && !progress.passed && progress.attempts > 0 && (
-            <Badge variant="destructive">
-              ❌ {progress.score?.toFixed(0)}% (intento {progress.attempts})
-            </Badge>
-          )}
 
           {/* Generation status badge */}
           {!locked && (
@@ -510,7 +349,7 @@ function ModuleCard({
             </section>
           )}
 
-          {/* Evaluation Section */}
+          {/* Evaluation Section - Preview Only */}
           {evalLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -519,13 +358,26 @@ function ModuleCard({
           )}
           {evaluation && evaluation.length > 0 && (
             <section>
-              <div className="flex items-center gap-2 mb-3">
-                <GraduationCap className="h-4 w-4 text-violet-400" />
-                <span className="text-xs font-medium text-violet-400 uppercase tracking-wide">
-                  {t("module.evaluation")}
-                </span>
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-violet-400" />
+                    <span className="text-sm font-medium">
+                      Evaluación: {evaluation.length} pregunta{evaluation.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigateToEvaluations?.(mod.id);
+                    }}
+                  >
+                    Editar Evaluación
+                  </Button>
+                </div>
               </div>
-              <EvaluationQuiz questions={evaluation} onSubmit={onSubmitEvaluation} moduleId={mod.id} />
             </section>
           )}
 
@@ -554,8 +406,7 @@ export default function CourseDetailPage() {
     new Set()
   );
   const [loading, setLoading] = useState(true);
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const [moduleProgress, setModuleProgress] = useState<Record<any, { score: number | null; passed: boolean; attempts: number }>>({});
+  const [activeTab, setActiveTab] = useState("modules");
 
   const loadModules = useCallback(() => {
     return api.getModules(id).then(setModules);
@@ -615,7 +466,7 @@ export default function CourseDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="modules">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="modules">{t("tabs.modules")}</TabsTrigger>
           <TabsTrigger value="evaluations">Evaluaciones</TabsTrigger>
@@ -651,29 +502,14 @@ export default function CourseDetailPage() {
                     isExpanded={expandedModules.has(mod.id)}
                     onToggle={() => toggleModule(mod.id)}
                     locked={false} /* Admin always has full access */
-                    progress={moduleProgress[mod.id]}
                     t={t}
-                    onSubmitEvaluation={async (moduleId, answers) => {
-                      try {
-                        // For now, use enrollment_id=1 (admin testing)
-                        const result = await api.submitEvaluation({
-                          enrollment_id: 1,
-                          module_id: Number(moduleId),
-                          answers,
-                        });
-                        setModuleProgress((prev) => ({
-                          ...prev,
-                          [moduleId]: {
-                            score: result.score,
-                            passed: result.passed,
-                            attempts: result.attempts,
-                          },
-                        }));
-                        return result;
-                      } catch (err) {
-                        console.error("Error submitting evaluation:", err);
-                        return null;
-                      }
+                    onNavigateToEvaluations={(moduleId) => {
+                      setActiveTab("evaluations");
+                      // Optional: scroll to module in evaluations tab
+                      setTimeout(() => {
+                        const element = document.getElementById(`module-eval-${moduleId}`);
+                        element?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }, 100);
                     }}
                   />
                 ))}
