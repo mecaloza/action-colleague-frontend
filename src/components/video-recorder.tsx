@@ -60,6 +60,24 @@ export function VideoRecorder({
 
   // ─── Initialize Media Stream ─────────────────────────────────────────────
 
+  const setupAudioMonitoring = useCallback((stream: MediaStream) => {
+    try {
+      const audioContext = new AudioContext();
+      const analyser = audioContext.createAnalyser();
+      const microphone = audioContext.createMediaStreamSource(stream);
+
+      analyser.fftSize = 256;
+      microphone.connect(analyser);
+
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+
+      updateAudioLevel();
+    } catch (error) {
+      console.error("Error setting up audio monitoring:", error);
+    }
+  }, []);
+
   const initializeStream = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -94,27 +112,9 @@ export function VideoRecorder({
       setState("error");
       setPermissions({ camera: false, microphone: false });
     }
-  }, []);
+  }, [setupAudioMonitoring]);
 
   // ─── Audio Level Monitoring ──────────────────────────────────────────────
-
-  const setupAudioMonitoring = (stream: MediaStream) => {
-    try {
-      const audioContext = new AudioContext();
-      const analyser = audioContext.createAnalyser();
-      const microphone = audioContext.createMediaStreamSource(stream);
-
-      analyser.fftSize = 256;
-      microphone.connect(analyser);
-
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-
-      updateAudioLevel();
-    } catch (error) {
-      console.error("Error setting up audio monitoring:", error);
-    }
-  };
 
   const updateAudioLevel = () => {
     if (!analyserRef.current) return;
@@ -130,31 +130,20 @@ export function VideoRecorder({
     animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
   };
 
+  // ─── Stop Recording ──────────────────────────────────────────────────────
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && state === "recording") {
+      mediaRecorderRef.current.stop();
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    }
+  }, [state]);
+
   // ─── Start Recording ─────────────────────────────────────────────────────
 
-  const startRecording = useCallback(() => {
-    if (!streamRef.current) {
-      setErrorMessage("No hay stream de video disponible");
-      return;
-    }
-
-    // Start countdown
-    setState("countdown");
-    setCountdown(3);
-
-    countdownIntervalRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownIntervalRef.current!);
-          beginRecording();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }, []);
-
-  const beginRecording = () => {
+  const beginRecording = useCallback(() => {
     if (!streamRef.current) return;
 
     try {
@@ -203,18 +192,29 @@ export function VideoRecorder({
       setErrorMessage("Error al iniciar la grabación");
       setState("error");
     }
-  };
+  }, [duration, maxDuration, onRecordingComplete, stopRecording]);
 
-  // ─── Stop Recording ──────────────────────────────────────────────────────
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && state === "recording") {
-      mediaRecorderRef.current.stop();
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
+  const startRecording = useCallback(() => {
+    if (!streamRef.current) {
+      setErrorMessage("No hay stream de video disponible");
+      return;
     }
-  }, [state]);
+
+    // Start countdown
+    setState("countdown");
+    setCountdown(3);
+
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownIntervalRef.current!);
+          beginRecording();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [beginRecording]);
 
   // ─── Reset ───────────────────────────────────────────────────────────────
 
