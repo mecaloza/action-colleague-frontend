@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -23,8 +25,8 @@ const API_BASE =
   "https://colleague-backend-production.up.railway.app/api/v1";
 
 interface CourseCreationManualProps {
-  moduleId: number;
-  onComplete?: (videoId: number) => void;
+  moduleId?: number; // Optional: si no se provee, creamos el curso completo
+  onComplete?: (courseId: number) => void;
   className?: string;
 }
 
@@ -40,6 +42,11 @@ export function CourseCreationManual({
   const [step, setStep] = useState<WizardStep>(1);
   const [canProceed, setCanProceed] = useState(false);
 
+  // Course metadata (when creating full course)
+  const [courseTitle, setCourseTitle] = useState("");
+  const [courseDescription, setCourseDescription] = useState("");
+  const [moduleTitle, setModuleTitle] = useState("");
+
   // Step 1: Video Recording
   const [videoData, setVideoData] = useState<{
     video_id: number;
@@ -54,6 +61,7 @@ export function CourseCreationManual({
     useState<ProcessingState>("idle");
   const [processingError, setProcessingError] = useState<string>("");
   const [finalVideoId, setFinalVideoId] = useState<number | null>(null);
+  const [createdCourseId, setCreatedCourseId] = useState<number | null>(null);
 
   // ─── Handlers ────────────────────────────────────────────────────────────
 
@@ -86,7 +94,7 @@ export function CourseCreationManual({
     }
   };
 
-  // ─── Video Composition ───────────────────────────────────────────────────
+  // ─── Video Composition & Course Creation ─────────────────────────────────
 
   const composeVideo = async () => {
     if (!videoData) {
@@ -127,15 +135,68 @@ export function CourseCreationManual({
       const result = await response.json();
       console.log("Video composed:", result);
 
+      const composedVideoUrl = result.video_url || result.storage_url;
       setFinalVideoId(result.video_id || videoData.video_id);
-      setProcessingState("success");
-      onComplete?.(result.video_id || videoData.video_id);
+
+      // Si moduleId no está definido, crear curso completo
+      if (!moduleId) {
+        await createFullCourse(composedVideoUrl);
+      } else {
+        setProcessingState("success");
+        onComplete?.(result.video_id || videoData.video_id);
+      }
     } catch (error) {
       console.error("Composition error:", error);
       setProcessingError(
         error instanceof Error
           ? error.message
           : "Error desconocido al componer el video"
+      );
+      setProcessingState("error");
+    }
+  };
+
+  const createFullCourse = async (videoUrl: string) => {
+    try {
+      const token = localStorage.getItem("ac_token");
+      
+      const coursePayload = {
+        title: courseTitle || "Nuevo Curso",
+        description: courseDescription || "Curso creado manualmente",
+        modules: [
+          {
+            title: moduleTitle || "Módulo 1",
+            order: 1,
+            video_url: videoUrl,
+          },
+        ],
+      };
+
+      const courseResponse = await fetch(`${API_BASE}/courses`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(coursePayload),
+      });
+
+      if (!courseResponse.ok) {
+        throw new Error("Error creando el curso");
+      }
+
+      const courseData = await courseResponse.json();
+      console.log("Course created:", courseData);
+      
+      setCreatedCourseId(courseData.id);
+      setProcessingState("success");
+      onComplete?.(courseData.id);
+    } catch (error) {
+      console.error("Course creation error:", error);
+      setProcessingError(
+        error instanceof Error
+          ? error.message
+          : "Error creando el curso"
       );
       setProcessingState("error");
     }
@@ -206,6 +267,45 @@ export function CourseCreationManual({
 
   const renderStep1 = () => (
     <div className="space-y-6">
+      {/* Course metadata (only when creating full course) */}
+      {!moduleId && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Información del Curso</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Título del Curso</Label>
+              <Input
+                type="text"
+                value={courseTitle}
+                onChange={(e) => setCourseTitle(e.target.value)}
+                placeholder="Ej: Seguridad Industrial Básica"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Descripción</Label>
+              <textarea
+                value={courseDescription}
+                onChange={(e) => setCourseDescription(e.target.value)}
+                placeholder="Breve descripción del curso"
+                rows={2}
+                className="flex w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm resize-none outline-none focus:ring-2 focus:ring-violet-500/50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Título del Módulo</Label>
+              <Input
+                type="text"
+                value={moduleTitle}
+                onChange={(e) => setModuleTitle(e.target.value)}
+                placeholder="Ej: Introducción y EPP"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="text-center">
         <h2 className="text-2xl font-bold mb-2">Paso 1: Grabar Video</h2>
         <p className="text-muted-foreground">
@@ -214,7 +314,7 @@ export function CourseCreationManual({
       </div>
 
       <VideoRecorderWithUpload
-        moduleId={moduleId}
+        moduleId={moduleId || 0}
         onUploadComplete={handleVideoUploadComplete}
       />
 
@@ -297,11 +397,18 @@ export function CourseCreationManual({
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-green-600 mb-2">
-                    ¡Curso creado exitosamente!
+                    ¡{!moduleId ? "Curso" : "Video"} creado exitosamente!
                   </p>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Video ID: {finalVideoId}
-                  </p>
+                  {createdCourseId && (
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Curso ID: {createdCourseId}
+                    </p>
+                  )}
+                  {!createdCourseId && (
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Video ID: {finalVideoId}
+                    </p>
+                  )}
                   <Badge variant="outline" className="text-sm">
                     Video: {videoData?.video_id} | Slides: {slideBlobs.length}
                   </Badge>
