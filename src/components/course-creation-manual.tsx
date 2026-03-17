@@ -108,6 +108,7 @@ export function CourseCreationManual({
     try {
       // Upload slides
       const formData = new FormData();
+      formData.append("video_id", videoData.video_id);
       slideBlobs.forEach((blob, index) => {
         formData.append("slides", blob, `slide-${index + 1}.png`);
       });
@@ -117,7 +118,7 @@ export function CourseCreationManual({
 
       // Call compose endpoint
       const response = await fetch(
-        `${API_BASE}/videos/compose?video_id=${videoData.video_id}`,
+        `${API_BASE}/videos/compose`,
         {
           method: "POST",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
