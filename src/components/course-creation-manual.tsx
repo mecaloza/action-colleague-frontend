@@ -108,7 +108,7 @@ export function CourseCreationManual({
     try {
       // Upload slides
       const formData = new FormData();
-      formData.append("video_id", videoData.video_id);
+      formData.append("video_id", String(videoData.video_id));
       slideBlobs.forEach((blob, index) => {
         formData.append("slides", blob, `slide-${index + 1}.png`);
       });
