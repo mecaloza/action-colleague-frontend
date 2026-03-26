@@ -60,7 +60,7 @@ function StatsCards({ stats, analytics }: { stats: CourseStats | null; analytics
     },
     {
       label: "Tasa de Aprobación",
-      value: analytics ? `${analytics.pass_rate.toFixed(0)}%` : stats ? `${stats.completion_rate}%` : "—",
+      value: analytics?.pass_rate != null ? `${analytics.pass_rate.toFixed(0)}%` : stats ? `${stats.completion_rate}%` : "—",
       icon: TrendingUp,
       highlight: true,
     },
@@ -141,7 +141,7 @@ function QuestionAnalyticsTable({ analytics }: { analytics: EvaluationAnalytics 
                 </TableCell>
                 <TableCell className="text-right">
                   <span className={q.correct_rate >= 70 ? "text-emerald-400" : q.correct_rate >= 40 ? "text-amber-400" : "text-red-400"}>
-                    {q.correct_rate.toFixed(0)}%
+                    {q.correct_rate?.toFixed(0) ?? '0'}%
                   </span>
                 </TableCell>
                 <TableCell className="text-right">{q.total_attempts}</TableCell>
@@ -233,7 +233,7 @@ function EmployeeResponsesTable({ courseId }: { courseId: string }) {
                   <TableCell className="text-muted-foreground text-sm">{emp.user_email}</TableCell>
                   <TableCell className="text-right">
                     <span className={emp.average_score >= 70 ? "text-emerald-400" : "text-red-400"}>
-                      {emp.average_score.toFixed(0)}%
+                      {emp.average_score?.toFixed(0) ?? '0'}%
                     </span>
                   </TableCell>
                   <TableCell className="text-right">{emp.total_attempts}</TableCell>
@@ -278,7 +278,7 @@ function EmployeeResponsesTable({ courseId }: { courseId: string }) {
                     <span className="text-sm font-medium">Intento {attempt.attempt}</span>
                     <div className="flex items-center gap-2">
                       <Badge className={attempt.passed ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}>
-                        {attempt.score.toFixed(0)}%
+                        {attempt.score?.toFixed(0) ?? '0'}%
                       </Badge>
                       <span className="text-xs text-muted-foreground">
                         {new Date(attempt.submitted_at).toLocaleDateString("es-ES", {
