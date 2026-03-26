@@ -178,6 +178,11 @@ export const api = {
   // Users (admin)
   getUsers: async (): Promise<User[]> => {
     const raw = await fetchAPI<any[]>("/users/");
+    // Guard: Ensure raw is array before mapping
+    if (!Array.isArray(raw)) {
+      console.error('[API] getUsers returned non-array:', raw);
+      return [];
+    }
     // Map reports_to -> leader_id/leader_name for frontend
     return raw.map((u: any) => ({
       ...u,

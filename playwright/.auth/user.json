@@ -1,0 +1,22 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "https://action-colleague.vercel.app",
+      "localStorage": [
+        {
+          "name": "ac_user",
+          "value": "{\"name\":\"Wilder Zapata\",\"email\":\"admin@actioncolleague.com\",\"role\":\"admin\",\"position\":\"CEO\",\"department\":\"Executive\",\"preferred_language\":\"es\",\"hire_date\":\"2019-01-01\",\"id\":11,\"reports_to\":null,\"permissions\":[],\"is_active\":true,\"created_at\":\"2026-02-27T04:12:03.508488\"}"
+        },
+        {
+          "name": "ac_token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMSIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc3NTA5ODYwNn0.7YgerzZB5z817R3UtTyXVDNgceRq42BTy07LtRQZl9Q"
+        },
+        {
+          "name": "ac_refresh_token",
+          "value": "Uh6kmlYqzD-PxZiUakfagW8cZb4sCEwf5R5brQsFJVty7bp75ba3v0zryQc3jxXy-szLyeT8Rv9ryVh8wsq15w"
+        }
+      ]
+    }
+  ]
+}

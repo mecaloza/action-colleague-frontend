@@ -80,7 +80,10 @@ export default function AdminEmployeesPage() {
     }
   };
 
-  const filtered = users.filter(
+  // Guard: Ensure users is always array before filtering
+  const safeUsers = Array.isArray(users) ? users : [];
+  
+  const filtered = safeUsers.filter(
     (u) =>
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       (u.email && u.email.toLowerCase().includes(search.toLowerCase())) ||
@@ -165,7 +168,7 @@ export default function AdminEmployeesPage() {
     }
   };
 
-  const leaders = users.filter(
+  const leaders = safeUsers.filter(
     (u) => u.is_active !== false && u.id !== editingId
   );
 
