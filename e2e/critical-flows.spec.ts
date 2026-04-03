@@ -45,6 +45,38 @@ test.describe('Critical Flows - Action Colleague', () => {
     expect(errors).toHaveLength(0);
   });
 
+  // REGRESIÓN BUG: filtro "Por empleado" en evaluaciones
+  test('should filter evaluations by employee without map error', async ({ page }) => {
+    const mapErrors: Error[] = [];
+    page.on('pageerror', err => {
+      if (err.message.includes('map is not a function')) {
+        mapErrors.push(err);
+      }
+    });
+    
+    await page.goto(`${BASE_URL}/admin/courses/15`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+    
+    // Ir a tab de Resultados
+    const resultsTab = page.getByRole('tab', { name: /resultados/i });
+    if (await resultsTab.isVisible()) {
+      await resultsTab.click();
+      await page.waitForTimeout(500);
+    }
+    
+    // Click en filtro "Por empleado" / "Por Empleado"
+    const employeeFilter = page.getByRole('button', { name: /por empleado/i });
+    if (await employeeFilter.isVisible()) {
+      await employeeFilter.click();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1000);
+    }
+    
+    // NO debe haber errores de .map
+    expect(mapErrors).toHaveLength(0);
+  });
+
   // Empleados (el que está crasheando ahora)
   test('should load employees page without map error', async ({ page }) => {
     const mapErrors: Error[] = [];

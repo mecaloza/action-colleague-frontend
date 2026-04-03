@@ -132,7 +132,7 @@ function QuestionAnalyticsTable({ analytics }: { analytics: EvaluationAnalytics 
             </TableRow>
           </TableHeader>
           <TableBody>
-            {analytics.questions.map((q) => (
+            {Array.isArray(analytics.questions) && analytics.questions.map((q) => (
               <TableRow key={q.question_index}>
                 <TableCell className="font-medium text-violet-400">{q.question_index + 1}</TableCell>
                 <TableCell className="max-w-[300px] truncate">{q.question_text}</TableCell>
@@ -227,7 +227,7 @@ function EmployeeResponsesTable({ courseId }: { courseId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {responses.map((emp) => (
+              {Array.isArray(responses) && responses.map((emp) => (
                 <TableRow key={emp.user_id}>
                   <TableCell className="font-medium">{emp.user_name}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{emp.user_email}</TableCell>
@@ -272,7 +272,7 @@ function EmployeeResponsesTable({ courseId }: { courseId: string }) {
             <p className="text-sm text-muted-foreground py-4">Sin intentos registrados.</p>
           ) : (
             <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-              {userDetails.map((attempt) => (
+              {Array.isArray(userDetails) && userDetails.map((attempt) => (
                 <div key={attempt.attempt} className="rounded-lg border border-white/[0.08] p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Intento {attempt.attempt}</span>
@@ -291,7 +291,7 @@ function EmployeeResponsesTable({ courseId }: { courseId: string }) {
                     </div>
                   </div>
                   <div className="space-y-1">
-                    {attempt.answers.map((a) => (
+                    {Array.isArray(attempt.answers) && attempt.answers.map((a) => (
                       <div key={a.question_index} className="flex items-center gap-2 text-sm">
                         {a.correct ? (
                           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
