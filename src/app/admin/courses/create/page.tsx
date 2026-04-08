@@ -129,6 +129,7 @@ export default function CreateCoursePage() {
   // Step 5: Generate
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [videoGenerationWarning, setVideoGenerationWarning] = useState<string | null>(null);
 
   // ── Step 1: Analyze ────────────────────────────────────────────────
   const handleAnalyze = async () => {
@@ -271,6 +272,7 @@ export default function CreateCoursePage() {
   const handleGenerate = async () => {
     if (!breakdown) return;
     setGenerating(true);
+    setVideoGenerationWarning(null);
     try {
       const res = await fetch(`${API_BASE}/courses/ai/generate-content`, {
         method: "POST",
@@ -286,26 +288,39 @@ export default function CreateCoursePage() {
           generate_video: true,
         }),
       });
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        throw new Error(errorText || "Error al generar el curso");
+      }
       const data = await res.json();
       setResult(data);
 
       // Auto-generate multi-scene video (avatar + infographics) in background
       if (data.course_id) {
-        try {
-          await fetch(`${API_BASE}/courses/ai/generate-video-v2`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${getToken()}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ course_id: data.course_id, avatar_id: selectedAvatar }),
-          });
-        } catch {
-          console.warn("Video generation queued in background");
+        const videoRes = await fetch(`${API_BASE}/courses/ai/generate-video-v2`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ course_id: data.course_id, avatar_id: selectedAvatar }),
+        });
+
+        if (!videoRes.ok) {
+          let detail = "No se pudo iniciar la generación de video AI.";
+          try {
+            const body = await videoRes.json();
+            detail = body?.detail || body?.message || detail;
+          } catch {
+            const errorText = await videoRes.text().catch(() => "");
+            if (errorText) detail = errorText;
+          }
+          setVideoGenerationWarning(detail);
         }
       }
-    } catch {
-      alert("Error al generar el curso");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error al generar el curso";
+      alert(message);
     } finally {
       setGenerating(false);
     }
@@ -1154,6 +1169,11 @@ export default function CreateCoursePage() {
                     <p className="text-sm text-muted-foreground">
                       {breakdown?.description}
                     </p>
+                    {videoGenerationWarning && (
+                      <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                        Error iniciando video AI: {videoGenerationWarning}
+                      </div>
+                    )}
                     <div className="mt-3 space-y-1">
                       {scripts.map((s, i) => (
                         <div
@@ -1210,6 +1230,11 @@ export default function CreateCoursePage() {
                 <p className="text-muted-foreground">
                   {result.message}
                 </p>
+                {videoGenerationWarning && (
+                  <div className="mx-auto max-w-2xl rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                    El curso se creó, pero el video AI no arrancó correctamente: {videoGenerationWarning}
+                  </div>
+                )}
                 <div className="flex items-center justify-center gap-3 pt-4">
                   <Button
                     variant="outline"
