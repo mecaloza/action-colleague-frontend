@@ -1,13 +1,11 @@
+/**
+ * Legacy endpoints used by screens that have not been rebuilt yet. Authentication and
+ * token refresh go through the shared client in `@/lib/api/client`.
+ */
 import {
-  LoginRequest,
-  LoginResponse,
   User,
   CreateUserRequest,
   UpdateUserRequest,
-  OrgChartNode,
-  Communication,
-  CreateCommunicationRequest,
-  GenerateImageResponse,
   Evaluation,
   CreateEvaluationRequest,
   UpdateEvaluationRequest,
@@ -15,67 +13,14 @@ import {
   EmployeeResponse,
   UserResponseDetail,
 } from "@/lib/types";
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://colleague-backend-production.up.railway.app/api/v1";
-
-const API_COMMS = API_BASE.replace(/\/v\d+$/, "/communications");
-
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("ac_token");
-}
-
-function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("ac_refresh_token");
-}
-
-function clearAuth() {
-  localStorage.removeItem("ac_token");
-  localStorage.removeItem("ac_refresh_token");
-  localStorage.removeItem("ac_user");
-}
-
-// Module-level promise to deduplicate concurrent refresh calls
-let refreshPromise: Promise<string> | null = null;
-
-async function refreshAccessToken(): Promise<string> {
-  if (refreshPromise) return refreshPromise;
-
-  refreshPromise = (async () => {
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) throw new Error("No refresh token");
-
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-
-    if (!res.ok) {
-      clearAuth();
-      throw new Error("Refresh failed");
-    }
-
-    const data = await res.json();
-    localStorage.setItem("ac_token", data.access_token);
-    localStorage.setItem("ac_refresh_token", data.refresh_token);
-    return data.access_token as string;
-  })().finally(() => {
-    refreshPromise = null;
-  });
-
-  return refreshPromise;
-}
+import { API_BASE, refreshAccessToken, tokenStore } from "@/lib/api/client";
 
 async function fetchAPI<T>(
   endpoint: string,
   options?: RequestInit & { skipAuth?: boolean }
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-  const token = getToken();
+  const token = tokenStore.access();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options?.headers as Record<string, string>),
@@ -83,106 +28,28 @@ async function fetchAPI<T>(
   if (token && !options?.skipAuth) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let res = await fetch(url, { ...options, headers });
 
-  // On 401, attempt token refresh and retry once
+  // On 401, refresh once (shared with the new client) and retry. If the refresh token is
+  // rejected, the client signs the user out and the app shell redirects to /login.
   if (res.status === 401 && !options?.skipAuth) {
-    try {
-      const newToken = await refreshAccessToken();
-      headers["Authorization"] = `Bearer ${newToken}`;
-      const retryRes = await fetch(url, { ...options, headers });
-      if (!retryRes.ok) {
-        const errorBody = await retryRes.text().catch(() => "");
-        throw new Error(
-          `API Error: ${retryRes.status} ${retryRes.statusText} ${errorBody}`
-        );
-      }
-      return retryRes.json();
-    } catch {
-      // Refresh failed — redirect to login
-      clearAuth();
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
-      throw new Error("Session expired");
-    }
+    headers["Authorization"] = `Bearer ${await refreshAccessToken(token)}`;
+    res = await fetch(url, { ...options, headers });
   }
 
   if (!res.ok) {
     const errorBody = await res.text().catch(() => "");
-    throw new Error(
-      `API Error: ${res.status} ${res.statusText} ${errorBody}`
-    );
+    throw new Error(`API Error: ${res.status} ${res.statusText} ${errorBody}`);
   }
   return res.json();
 }
 
 export const api = {
-  // Auth
-  login: async (data: LoginRequest): Promise<LoginResponse> => {
-    const url = `${API_BASE}/auth/login`;
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 422) {
-          throw new Error("Invalid email or password");
-        }
-        throw new Error(`Login failed: ${res.status}`);
-      }
-      const tokenData = await res.json();
-      // Store tokens
-      localStorage.setItem("ac_token", tokenData.access_token);
-      if (tokenData.refresh_token) {
-        localStorage.setItem("ac_refresh_token", tokenData.refresh_token);
-      }
-      // Fetch full user data
-      const meRes = await fetch(`${API_BASE}/auth/me`, {
-        headers: { "Authorization": `Bearer ${tokenData.access_token}` },
-      });
-      const user = meRes.ok ? await meRes.json() : { id: tokenData.user_id, role: tokenData.role, name: "", email: data.email };
-      return { access_token: tokenData.access_token, refresh_token: tokenData.refresh_token, token_type: "bearer", user };
-    } catch (error) {
-      throw error;
-    }
-  },
-
-  logout: async () => {
-    try {
-      const refreshToken = getRefreshToken();
-      if (refreshToken) {
-        await fetch(`${API_BASE}/auth/logout`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${getToken()}`,
-          },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-      }
-    } catch {
-      // Best-effort server-side revocation
-    } finally {
-      clearAuth();
-    }
-  },
-
-  getMe: () => fetchAPI<User>("/auth/me"),
-
   // Users (admin)
   getUsers: async (): Promise<User[]> => {
     const raw = await fetchAPI<any[]>("/users/");
     // Guard: Ensure raw is array before mapping
-    if (!Array.isArray(raw)) {
-      console.error('[API] getUsers returned non-array:', raw);
-      return [];
-    }
+    if (!Array.isArray(raw)) return [];
     // Map reports_to -> leader_id/leader_name for frontend
     return raw.map((u: any) => ({
       ...u,
@@ -215,7 +82,6 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
-  getOrgChart: () => fetchAPI<OrgChartNode[]>("/users/org-chart"),
 
   // Courses
   getCourses: () => fetchAPI<any[]>("/courses/"),
@@ -408,48 +274,4 @@ export const api = {
   getAdminDashboard: () => fetchAPI<any>("/dashboards/admin"),
   getCollaboratorDashboard: (userId: string) =>
     fetchAPI<any>(`/dashboards/collaborator/${userId}`),
-
-  // Communications
-  getCommunications: async (): Promise<Communication[]> => {
-    const token = getToken();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(API_COMMS, { headers });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
-    return res.json();
-  },
-  createCommunication: async (data: CreateCommunicationRequest): Promise<Communication> => {
-    const token = getToken();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(API_COMMS, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
-    return res.json();
-  },
-  deleteCommunication: async (id: number): Promise<void> => {
-    const token = getToken();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`${API_COMMS}/${id}`, {
-      method: "DELETE",
-      headers,
-    });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
-  },
-  generateCommunicationImage: async (prompt: string): Promise<GenerateImageResponse> => {
-    const token = getToken();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`${API_COMMS}/generate-image`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ prompt }),
-    });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
-    return res.json();
-  },
 };
