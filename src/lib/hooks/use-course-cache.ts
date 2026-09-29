@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { courseKeys } from "@/lib/api/courses";
+import { userKeys } from "@/lib/api/users";
 import type { CourseDetail, Participant } from "@/lib/api/types";
 
 /**
@@ -23,6 +24,7 @@ export function useCourseCache() {
     /** People were assigned: show the returned list at once, then refetch the course counts. */
     storeParticipants: (courseId: number, participants: Participant[]) => {
       queryClient.setQueryData(courseKeys.participants(courseId), participants);
+      void queryClient.invalidateQueries({ queryKey: userKeys.all }); // each person's courses and completions
       // Only the course itself (its counts): the list just stored is already fresh.
       return queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId), exact: true });
     },
