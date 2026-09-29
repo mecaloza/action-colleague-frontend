@@ -1,12 +1,15 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { UploadProgress } from "@/components/media/upload-progress";
+import { mediaApi } from "@/lib/api/media";
 import { useUpload } from "@/lib/hooks/use-upload";
+import { toastError } from "@/lib/notify";
+import { type Deck, DeckSetup } from "./deck-setup";
 import { RecordingStudio } from "./recording-studio";
 import type { Recording } from "./use-recorder";
 
@@ -19,14 +22,33 @@ interface RecordingDialogProps {
   onUploaded: () => void;
 }
 
-/** Full-screen studio: record with the camera, review, and upload as the module's video. */
+/**
+ * Full-screen studio: choose camera only or camera and slides, record, review, and upload. With
+ * slides, the server combines them with the camera at the exact times they were changed.
+ */
 export function RecordingDialog({ open, onOpenChange, courseId, moduleId, moduleTitle, onUploaded }: RecordingDialogProps) {
-  const { state, busy, upload, cancel, reset } = useUpload();
+  const { state, busy: uploading, upload, cancel, reset } = useUpload();
   const confirm = useConfirm();
+  // undefined: still choosing; null: camera only.
+  const [deck, setDeck] = useState<Deck | null | undefined>(undefined);
+  const [deckUploading, setDeckUploading] = useState(false);
+  const [composing, setComposing] = useState(false);
+  // This take's recording once uploaded: if asking for the composition fails, trying again doesn't upload it again.
+  const uploaded = useRef<{ blob: Blob; assetId: string } | null>(null);
+  const busy = uploading || composing || deckUploading;
   const hasTake = useRef(false);
   const setHasTake = useRef((value: boolean) => {
     hasTake.current = value;
   }).current;
+
+  // The dialog stays mounted between sessions: nothing chosen or recorded in this one may reach the next.
+  const close = () => {
+    reset();
+    setDeck(undefined);
+    hasTake.current = false;
+    uploaded.current = null;
+    onOpenChange(false);
+  };
 
   // The close button or Escape: never mid-upload, and a take not used yet is only dropped on purpose.
   const requestClose = async () => {
@@ -41,23 +63,39 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
       }))
     )
       return;
-    reset();
-    onOpenChange(false);
+    close();
   };
 
   const handleFinish = async (recording: Recording) => {
-    const asset = await upload(recording.blob, {
-      filename: `grabacion.${recording.extension}`,
-      kind: "recording",
-      courseId,
-      moduleId,
-      purpose: "recording",
-    });
-    if (asset) {
+    const filename = `grabacion.${recording.extension}`;
+    if (!deck) {
+      const asset = await upload(recording.blob, { filename, kind: "recording", courseId, moduleId, purpose: "recording" });
+      if (!asset) return;
       toast.success("Grabación subida. La estamos procesando; aparecerá en el módulo en unos minutos.");
-      onUploaded();
-      onOpenChange(false);
+    } else {
+      // Not attached on its own: the composition (slides + camera) becomes the module's video.
+      if (uploaded.current?.blob !== recording.blob) {
+        const asset = await upload(recording.blob, { filename, kind: "recording", courseId });
+        if (!asset) return;
+        uploaded.current = { blob: recording.blob, assetId: asset.id };
+      }
+      setComposing(true);
+      try {
+        await mediaApi.composeRecording(moduleId, {
+          recording_asset_id: uploaded.current.assetId,
+          deck_asset_id: deck.assetId,
+          timeline: recording.timeline,
+        });
+      } catch (error) {
+        toastError(error);
+        return;
+      } finally {
+        setComposing(false);
+      }
+      toast.success("Grabación subida. Estamos combinándola con tus diapositivas; aparecerá en el módulo en unos minutos.");
     }
+    onUploaded();
+    close();
   };
 
   return (
@@ -85,7 +123,17 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
             </DialogPrimitive.Close>
           </div>
           <div className="container flex-1 space-y-4 pb-10">
-            {open && <RecordingStudio slides={[]} onFinish={handleFinish} locked={busy} onTakeChange={setHasTake} />}
+            {open &&
+              (deck === undefined ? (
+                <DeckSetup courseId={courseId} onReady={setDeck} onBusyChange={setDeckUploading} />
+              ) : (
+                <RecordingStudio
+                  slides={deck?.pages ?? []}
+                  onFinish={handleFinish}
+                  locked={busy}
+                  onTakeChange={setHasTake}
+                />
+              ))}
             <div className="text-ink-900">
               <UploadProgress state={state} onCancel={cancel} />
             </div>

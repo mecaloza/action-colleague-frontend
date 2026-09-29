@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 const CONTENT_KINDS: { value: ModuleSource; label: string; description: string; icon: LucideIcon }[] = [
   { value: "text", label: "Lectura", description: "Texto con formato; ideal para políticas o guías.", icon: FileText },
   { value: "upload", label: "Video o documento", description: "Sube un video o un PDF que ya tienes.", icon: Film },
-  { value: "recording", label: "Grabarme", description: "Graba tu cámara y tu voz desde el navegador.", icon: Video },
+  { value: "recording", label: "Grabarme", description: "Graba tu cámara y tu voz, con tus diapositivas si quieres.", icon: Video },
 ];
 
 export function NewModuleDialog({

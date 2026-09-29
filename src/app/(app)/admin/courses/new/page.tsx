@@ -21,8 +21,8 @@ const OPTIONS = [
     icon: FileVideo,
     title: "Con mi material",
     description:
-      "¿Ya tienes el contenido? Sube tus videos o documentos, o grábate desde el navegador. Agrega evaluaciones a mano o con ayuda de la IA.",
-    points: ["Sube videos de cualquier formato", "Grábate con la cámara del navegador", "Evaluaciones manuales o con IA"],
+      "¿Ya tienes el contenido? Sube tus videos o documentos, o grábate con tus diapositivas desde el navegador. Agrega evaluaciones a mano o con ayuda de la IA.",
+    points: ["Sube videos de cualquier formato", "Graba cámara + presentación PDF", "Evaluaciones manuales o con IA"],
   },
 ];
 

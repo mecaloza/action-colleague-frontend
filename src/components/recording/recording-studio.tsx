@@ -55,6 +55,7 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish, locked = 
 
   const goTo = (next: number) => {
     const clamped = Math.max(0, Math.min(slides.length - 1, next));
+    if (clamped === slide) return; // an arrow held down at the first or last slide changes nothing
     setSlide(clamped);
     markSlide(clamped);
   };

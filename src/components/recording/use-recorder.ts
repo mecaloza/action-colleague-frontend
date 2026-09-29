@@ -228,11 +228,16 @@ export function useRecorder() {
     if (recorder.current && recorder.current.state !== "inactive") recorder.current.stop();
   }, []);
 
-  /** Remembers the slide on screen and, while recording, timestamps the change. */
+  /**
+   * Remembers the slide on screen and, during a take, timestamps the change. Paused, the time stands
+   * still: the new slide shows from where the recording resumes.
+   */
   const markSlide = useCallback(
     (slide: number) => {
+      if (slide === currentSlide.current) return;
       currentSlide.current = slide;
-      if (recorder.current?.state === "recording") {
+      const state = recorder.current?.state;
+      if (state === "recording" || state === "paused") {
         timeline.current.push({ at: Math.round(seconds() * 100) / 100, slide });
       }
     },

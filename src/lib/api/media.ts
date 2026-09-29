@@ -1,6 +1,13 @@
 import { http } from "./client";
 import type { CourseDetail, Job, MediaAsset, MediaKind, MediaPurpose, ModuleAdmin, UploadTarget } from "./types";
 
+export interface RecordingCompose {
+  recording_asset_id: string;
+  deck_asset_id?: string;
+  /** Slide changes: the page index shown from each second on. */
+  timeline: { at: number; slide: number }[];
+}
+
 export interface UploadRequest {
   filename: string;
   mime_type: string;
@@ -23,6 +30,8 @@ export const mediaApi = {
   materials: (courseId: number, signal?: AbortSignal) =>
     http.get<MediaAsset[]>(`/courses/${courseId}/materials`, undefined, signal),
   jobs: (params: { course_id?: number; module_id?: number; active?: boolean }) => http.get<Job[]>("/jobs", { ...params }),
+  /** A camera recording becomes the module's video, combined with the slides at the recorded times. */
+  composeRecording: (moduleId: number, input: RecordingCompose) => http.post<Job>(`/modules/${moduleId}/recording`, input),
 };
 
 export const mediaKeys = {
