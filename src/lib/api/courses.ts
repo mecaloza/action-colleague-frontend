@@ -37,6 +37,9 @@ export interface ModuleInput {
   source?: ModuleSource;
 }
 
+/** What can change after creation (the source follows the content: upload, recording...). */
+export type ModuleUpdate = Partial<Omit<ModuleInput, "source">>;
+
 export interface EvaluationInput {
   questions: Question[];
   max_attempts: number;
@@ -60,7 +63,7 @@ export const coursesApi = {
   preview: (id: number) => http.get<LearnerCourseDetail>(`/courses/${id}/preview`),
 
   createModule: (courseId: number, input: ModuleInput) => http.post<ModuleAdmin>(`/courses/${courseId}/modules`, input),
-  updateModule: (id: number, input: Partial<ModuleInput>) => http.patch<ModuleAdmin>(`/modules/${id}`, input),
+  updateModule: (id: number, input: ModuleUpdate) => http.patch<ModuleAdmin>(`/modules/${id}`, input),
   removeModule: (id: number) => http.delete(`/modules/${id}`),
   reorderModules: (courseId: number, moduleIds: number[]) =>
     http.put<ModuleAdmin[]>(`/courses/${courseId}/modules/order`, { module_ids: moduleIds }),

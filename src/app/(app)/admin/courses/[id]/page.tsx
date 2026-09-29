@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { CourseHeader } from "@/components/courses/course-header";
 import { EvaluationsTab } from "@/components/courses/evaluations-tab";
@@ -23,15 +23,19 @@ function hasPendingGeneration(course: CourseDetail | undefined): boolean {
 export default function CourseEditorPage() {
   const params = useParams<{ id: string }>();
   const courseId = Number(params.id);
+  const validId = Number.isInteger(courseId) && courseId > 0;
 
   const courseQuery = useQuery({
     queryKey: courseKeys.detail(courseId),
     queryFn: () => coursesApi.get(courseId),
+    enabled: validId,
     refetchInterval: (query) => (hasPendingGeneration(query.state.data) ? GENERATION_POLL_MS : false),
   });
 
-  if (courseQuery.isLoading) return <PageLoading />;
-  if (courseQuery.error || !courseQuery.data) return <PageError query={courseQuery} />;
+  if (!validId) notFound();
+  if (courseQuery.isPending) return <PageLoading />;
+  // Only when there is nothing to show: a failed poll keeps the editor (and unsaved drafts) on screen.
+  if (!courseQuery.data) return <PageError query={courseQuery} />;
 
   const course = courseQuery.data;
 
@@ -41,17 +45,21 @@ export default function CourseEditorPage() {
 
       <div className="container py-10">
         <Tabs defaultValue="modules">
-          <TabsList>
-            <TabsTrigger value="modules">Contenido</TabsTrigger>
-            <TabsTrigger value="evaluations">Evaluaciones</TabsTrigger>
-            <TabsTrigger value="participants">Participantes</TabsTrigger>
-            <TabsTrigger value="results">Resultados</TabsTrigger>
-            <TabsTrigger value="settings">Ajustes</TabsTrigger>
-          </TabsList>
+          <div className="relative">
+            <TabsList>
+              <TabsTrigger value="modules">Contenido</TabsTrigger>
+              <TabsTrigger value="evaluations">Evaluaciones</TabsTrigger>
+              <TabsTrigger value="participants">Participantes</TabsTrigger>
+              <TabsTrigger value="results">Resultados</TabsTrigger>
+              <TabsTrigger value="settings">Ajustes</TabsTrigger>
+            </TabsList>
+            {/* On phones the tabs scroll sideways: the fade hints there is more. */}
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background md:hidden" />
+          </div>
           <TabsContent value="modules">
             <ModulesTab course={course} />
           </TabsContent>
-          <TabsContent value="evaluations">
+          <TabsContent value="evaluations" forceMount className="data-[state=inactive]:hidden">
             <EvaluationsTab course={course} />
           </TabsContent>
           <TabsContent value="participants">

@@ -57,6 +57,15 @@ export function CourseHeader({ course }: { course: CourseDetail }) {
     if (confirmed) actions.remove.mutate();
   };
 
+  const confirmUnpublish = async () => {
+    const confirmed = await confirm({
+      title: archived ? "¿Restaurar como borrador?" : "¿Despublicar este curso?",
+      description: "Las personas asignadas no lo verán hasta que lo publiques de nuevo.",
+      confirmLabel: archived ? "Restaurar" : "Despublicar",
+    });
+    if (confirmed) actions.unpublish.mutate();
+  };
+
   return (
     <>
       <section className="band-dark">
@@ -88,7 +97,7 @@ export function CourseHeader({ course }: { course: CourseDetail }) {
               ) : (
                 <Button
                   variant="outline-inverse"
-                  onClick={() => actions.unpublish.mutate()}
+                  onClick={confirmUnpublish}
                   loading={actions.unpublish.isPending}
                 >
                   <Undo2 /> {archived ? "Restaurar como borrador" : "Despublicar"}

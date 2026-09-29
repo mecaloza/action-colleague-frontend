@@ -96,7 +96,9 @@ test("la biblioteca filtra, busca y archiva cursos", async ({ page }) => {
 
   await page.goto("/admin/courses");
   await page.getByLabel("Buscar cursos").fill(title);
-  await expect(page.getByText("No hay cursos que coincidan")).toBeHidden();
+  // Archived courses leave the default view…
+  await expect(page.getByText("No hay cursos que coincidan")).toBeVisible();
+  // …and are found under "Archivados".
   await page.getByRole("button", { name: "Archivados" }).click();
   await expect(page.getByRole("link", { name: new RegExp(title) })).toBeVisible();
   await page.getByRole("button", { name: "Borradores" }).click();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, HelpCircle } from "lucide-react";
 import { ModuleVideo } from "@/components/courses/module-video";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { LearnerModule } from "@/lib/api/types";
 import { formatDuration, plural, twoDigits } from "@/lib/format";
+import { safeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 
 function ModuleContent({ module }: { module: LearnerModule }) {
@@ -23,9 +24,9 @@ function ModuleContent({ module }: { module: LearnerModule }) {
         {module.description && <p className="mt-3 text-muted-foreground">{module.description}</p>}
       </div>
       <ModuleVideo module={module} />
-      {module.document && (
+      {module.document && safeHttpUrl(module.document.url) && (
         <Button variant="outline" asChild>
-          <a href={module.document.url} target="_blank" rel="noreferrer">
+          <a href={safeHttpUrl(module.document.url)} target="_blank" rel="noreferrer">
             <FileText /> Abrir documento
           </a>
         </Button>
@@ -94,11 +95,17 @@ function ModuleNav({ modules, selected, onSelect }: ModuleNavProps) {
 export default function CoursePreviewPage() {
   const params = useParams<{ id: string }>();
   const courseId = Number(params.id);
-  const preview = useQuery({ queryKey: courseKeys.preview(courseId), queryFn: () => coursesApi.preview(courseId) });
+  const validId = Number.isInteger(courseId) && courseId > 0;
+  const preview = useQuery({
+    queryKey: courseKeys.preview(courseId),
+    queryFn: () => coursesApi.preview(courseId),
+    enabled: validId,
+  });
   const [selected, setSelected] = useState(0);
 
-  if (preview.isLoading) return <PageLoading bodyClassName="aspect-video" />;
-  if (preview.error || !preview.data) return <PageError query={preview} />;
+  if (!validId) notFound();
+  if (preview.isPending) return <PageLoading bodyClassName="aspect-video" />;
+  if (!preview.data) return <PageError query={preview} />;
 
   const { course, modules } = preview.data;
   const current = modules[Math.min(selected, modules.length - 1)];

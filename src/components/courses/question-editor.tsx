@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, Circle, GripVertical, Plus, Trash2, X, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, Circle, Plus, Trash2, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,25 +76,26 @@ function ListField({
             {ordered ? (
               <span className="w-6 shrink-0 text-center font-display text-sm font-semibold text-accent">{index + 1}</span>
             ) : (
-              <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="mx-1.5 h-1.5 w-1.5 shrink-0 rotate-45 bg-accent" aria-hidden />
             )}
             <Input
               aria-label={placeholder(index)}
               value={value}
               onChange={(event) => onChange(replaceAt(values, index, event.target.value))}
               placeholder={placeholder(index)}
+              maxLength={300}
             />
             {ordered && (
               <div className="flex">
                 <IconButton
                   icon={ArrowUp}
-                  label="Subir"
+                  label={`Subir: ${placeholder(index)}`}
                   disabled={index === 0}
                   onClick={() => onChange(moveItem(values, index, index - 1))}
                 />
                 <IconButton
                   icon={ArrowDown}
-                  label="Bajar"
+                  label={`Bajar: ${placeholder(index)}`}
                   disabled={index === values.length - 1}
                   onClick={() => onChange(moveItem(values, index, index + 1))}
                 />
@@ -102,7 +103,7 @@ function ListField({
             )}
             <IconButton
               icon={X}
-              label="Quitar"
+              label={`Quitar: ${placeholder(index)}`}
               disabled={values.length <= min}
               onClick={() => onChange(removeAt(values, index))}
             />
@@ -116,7 +117,7 @@ function ListField({
 
 /** Which option stays marked as correct once `removed` is deleted. */
 function correctIndexAfterRemoving(correct: number, removed: number): number {
-  if (correct === removed) return 0;
+  if (correct === removed) return -1; // the admin must pick the right answer again
   return correct > removed ? correct - 1 : correct;
 }
 
@@ -145,10 +146,11 @@ function SingleChoiceOptions({ question, onChange }: FieldsProps<SingleChoiceQue
                   onChange({ ...question, options: replaceAt(question.options, index, event.target.value) })
                 }
                 placeholder={`Opción ${index + 1}`}
+                maxLength={300}
               />
               <IconButton
                 icon={X}
-                label="Quitar opción"
+                label={`Quitar opción ${index + 1}`}
                 disabled={question.options.length <= 2}
                 onClick={() =>
                   onChange({
@@ -202,23 +204,30 @@ function MatchingPairs({ question, onChange }: FieldsProps<MatchingQuestion>) {
       <FieldCaption>Parejas (concepto → definición)</FieldCaption>
       <ul className="space-y-2">
         {question.pairs.map((pair, index) => (
-          <li key={index} className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
+          <li
+            key={index}
+            className="flex flex-col gap-2 border-l-2 border-accent/40 pl-3 sm:grid sm:grid-cols-[1fr_auto_1fr_auto] sm:items-center sm:border-0 sm:pl-0"
+          >
             <Input
               value={pair.left}
               placeholder="Concepto"
+              maxLength={300}
               aria-label={`Concepto ${index + 1}`}
               onChange={(event) => setPairs(replaceAt(question.pairs, index, { ...pair, left: event.target.value }))}
             />
-            <span className="text-accent">→</span>
+            <span className="hidden text-accent sm:inline" aria-hidden>
+              →
+            </span>
             <Input
               value={pair.right}
               placeholder="Definición"
+              maxLength={300}
               aria-label={`Definición ${index + 1}`}
               onChange={(event) => setPairs(replaceAt(question.pairs, index, { ...pair, right: event.target.value }))}
             />
             <IconButton
               icon={X}
-              label="Quitar pareja"
+              label={`Quitar pareja ${index + 1}`}
               disabled={question.pairs.length <= 2}
               onClick={() => setPairs(removeAt(question.pairs, index))}
             />
@@ -250,6 +259,7 @@ function FillBlankFields({ question, fieldId, onChange }: FieldsProps<FillBlankQ
           value={question.hint}
           onChange={(event) => onChange({ ...question, hint: event.target.value })}
           placeholder="Empieza con…"
+          maxLength={300}
         />
       </div>
     </>
@@ -302,7 +312,7 @@ export function QuestionEditor({
 
   return (
     <article className={cn("border bg-white", problem ? "border-amber-300" : "border-border")}>
-      <header className="flex items-center gap-3 border-b border-border px-5 py-3">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-3 sm:px-5">
         <span className="font-display text-lg font-semibold text-accent">{twoDigits(index + 1)}</span>
         <span className="text-[11px] font-bold uppercase tracking-label text-muted-foreground">
           {questionTypeLabel(question.type)}
@@ -324,6 +334,7 @@ export function QuestionEditor({
               value={question.scenario}
               onChange={(event) => onChange({ ...question, scenario: event.target.value })}
               placeholder="Describe una situación del trabajo…"
+              maxLength={1500}
               className="min-h-[72px]"
             />
           </div>
@@ -335,6 +346,7 @@ export function QuestionEditor({
             id={`${fieldId}-prompt`}
             value={question.prompt}
             onChange={(event) => onChange({ ...question, prompt: event.target.value })}
+            maxLength={1000}
             placeholder={question.type === "fill_blank" ? "La _____ es clave para…" : "Escribe la pregunta"}
           />
         </div>
@@ -349,6 +361,7 @@ export function QuestionEditor({
             onChange={(event) => onChange({ ...question, explanation: event.target.value })}
             className="min-h-[64px]"
             placeholder="Por qué esta es la respuesta correcta…"
+            maxLength={1500}
           />
         </div>
       </div>

@@ -5,10 +5,11 @@ import { Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { QueryError } from "@/components/layout/query-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { AttemptDetail, Participant } from "@/lib/api/types";
-import { formatDate, formatPercent } from "@/lib/format";
+import { formatDate, formatPercent, plural } from "@/lib/format";
 
 function AttemptCard({ attempt }: { attempt: AttemptDetail }) {
   return (
@@ -16,7 +17,7 @@ function AttemptCard({ attempt }: { attempt: AttemptDetail }) {
       <div className="mb-2 flex items-center justify-between text-sm">
         <span className="font-semibold">Intento {attempt.attempt_number}</span>
         <Badge variant={attempt.passed ? "success" : "destructive"}>
-          {attempt.passed ? "Aprobado" : "No aprobado"} · {formatPercent(attempt.score ?? 0)}
+          {attempt.passed ? "Aprobado" : "No aprobado"} · {formatPercent(attempt.score)}
         </Badge>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">{formatDate(attempt.created_at)}</p>
@@ -53,13 +54,14 @@ function ParticipantDetail({ courseId, participant }: { courseId: number; partic
         <div>
           <div className="mb-2 flex justify-between text-sm">
             <span>
-              {participant.completed_modules} de {participant.total_modules} módulos
+              {participant.completed_modules} de {plural(participant.total_modules, "módulo")}
             </span>
             <span className="font-semibold">{formatPercent(participant.progress_pct)}</span>
           </div>
           <Progress value={participant.progress_pct} />
         </div>
         {attempts.isLoading && <Skeleton className="h-32" />}
+        {attempts.error && <QueryError query={attempts} />}
         {attempts.data?.length === 0 && (
           <p className="text-sm text-muted-foreground">Todavía no ha presentado evaluaciones.</p>
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronDown, HelpCircle, Plus, Trash2 } from "lucide-react";
@@ -30,10 +30,12 @@ import { QUESTION_TYPES, blankQuestion, questionProblem } from "./question-model
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_PASSING_SCORE = 70;
+const MAX_QUESTIONS = 30; // EvaluationPut.questions max_length
 
-/** Number typed in a field, kept within [min, max]; `fallback` when it is not a number. */
-function clampedNumber(raw: string, min: number, max: number, fallback: number): number {
-  return Math.min(max, Math.max(min, Number(raw) || fallback));
+/** Whole number typed in a field, or null while it is empty, fractional or outside [min, max]. */
+function wholeNumberIn(raw: string, min: number, max: number): number | null {
+  const value = Number(raw);
+  return raw.trim() !== "" && Number.isInteger(value) && value >= min && value <= max ? value : null;
 }
 
 function AddQuestionMenu({ onAdd }: { onAdd: (type: QuestionType) => void }) {
@@ -63,20 +65,29 @@ interface EvaluationFormProps {
   courseId: number;
   /** Null while the module has no evaluation yet. */
   evaluation: EvaluationAdmin | null;
+  onDirtyChange: (dirty: boolean) => void;
 }
 
 /** Editable draft of a module's evaluation, started from what the server has saved. */
-function EvaluationForm({ module, courseId, evaluation }: EvaluationFormProps) {
+function EvaluationForm({ module, courseId, evaluation, onDirtyChange }: EvaluationFormProps) {
   const confirm = useConfirm();
   const { refreshEvaluation } = useCourseCache();
   const [questions, setQuestions] = useState<Question[]>(evaluation?.questions ?? []);
-  const [maxAttempts, setMaxAttempts] = useState(evaluation?.max_attempts ?? DEFAULT_MAX_ATTEMPTS);
-  const [passingScore, setPassingScore] = useState(evaluation?.passing_score ?? DEFAULT_PASSING_SCORE);
+  // Raw text while typing; validated below instead of clamped on every keystroke.
+  const [maxAttempts, setMaxAttempts] = useState(String(evaluation?.max_attempts ?? DEFAULT_MAX_ATTEMPTS));
+  const [passingScore, setPassingScore] = useState(String(evaluation?.passing_score ?? DEFAULT_PASSING_SCORE));
+  const attempts = wholeNumberIn(maxAttempts, 1, 20);
+  const score = wholeNumberIn(passingScore, 1, 100);
   const problemCount = questions.filter((question) => questionProblem(question)).length;
+
+  const draft = JSON.stringify([questions, maxAttempts, passingScore]);
+  const [startedFrom] = useState(draft);
+  const dirty = draft !== startedFrom;
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   const save = useMutation({
     mutationFn: () =>
-      coursesApi.saveEvaluation(module.id, { questions, max_attempts: maxAttempts, passing_score: passingScore }),
+      coursesApi.saveEvaluation(module.id, { questions, max_attempts: attempts ?? 0, passing_score: score ?? 0 }),
     onSuccess: () => {
       toast.success("Evaluación guardada");
       refreshEvaluation(courseId, module.id);
@@ -113,7 +124,8 @@ function EvaluationForm({ module, courseId, evaluation }: EvaluationFormProps) {
             min={1}
             max={20}
             value={maxAttempts}
-            onChange={(event) => setMaxAttempts(clampedNumber(event.target.value, 1, 20, 1))}
+            aria-invalid={attempts === null}
+            onChange={(event) => setMaxAttempts(event.target.value)}
           />
         </div>
         <div>
@@ -124,7 +136,8 @@ function EvaluationForm({ module, courseId, evaluation }: EvaluationFormProps) {
             min={1}
             max={100}
             value={passingScore}
-            onChange={(event) => setPassingScore(clampedNumber(event.target.value, 1, 100, DEFAULT_PASSING_SCORE))}
+            aria-invalid={score === null}
+            onChange={(event) => setPassingScore(event.target.value)}
           />
         </div>
       </div>
@@ -142,7 +155,11 @@ function EvaluationForm({ module, courseId, evaluation }: EvaluationFormProps) {
       ))}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-        <AddQuestionMenu onAdd={(type) => setQuestions((list) => [...list, blankQuestion(type)])} />
+        {questions.length < MAX_QUESTIONS ? (
+          <AddQuestionMenu onAdd={(type) => setQuestions((list) => [...list, blankQuestion(type)])} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Máximo {MAX_QUESTIONS} preguntas por evaluación.</p>
+        )}
         <div className="flex items-center gap-2">
           {evaluation && (
             <Button
@@ -156,7 +173,7 @@ function EvaluationForm({ module, courseId, evaluation }: EvaluationFormProps) {
           )}
           <Button
             onClick={() => save.mutate()}
-            disabled={questions.length === 0 || problemCount > 0}
+            disabled={questions.length === 0 || problemCount > 0 || attempts === null || score === null}
             loading={save.isPending}
           >
             Guardar evaluación
@@ -174,7 +191,15 @@ function EvaluationForm({ module, courseId, evaluation }: EvaluationFormProps) {
 }
 
 /** Loads a module's evaluation (a 404 just means it has none yet) and hands it to the form. */
-function ModuleEvaluation({ module, courseId }: { module: ModuleAdmin; courseId: number }) {
+function ModuleEvaluation({
+  module,
+  courseId,
+  onDirtyChange,
+}: {
+  module: ModuleAdmin;
+  courseId: number;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const evaluation = useQuery({
     queryKey: courseKeys.evaluation(module.id),
     queryFn: async () => {
@@ -192,11 +217,45 @@ function ModuleEvaluation({ module, courseId }: { module: ModuleAdmin; courseId:
 
   // Keyed by what is saved: the draft starts over whenever the saved evaluation changes (saved, removed...).
   const saved = evaluation.data ?? null;
-  return <EvaluationForm key={JSON.stringify(saved)} module={module} courseId={courseId} evaluation={saved} />;
+  return (
+    <EvaluationForm
+      key={JSON.stringify(saved)}
+      module={module}
+      courseId={courseId}
+      evaluation={saved}
+      onDirtyChange={onDirtyChange}
+    />
+  );
 }
 
 export function EvaluationsTab({ course }: { course: CourseDetail }) {
+  const confirm = useConfirm();
   const [openId, setOpenId] = useState<number | null>(course.modules[0]?.id ?? null);
+  const [dirty, setDirty] = useState(false);
+
+  // Leaving the page (reload, close) with unsaved questions asks first.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  /** Opening or closing a module unmounts the open form: ask before discarding its draft. */
+  const toggle = async (moduleId: number) => {
+    if (dirty) {
+      const discard = await confirm({
+        title: "¿Descartar los cambios sin guardar?",
+        description: "Las preguntas que no guardaste en esta evaluación se perderán.",
+        confirmLabel: "Descartar",
+        destructive: true,
+      });
+      if (!discard) return;
+    }
+    setDirty(false);
+    setOpenId((current) => (current === moduleId ? null : moduleId));
+  };
+
   if (!course.modules.length) {
     return <EmptyState icon={<HelpCircle />} title="Primero agrega módulos" description="Cada módulo puede tener su propia evaluación." />;
   }
@@ -208,7 +267,7 @@ export function EvaluationsTab({ course }: { course: CourseDetail }) {
           <section key={module.id} className="border border-border bg-white">
             <button
               className="flex w-full items-center gap-4 px-5 py-4 text-left"
-              onClick={() => setOpenId(expanded ? null : module.id)}
+              onClick={() => toggle(module.id)}
               aria-expanded={expanded}
             >
               <span className="font-display text-2xl font-medium text-accent">{twoDigits(module.order)}</span>
@@ -222,7 +281,7 @@ export function EvaluationsTab({ course }: { course: CourseDetail }) {
             </button>
             {expanded && (
               <div className="border-t border-border bg-mist/40 p-5">
-                <ModuleEvaluation module={module} courseId={course.id} />
+                <ModuleEvaluation module={module} courseId={course.id} onDirtyChange={setDirty} />
               </div>
             )}
           </section>

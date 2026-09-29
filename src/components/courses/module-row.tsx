@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ModuleAdmin, ModuleSource } from "@/lib/api/types";
 import { formatDuration, plural, twoDigits } from "@/lib/format";
+import { useStableUrl } from "@/lib/hooks/use-stable-url";
 import { cn } from "@/lib/utils";
 
 const SOURCE_META: Record<ModuleSource, { label: string; icon: LucideIcon }> = {
@@ -34,7 +35,8 @@ function GenerationBadge({ module }: { module: ModuleAdmin }) {
   if (module.generation_status === "failed")
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
+        {/* A button, so the reason also shows with the keyboard and on touch. */}
+        <TooltipTrigger type="button">
           <Badge variant="destructive">
             <AlertTriangle className="h-3 w-3" /> Error
           </Badge>
@@ -51,12 +53,13 @@ function GenerationBadge({ module }: { module: ModuleAdmin }) {
 export function ModuleRow({ module, onOpen }: { module: ModuleAdmin; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: module.id });
   const { label, icon: SourceIcon } = SOURCE_META[module.source] ?? SOURCE_META.text;
+  const poster = useStableUrl(module.poster_url);
   return (
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "group flex items-center gap-4 border border-border bg-white px-4 py-4 transition-shadow",
+        "group flex flex-wrap items-center gap-x-4 gap-y-2 border border-border bg-white px-4 py-4 transition-shadow sm:flex-nowrap",
         isDragging && "relative z-10 shadow-2xl",
       )}
     >
@@ -70,9 +73,9 @@ export function ModuleRow({ module, onOpen }: { module: ModuleAdmin; onOpen: () 
       </button>
       <span className="w-8 shrink-0 font-display text-2xl font-medium text-accent">{twoDigits(module.order)}</span>
       <div className="relative hidden h-14 w-24 shrink-0 overflow-hidden bg-ink-900 sm:block">
-        {module.poster_url ? (
+        {poster ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={module.poster_url} alt="" className="h-full w-full object-cover" />
+          <img src={poster} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full items-center justify-center text-white/40">
             <SourceIcon className="h-5 w-5" />
@@ -80,7 +83,7 @@ export function ModuleRow({ module, onOpen }: { module: ModuleAdmin; onOpen: () 
         )}
         {module.video && <MonitorPlay className="absolute bottom-1 right-1 h-4 w-4 text-white drop-shadow" />}
       </div>
-      <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+      <button onClick={onOpen} className="min-w-0 flex-1 basis-40 text-left">
         <p className="truncate font-semibold group-hover:text-accent">{module.title}</p>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
@@ -97,7 +100,8 @@ export function ModuleRow({ module, onOpen }: { module: ModuleAdmin; onOpen: () 
         </p>
       </button>
       <GenerationBadge module={module} />
-      <Button variant="outline" size="sm" onClick={onOpen}>
+      {/* On phones the title opens the module; the row keeps room for it. */}
+      <Button variant="outline" size="sm" onClick={onOpen} className="hidden sm:inline-flex" aria-label={`Editar ${module.title}`}>
         Editar
       </Button>
     </li>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { BookOpen, Search } from "lucide-react";
 import { CourseCard, CourseCardSkeleton } from "@/components/courses/course-card";
 import { NewCourseButton } from "@/components/courses/new-course-button";
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 type StatusFilterValue = CourseStatus | "all";
 
 const FILTERS: { value: StatusFilterValue; label: string }[] = [
-  { value: "all", label: "Todos" },
+  { value: "all", label: "Activos" }, // published and drafts; archived ones have their own tab
   { value: "published", label: "Publicados" },
   { value: "draft", label: "Borradores" },
   { value: "archived", label: "Archivados" },
@@ -56,6 +56,7 @@ export default function CoursesPage() {
   const courses = useQuery({
     queryKey: courseKeys.list(params),
     queryFn: () => coursesApi.list(params),
+    placeholderData: keepPreviousData, // typing a search keeps the current cards instead of flashing skeletons
     // Keep the "Generando" badges live while any course is being produced.
     refetchInterval: (query) => (query.state.data?.some((course) => course.generating_count > 0) ? 5000 : false),
   });
@@ -80,6 +81,7 @@ export default function CoursesPage() {
               placeholder="Buscar por título o descripción"
               className="pl-10"
               aria-label="Buscar cursos"
+              maxLength={200}
             />
           </div>
         </div>

@@ -33,7 +33,7 @@ export function blankQuestion(type: QuestionType): Question {
   const base = { id: newId(), prompt: "", explanation: "" };
   switch (type) {
     case "single_choice":
-      return { ...base, type, scenario: "", options: ["", ""], correct_index: 0 };
+      return { ...base, type, scenario: "", options: ["", ""], correct_index: -1 }; // the admin marks it
     case "true_false":
       return { ...base, type, correct: true };
     case "ordering":
@@ -45,7 +45,10 @@ export function blankQuestion(type: QuestionType): Question {
   }
 }
 
-const hasDuplicates = (texts: string[]) => new Set(texts.map((text) => text.trim())).size < texts.length;
+// Same rules as the backend: repeats ignore case, and accepted answers need a letter or digit.
+const hasDuplicates = (texts: string[]) => new Set(texts.map((text) => text.trim().toLowerCase())).size < texts.length;
+// Digits and Latin letters, accents included (× and ÷ sit in that block but are symbols).
+const hasWordCharacters = (text: string) => /[0-9A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F]/.test(text);
 
 /** Client-side mirror of the backend validation, to show problems before saving. */
 export function questionProblem(question: Question): string | null {
@@ -53,11 +56,16 @@ export function questionProblem(question: Question): string | null {
   switch (question.type) {
     case "single_choice":
       if (question.options.some((option) => !option.trim())) return "Hay opciones vacías";
-      return question.options.length < 2 ? "Agrega al menos dos opciones" : null;
+      if (question.options.length < 2) return "Agrega al menos dos opciones";
+      if (hasDuplicates(question.options)) return "Hay opciones repetidas";
+      return question.correct_index >= 0 && question.correct_index < question.options.length
+        ? null
+        : "Marca la respuesta correcta";
     case "true_false":
       return null;
     case "ordering":
-      return question.items.some((item) => !item.trim()) ? "Hay pasos vacíos" : null;
+      if (question.items.some((item) => !item.trim())) return "Hay pasos vacíos";
+      return hasDuplicates(question.items) ? "Hay pasos repetidos" : null;
     case "matching":
       if (question.pairs.some((pair) => !pair.left.trim() || !pair.right.trim())) return "Hay parejas incompletas";
       return hasDuplicates(question.pairs.map((pair) => pair.left)) ||
@@ -65,6 +73,6 @@ export function questionProblem(question: Question): string | null {
         ? "Hay textos repetidos"
         : null;
     case "fill_blank":
-      return question.answers.some((answer) => answer.trim()) ? null : "Agrega al menos una respuesta aceptada";
+      return question.answers.some(hasWordCharacters) ? null : "Agrega al menos una respuesta aceptada";
   }
 }

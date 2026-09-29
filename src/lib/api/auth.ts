@@ -1,6 +1,7 @@
 import { ApiError, apiRequest, http, tokenStore } from "./client";
+import type { Role } from "./types";
 
-export type Role = "admin" | "collaborator";
+export type { Role };
 
 export interface CurrentUser {
   id: number;

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/api/client";
-import { coursesApi } from "@/lib/api/courses";
+import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { PublishProblem } from "@/lib/api/types";
 import { toastError } from "@/lib/notify";
 import { useCourseCache } from "./use-course-cache";
@@ -17,7 +17,8 @@ function publishProblemsOf(error: unknown): PublishProblem[] {
 /** Publish, unpublish, archive and delete a course, each with its own feedback. */
 export function useCourseActions(courseId: number) {
   const router = useRouter();
-  const { storeCourse, refreshLibrary } = useCourseCache();
+  const queryClient = useQueryClient();
+  const { storeCourse } = useCourseCache();
   const [publishProblems, setPublishProblems] = useState<PublishProblem[] | null>(null);
 
   const publish = useMutation({
@@ -54,9 +55,10 @@ export function useCourseActions(courseId: number) {
   const remove = useMutation({
     mutationFn: () => coursesApi.remove(courseId),
     onSuccess: () => {
-      refreshLibrary();
       toast.success("Curso eliminado");
       router.replace("/admin/courses");
+      queryClient.removeQueries({ queryKey: courseKeys.detail(courseId) }); // detail, participants, results...
+      queryClient.invalidateQueries({ queryKey: ["courses", "list"] });
     },
     onError: toastError,
   });

@@ -7,9 +7,11 @@ import { Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { QueryError } from "@/components/layout/query-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { coursesApi } from "@/lib/api/courses";
 import type { CourseDetail, UserRow } from "@/lib/api/types";
+import { plural } from "@/lib/format";
 import { userKeys, usersApi, type UserListParams } from "@/lib/api/users";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { toastError } from "@/lib/notify";
@@ -107,33 +109,42 @@ export function AssignDialog({ course, enrolledIds, open, onOpenChange }: Assign
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar por nombre, correo o área"
+            aria-label="Buscar personas"
+            maxLength={200}
             className="pl-10"
           />
         </div>
         <div className="flex items-center justify-between pb-2 text-xs text-muted-foreground">
-          <span>{candidates.length} disponibles</span>
+          <span>{plural(candidates.length, "disponible")}</span>
           {candidates.length > 0 && (
             <button
               className="font-bold uppercase tracking-label text-accent"
-              onClick={() => setSelected(new Set(candidates.map((user) => user.id)))}
+              // Adds the people shown (e.g. a search) to those already chosen.
+              onClick={() => setSelected((current) => new Set(Array.from(current).concat(candidates.map((user) => user.id))))}
             >
               Seleccionar todos
             </button>
           )}
         </div>
-        <ul className="max-h-80 overflow-y-auto border border-border">
-          {users.isLoading && (
-            <li className="p-4">
-              <Skeleton className="h-10" />
-            </li>
-          )}
-          {candidates.map((user) => (
-            <CandidateRow key={user.id} user={user} isSelected={selected.has(user.id)} onToggle={() => toggle(user.id)} />
-          ))}
-          {!users.isLoading && candidates.length === 0 && (
-            <li className="p-6 text-center text-sm text-muted-foreground">No hay más personas para asignar.</li>
-          )}
-        </ul>
+        {users.error ? (
+          <QueryError query={users} />
+        ) : (
+          <ul className="max-h-80 overflow-y-auto border border-border">
+            {users.isLoading && (
+              <li className="p-4">
+                <Skeleton className="h-10" />
+              </li>
+            )}
+            {candidates.map((user) => (
+              <CandidateRow key={user.id} user={user} isSelected={selected.has(user.id)} onToggle={() => toggle(user.id)} />
+            ))}
+            {!users.isLoading && candidates.length === 0 && (
+              <li className="p-6 text-center text-sm text-muted-foreground">
+                {term ? "Nadie coincide con la búsqueda." : "No hay más personas para asignar."}
+              </li>
+            )}
+          </ul>
+        )}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar

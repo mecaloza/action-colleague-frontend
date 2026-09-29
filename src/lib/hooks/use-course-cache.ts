@@ -23,15 +23,18 @@ export function useCourseCache() {
     /** People were assigned: show the returned list at once, then refetch the course counts. */
     storeParticipants: (courseId: number, participants: Participant[]) => {
       queryClient.setQueryData(courseKeys.participants(courseId), participants);
-      return queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId) });
+      // Only the course itself (its counts): the list just stored is already fresh.
+      return queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId), exact: true });
     },
 
     /** The server returned an updated course (created, edited, published...): keep that copy and refresh the library. */
     storeCourse: (course: CourseDetail) => {
-      // Invalidate first: the copy stored afterwards stays fresh instead of being refetched when the editor mounts.
-      const refreshed = queryClient.invalidateQueries({ queryKey: courseKeys.all });
       queryClient.setQueryData(courseKeys.detail(course.id), course);
-      return refreshed;
+      // The lists and the preview change too; the detail just stored does not need a refetch.
+      return queryClient.invalidateQueries({
+        queryKey: courseKeys.all,
+        predicate: (query) => query.queryKey.length !== 2 || query.queryKey[1] !== course.id,
+      });
     },
 
     /** A course was deleted: refetch every course query. */

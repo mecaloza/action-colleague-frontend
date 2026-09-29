@@ -31,20 +31,31 @@ function ParticipantRow({ participant, onOpen, onRemove }: ParticipantRowProps) 
   return (
     <TableRow className="cursor-pointer" onClick={onOpen}>
       <TableCell>
-        <p className="font-semibold">{participant.user.name}</p>
+        {/* The row opens on click; this button is the way in for keyboards and screen readers. */}
+        <button
+          type="button"
+          className="text-left font-semibold hover:text-accent"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+          aria-label={`Ver el detalle de ${participant.user.name}`}
+        >
+          {participant.user.name}
+        </button>
         <p className="text-xs text-muted-foreground">{participant.user.department || participant.user.email}</p>
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden sm:table-cell">
         <EnrollmentBadge status={participant.status} />
       </TableCell>
       <TableCell>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-[96px] items-center gap-3">
           <Progress value={participant.progress_pct} className="flex-1" />
           <span className="w-10 text-right text-xs font-semibold">{formatPercent(participant.progress_pct)}</span>
         </div>
       </TableCell>
-      <TableCell>{formatPercent(participant.average_score)}</TableCell>
-      <TableCell className="text-sm text-muted-foreground">
+      <TableCell className="hidden md:table-cell">{formatPercent(participant.average_score)}</TableCell>
+      <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
         {participant.last_activity_at ? formatRelative(participant.last_activity_at) : "Sin actividad"}
       </TableCell>
       <TableCell>
@@ -77,11 +88,13 @@ function ParticipantsTable({ participants, onOpen, onRemove }: ParticipantsTable
         <TableHeader>
           <TableRow>
             <TableHead>Persona</TableHead>
-            <TableHead>Estado</TableHead>
+            <TableHead className="hidden sm:table-cell">Estado</TableHead>
             <TableHead className="w-48">Avance</TableHead>
-            <TableHead>Promedio</TableHead>
-            <TableHead>Última actividad</TableHead>
-            <TableHead className="w-10" />
+            <TableHead className="hidden md:table-cell">Promedio</TableHead>
+            <TableHead className="hidden lg:table-cell">Última actividad</TableHead>
+            <TableHead className="w-10">
+              <span className="sr-only">Acciones</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

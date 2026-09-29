@@ -17,11 +17,15 @@ const ConfirmContext = createContext<Confirm | null>(null);
 
 /** Accessible replacement for window.confirm: `if (await confirm({...})) ...` */
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
-  const [options, setOptions] = useState<ConfirmOptions | null>(null);
+  const [open, setOpen] = useState(false);
+  // Kept after closing so the text doesn't vanish during the closing animation.
+  const [options, setOptions] = useState<ConfirmOptions>({ title: "" });
   const resolver = useRef<(value: boolean) => void>();
 
   const confirm = useCallback<Confirm>((next) => {
+    resolver.current?.(false); // a newer question replaces one still open
     setOptions(next);
+    setOpen(true);
     return new Promise<boolean>((resolve) => {
       resolver.current = resolve;
     });
@@ -30,24 +34,29 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const close = (value: boolean) => {
     resolver.current?.(value);
     resolver.current = undefined;
-    setOptions(null);
+    setOpen(false);
   };
 
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
-      <Dialog open={options !== null} onOpenChange={(open) => !open && close(false)}>
+      <Dialog open={open} onOpenChange={(next) => !next && close(false)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{options?.title}</DialogTitle>
-            {options?.description && <DialogDescription>{options.description}</DialogDescription>}
+            <DialogTitle>{options.title}</DialogTitle>
+            {options.description && <DialogDescription>{options.description}</DialogDescription>}
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => close(false)}>
+            {/* Destructive questions start on "Cancelar": Enter never deletes by accident. */}
+            <Button variant="ghost" onClick={() => close(false)} autoFocus={options.destructive}>
               Cancelar
             </Button>
-            <Button variant={options?.destructive ? "destructive" : "default"} onClick={() => close(true)} autoFocus>
-              {options?.confirmLabel ?? "Confirmar"}
+            <Button
+              variant={options.destructive ? "destructive" : "default"}
+              onClick={() => close(true)}
+              autoFocus={!options.destructive}
+            >
+              {options.confirmLabel ?? "Confirmar"}
             </Button>
           </DialogFooter>
         </DialogContent>

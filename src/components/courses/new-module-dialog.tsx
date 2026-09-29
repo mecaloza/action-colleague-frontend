@@ -50,7 +50,7 @@ export function NewModuleDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Nuevo módulo</DialogTitle>
-          <DialogDescription>Elige cómo vas a crear su contenido; puedes cambiarlo después.</DialogDescription>
+          <DialogDescription>Elige cómo vas a crear su contenido.</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-6"

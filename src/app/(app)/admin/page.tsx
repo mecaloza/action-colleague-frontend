@@ -19,7 +19,7 @@ function Kpi({ value, label, hint }: { value: string; label: string; hint?: stri
     <div className="border-l border-white/15 pl-6 first:border-l-0 first:pl-0">
       <p className="font-display text-5xl font-medium tracking-tightest text-white">{value}</p>
       <p className="mt-2 text-[10.5px] font-bold uppercase tracking-label text-white/60">{label}</p>
-      {hint && <p className="mt-1 text-xs text-white/40">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-white/60">{hint}</p>}
     </div>
   );
 }
@@ -71,7 +71,7 @@ function TopCourseItem({ course, rank }: { course: Dashboard["top_courses"][numb
         <div className="flex items-center gap-3">
           <Progress value={course.completion_rate} className="flex-1" />
           <span className="text-xs text-muted-foreground">
-            {formatPercent(course.completion_rate)} de {course.enrolled_count}
+            {formatPercent(course.completion_rate)} de {plural(course.enrolled_count, "persona")}
           </span>
         </div>
       </Link>
@@ -95,17 +95,29 @@ export default function AdminDashboardPage() {
         {data ? (
           <dl className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <Kpi value={String(data.courses.published)} label="Cursos publicados" hint={`${data.courses.draft} en borrador`} />
-            <Kpi value={String(data.learners.active_30d)} label="Personas activas (30 días)" hint={`de ${data.learners.total} colaboradores`} />
-            <Kpi value={formatPercent(data.completion_rate)} label="Tasa de finalización" hint={`${data.enrollments.completed} de ${data.enrollments.total} inscripciones`} />
+            <Kpi
+              value={String(data.learners.active_30d)}
+              label="Personas activas (30 días)"
+              hint={`de ${plural(data.learners.total, "colaborador", "colaboradores")}`}
+            />
+            <Kpi
+              value={formatPercent(data.completion_rate)}
+              label="Tasa de finalización"
+              hint={`${data.enrollments.completed} de ${plural(data.enrollments.total, "inscripción", "inscripciones")}`}
+            />
             <Kpi value={formatPercent(data.average_score)} label="Puntaje promedio" />
           </dl>
-        ) : (
+        ) : dashboard.isLoading ? (
           <Skeleton className="h-20 bg-white/10" />
-        )}
+        ) : null}
       </PageHero>
 
+      {dashboard.error && !data ? (
+        <section className="container py-12">
+          <QueryError query={dashboard} />
+        </section>
+      ) : (
       <section className="container grid gap-10 py-12 lg:grid-cols-[1.4fr_1fr]">
-        {dashboard.error && <QueryError query={dashboard} />}
 
         <div>
           <div className="mb-5 flex items-end justify-between">
@@ -142,6 +154,7 @@ export default function AdminDashboardPage() {
           )}
         </div>
       </section>
+      )}
     </>
   );
 }
