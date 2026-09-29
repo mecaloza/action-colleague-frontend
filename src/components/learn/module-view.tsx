@@ -10,6 +10,8 @@ import { Reading } from "./reading";
 
 interface ModuleViewProps {
   module: LearnerModule;
+  /** Receives the module's title: the page focuses it after navigating here. */
+  headingRef?: (node: HTMLHeadingElement | null) => void;
   /** The course's language: its captions are in it. */
   language: string;
   nextModule: LearnerModule | null;
@@ -68,7 +70,16 @@ function QuizCard({ quiz, nextModule, onOpenQuiz, onNext }: QuizCardProps) {
 }
 
 /** Everything a learner studies in a module, and how they complete it. */
-export function ModuleView({ module, language, nextModule, completing, onComplete, onOpenQuiz, onNext }: ModuleViewProps) {
+export function ModuleView({
+  module,
+  headingRef,
+  language,
+  nextModule,
+  completing,
+  onComplete,
+  onOpenQuiz,
+  onNext,
+}: ModuleViewProps) {
   if (!module.unlocked) {
     return (
       <div className="flex flex-col items-center gap-4 border border-border bg-white px-6 py-16 text-center">
@@ -87,7 +98,9 @@ export function ModuleView({ module, language, nextModule, completing, onComplet
           Módulo {twoDigits(module.order)}
           {module.duration_seconds ? ` · ${formatDuration(module.duration_seconds)}` : ""}
         </p>
-        <h2 className="display-lg text-balance">{module.title}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="display-lg text-balance outline-none">
+          {module.title}
+        </h2>
         {module.description && <p className="mt-3 max-w-3xl text-lg text-muted-foreground">{module.description}</p>}
       </header>
 

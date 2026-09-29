@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
@@ -119,7 +119,7 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
 
   const close = async () => {
     if (submit.isPending) return; // it was sent: its result is on its way
-    if (!result && answered > 0) {
+    if (!result && Object.keys(answers).length > 0) {
       const confirmed = await confirm({
         title: "¿Salir de la evaluación?",
         description: "Tus respuestas no se guardan y el intento no cuenta.",
@@ -141,6 +141,11 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
         ? "Usaste todos los intentos. Habla con tu administrador si necesitas otro."
         : null
     : null;
+
+  // Passed or out of attempts on another device or tab: the page behind shows it too (next module unlocked...).
+  useEffect(() => {
+    if (closedReason) void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
+  }, [closedReason, courseId, queryClient]);
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(next) => (next ? onOpenChange(true) : void close())}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useCallback, useRef, useState } from "react";
 import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
@@ -42,7 +42,17 @@ function CoursePlayer() {
   const nextModule = current ? modules[modules.indexOf(current) + 1] ?? null : null;
   const quizModule = modules.find((module) => module.id === quizModuleId);
 
+  // Set when the learner moves to another module: its title takes the focus once it shows.
+  const focusNextTitle = useRef(false);
+  const focusTitle = useCallback((node: HTMLHeadingElement | null) => {
+    if (node && focusNextTitle.current) {
+      focusNextTitle.current = false;
+      node.focus({ preventScroll: true });
+    }
+  }, []);
+
   const show = (moduleId: number) => {
+    focusNextTitle.current = true;
     router.replace(`/learn/${courseId}?m=${moduleId}`, { scroll: false });
     content.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -102,6 +112,7 @@ function CoursePlayer() {
             <motion.div key={current.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
               <ModuleView
                 module={current}
+                headingRef={focusTitle}
                 language={course.language}
                 nextModule={nextModule}
                 completing={complete.isPending}

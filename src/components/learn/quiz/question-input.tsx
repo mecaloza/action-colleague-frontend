@@ -125,10 +125,10 @@ function Ordering({ question, response, onChange }: InputProps<Extract<LearnerQu
         <li key={item.id} className="flex items-center gap-3 border border-input bg-white px-4 py-3">
           <span className="w-6 text-center font-display text-lg font-semibold text-accent-strong">{index + 1}</span>
           <span className="flex-1">{item.text}</span>
-          <Button variant="ghost" size="icon-sm" aria-label={`Subir «${item.text}»`} disabled={index === 0} onClick={() => move(index, index - 1)}>
+          <Button variant="ghost" size="icon" aria-label={`Subir «${item.text}»`} disabled={index === 0} onClick={() => move(index, index - 1)}>
             <ArrowUp />
           </Button>
-          <Button variant="ghost" size="icon-sm" aria-label={`Bajar «${item.text}»`} disabled={index === order.length - 1} onClick={() => move(index, index + 1)}>
+          <Button variant="ghost" size="icon" aria-label={`Bajar «${item.text}»`} disabled={index === order.length - 1} onClick={() => move(index, index + 1)}>
             <ArrowDown />
           </Button>
         </li>

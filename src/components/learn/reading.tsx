@@ -27,7 +27,9 @@ const components: Components = {
 export function Reading({ text }: { text: string }) {
   return (
     <div className="reading">
-      <ReactMarkdown components={components}>{text}</ReactMarkdown>
+      <ReactMarkdown components={components} skipHtml>
+        {text}
+      </ReactMarkdown>
     </div>
   );
 }

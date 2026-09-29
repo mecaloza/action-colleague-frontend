@@ -132,8 +132,8 @@ export default function AdminDashboardPage() {
             <Skeleton className="h-64" />
           ) : data?.recent_activity.length ? (
             <ol className="divide-y divide-border border border-border bg-white">
-              {data.recent_activity.map((item) => (
-                <ActivityItem key={`${item.kind}-${item.course_id}-${item.user_name}-${item.at}`} item={item} />
+              {data.recent_activity.map((item, index) => (
+                <ActivityItem key={`${item.kind}-${item.course_id}-${item.user_name}-${item.at}-${index}`} item={item} />
               ))}
             </ol>
           ) : (
