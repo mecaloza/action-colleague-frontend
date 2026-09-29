@@ -295,3 +295,48 @@ export interface CompletionResult {
   next_module_id: number | null;
   course_completed: boolean;
 }
+
+// Media and background jobs
+export type MediaKind = "video" | "recording" | "document" | "deck" | "image" | "audio";
+export type MediaPurpose = "module_video" | "recording" | "module_document" | "course_cover" | "course_material" | "deck";
+export type MediaStatus = "pending" | "uploaded" | "processing" | "ready" | "failed";
+
+export interface MediaAsset {
+  id: string;
+  kind: MediaKind;
+  status: MediaStatus;
+  mime_type: string;
+  size_bytes: number | null;
+  duration_seconds: number | null;
+  width: number | null;
+  height: number | null;
+  original_filename: string | null;
+  course_id: number | null;
+  url: string | null;
+  error: string | null;
+  pages: string[];
+  text_chars: number | null;
+  created_at: string | null;
+}
+
+export interface UploadTarget {
+  method: "PUT" | "TUS";
+  url: string;
+  headers: Record<string, string>;
+  metadata: Record<string, string>;
+  chunk_size: number | null;
+}
+
+export interface Job {
+  id: string;
+  type: string;
+  status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+  progress: number;
+  step: string;
+  error: string | null;
+  course_id: number | null;
+  module_id: number | null;
+  result: Record<string, unknown> | null;
+  created_at: string | null;
+  updated_at: string | null;
+}

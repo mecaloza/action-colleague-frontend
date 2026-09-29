@@ -11,6 +11,7 @@ import { coursesApi } from "@/lib/api/courses";
 import type { CourseDetail, Language } from "@/lib/api/types";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { toastError } from "@/lib/notify";
+import { CoverPicker } from "./cover-picker";
 import { LanguageField } from "./language-field";
 
 function SettingsForm({ course }: { course: CourseDetail }) {
@@ -43,13 +44,24 @@ function SettingsForm({ course }: { course: CourseDetail }) {
       </div>
       <div>
         <Label htmlFor="course-description">Descripción</Label>
-        <Textarea id="course-description" value={description} onChange={(event) => setDescription(event.target.value)} />
+        <Textarea
+          id="course-description"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          maxLength={5000}
+        />
       </div>
       <div className="grid gap-6 sm:grid-cols-2">
         <LanguageField value={language} onChange={setLanguage} />
         <div>
           <Label htmlFor="course-audience">Audiencia</Label>
-          <Input id="course-audience" value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Ej. operarios de planta" />
+          <Input
+            id="course-audience"
+            value={audience}
+            onChange={(event) => setAudience(event.target.value)}
+            placeholder="Ej. operarios de planta"
+            maxLength={500}
+          />
         </div>
       </div>
       <Button type="submit" loading={save.isPending} disabled={!title.trim()}>
@@ -62,5 +74,13 @@ function SettingsForm({ course }: { course: CourseDetail }) {
 export function SettingsTab({ course }: { course: CourseDetail }) {
   // The form starts over whenever the saved values change (after saving, or edited elsewhere).
   const savedValues = JSON.stringify([course.title, course.description, course.language, course.settings.audience]);
-  return <SettingsForm key={savedValues} course={course} />;
+  return (
+    <div className="max-w-3xl space-y-10">
+      <section>
+        <p className="mb-3 text-[11px] font-bold uppercase tracking-label text-ink-700">Portada</p>
+        <CoverPicker course={course} />
+      </section>
+      <SettingsForm key={savedValues} course={course} />
+    </div>
+  );
 }
