@@ -4,6 +4,7 @@ import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MotionConfig } from "framer-motion";
 import { Toaster } from "sonner";
+import { ConfirmProvider } from "@/components/layout/confirm-dialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/auth-context";
 import { LanguageProvider } from "@/contexts/language-context";
@@ -39,8 +40,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <AuthProvider>
           <MotionConfig reducedMotion="user">
             <TooltipProvider delayDuration={200}>
-              {children}
-              <Toaster position="bottom-right" toastOptions={TOAST_OPTIONS} />
+              <ConfirmProvider>
+                {children}
+                <Toaster position="bottom-right" toastOptions={TOAST_OPTIONS} />
+              </ConfirmProvider>
             </TooltipProvider>
           </MotionConfig>
         </AuthProvider>

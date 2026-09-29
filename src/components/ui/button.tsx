@@ -15,7 +15,7 @@ const buttonVariants = cva(
         secondary: "bg-mist text-ink-800 hover:bg-fog",
         ghost: "text-ink-800 hover:bg-mist",
         inverse: "bg-white text-ink-900 hover:bg-mist",
-        "outline-inverse": "border border-white/40 text-white hover:border-white hover:bg-white hover:text-ink-900",
+        "outline-inverse": "border border-white/40 bg-ink-950/70 text-white hover:border-white hover:bg-white hover:text-ink-900",
         destructive: "bg-destructive text-white hover:bg-destructive/90",
         link: "h-auto p-0 normal-case tracking-normal text-accent underline-offset-4 hover:underline",
       },

@@ -10,11 +10,11 @@ const badgeVariants = cva(
         default: "bg-ink-800 text-white",
         secondary: "bg-mist text-ink-700",
         outline: "border border-border text-ink-700",
-        accent: "bg-accent-soft text-accent",
+        accent: "bg-accent-soft text-accent-strong",
         success: "bg-green-50 text-success",
         warning: "bg-amber-50 text-warning",
         destructive: "bg-red-50 text-destructive",
-        inverse: "bg-white/10 text-white",
+        inverse: "bg-black/60 text-white",
       },
     },
     defaultVariants: { variant: "default" },
@@ -31,7 +31,7 @@ function Badge({ className, variant, pulse, children, ...props }: BadgeProps) {
     <span className={cn(badgeVariants({ variant }), className)} {...props}>
       {pulse && (
         <span className="relative flex h-1.5 w-1.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+          <span className="absolute inline-flex h-full w-full rounded-full motion-safe:animate-ping bg-current opacity-60" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
         </span>
       )}

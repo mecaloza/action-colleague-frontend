@@ -1,184 +1,160 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { api } from "@/lib/api";
-import { BookOpen, Users, TrendingUp, Award, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, CheckCircle2, Sparkles, XCircle } from "lucide-react";
+import { NewCourseButton } from "@/components/courses/new-course-button";
+import { EmptyState } from "@/components/layout/empty-state";
+import { PageHero } from "@/components/layout/page-hero";
+import { QueryError } from "@/components/layout/query-state";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth-context";
-import { useTranslations } from "next-intl";
+import { dashboardApi, dashboardKeys } from "@/lib/api/dashboard";
+import type { Dashboard } from "@/lib/api/types";
+import { formatPercent, formatRelative, plural, twoDigits } from "@/lib/format";
 
-const statIcons = [
-  { icon: BookOpen, bg: "bg-violet-500/10", color: "text-violet-400" },
-  { icon: Users, bg: "bg-blue-500/10", color: "text-blue-400" },
-  { icon: TrendingUp, bg: "bg-emerald-500/10", color: "text-emerald-400" },
-  { icon: Award, bg: "bg-amber-500/10", color: "text-amber-400" },
-];
-
-interface DashboardData {
-  total_courses: number;
-  total_users: number;
-  total_enrollments: number;
-  completed_enrollments: number;
-  active_enrollments: number;
-  total_certificates: number;
-}
-
-function AdminDashboard() {
-  const t = useTranslations("adminDashboard");
-  const [stats, setStats] = useState<DashboardData | null>(null);
-  const [error, setError] = useState(false);
-  const { user } = useAuth();
-
-  useEffect(() => {
-    api
-      .getAdminDashboard()
-      .then((data: any) => {
-        setStats({
-          total_courses: data.total_courses ?? 0,
-          total_users: data.total_users ?? data.total_employees ?? 0,
-          total_enrollments: data.total_enrollments ?? 0,
-          completed_enrollments: data.completed_enrollments ?? 0,
-          active_enrollments: data.active_enrollments ?? 0,
-          total_certificates: data.total_certificates ?? 0,
-        });
-      })
-      .catch(() => setError(true));
-  }, []);
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <p className="text-muted-foreground">{t("loadError")}</p>
-      </div>
-    );
-  }
-
-  if (!stats) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
-      </div>
-    );
-  }
-
-  const completionRate =
-    stats.total_enrollments > 0
-      ? Math.round((stats.completed_enrollments / stats.total_enrollments) * 100)
-      : 0;
-
-  const statCards = [
-    { label: t("stats.courses"), value: stats.total_courses, sub: t("stats.coursesSub") },
-    { label: t("stats.employees"), value: stats.total_users, sub: t("stats.employeesSub") },
-    { label: t("stats.activeEnrollments"), value: stats.active_enrollments, sub: t("stats.activeEnrollmentsSub") },
-    { label: t("stats.completionRate"), value: `${completionRate}%`, sub: t("stats.completionRateSub", { completed: stats.completed_enrollments, total: stats.total_enrollments }) },
-  ];
-
+function Kpi({ value, label, hint }: { value: string; label: string; hint?: string }) {
   return (
-    <div className="space-y-6 animate-slide-up">
-      {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-r from-violet-600/20 via-purple-600/10 to-transparent p-6 backdrop-blur-xl">
-        <div className="absolute top-0 right-0 h-full w-1/3 bg-gradient-to-l from-violet-500/10 to-transparent" />
-        <h1 className="text-3xl font-bold">
-          {t("welcome")}, <span className="gradient-text">{user?.name || t("adminFallback")}</span>
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          {t("subtitle")}
-        </p>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((stat, i) => {
-          const { icon: Icon, bg, color } = statIcons[i];
-          return (
-            <Card
-              key={stat.label}
-              className="gradient-border hover:glow-violet-sm transition-all duration-300"
-            >
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {stat.label}
-                </CardTitle>
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${bg}`}
-                >
-                  <Icon className={`h-4 w-4 ${color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stat.sub}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{t("enrollmentSummary.title")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                { label: t("enrollmentSummary.completed"), value: stats.completed_enrollments, color: "bg-emerald-500" },
-                { label: t("enrollmentSummary.inProgress"), value: stats.active_enrollments, color: "bg-amber-500" },
-                { label: t("enrollmentSummary.total"), value: stats.total_enrollments, color: "bg-violet-500" },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`h-3 w-3 rounded-full ${item.color}`} />
-                    <span className="text-sm font-medium">{item.label}</span>
-                  </div>
-                  <span className="text-sm font-semibold">{item.value}</span>
-                </div>
-              ))}
-              {/* Progress bar */}
-              <div className="pt-2">
-                <div className="h-3 w-full overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all duration-500"
-                    style={{ width: `${completionRate}%` }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 text-center">
-                  {t("enrollmentSummary.completedPct", { percent: completionRate })}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{t("certificates.title")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-6">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-500 shadow-lg shadow-amber-500/20 mb-4">
-                <Award className="h-8 w-8 text-white" />
-              </div>
-              <p className="text-4xl font-bold">{stats.total_certificates}</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {t("certificates.issued")}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+    <div className="border-l border-white/15 pl-6 first:border-l-0 first:pl-0">
+      <p className="font-display text-5xl font-medium tracking-tightest text-white">{value}</p>
+      <p className="mt-2 text-[10.5px] font-bold uppercase tracking-label text-white/60">{label}</p>
+      {hint && <p className="mt-1 text-xs text-white/60">{hint}</p>}
     </div>
   );
 }
 
-/** Previous-version screen: keeps the page padding the old layout used to add. */
-export default function Page() {
+const ACTIVITY_TEXT = {
+  passed_quiz: "aprobó la evaluación de",
+  failed_quiz: "no aprobó la evaluación de",
+  completed_course: "completó el curso",
+} as const;
+
+type Activity = Dashboard["recent_activity"][number];
+
+function ActivityItem({ item }: { item: Activity }) {
+  const showScore = item.score !== null && item.kind !== "completed_course";
   return (
-    <div className="container py-8">
-      <AdminDashboard />
-    </div>
+    <li className="flex items-start gap-4 px-5 py-4">
+      {item.kind === "failed_quiz" ? (
+        <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+      ) : (
+        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+      )}
+      <div className="min-w-0 flex-1 text-sm">
+        <p>
+          <span className="font-semibold">{item.user_name}</span> {ACTIVITY_TEXT[item.kind]}{" "}
+          <Link href={`/admin/courses/${item.course_id}`} className="font-semibold hover:text-accent">
+            {item.module_title ?? item.course_title}
+          </Link>
+          {showScore ? ` (${formatPercent(item.score)})` : ""}
+        </p>
+        {item.module_title && <p className="text-xs text-muted-foreground">{item.course_title}</p>}
+      </div>
+      {item.at && <time className="shrink-0 text-xs text-muted-foreground">{formatRelative(item.at)}</time>}
+    </li>
+  );
+}
+
+function TopCourseItem({ course, rank }: { course: Dashboard["top_courses"][number]; rank: number }) {
+  return (
+    <li>
+      <Link
+        href={`/admin/courses/${course.id}`}
+        className="group block border border-border bg-white p-5 transition-colors hover:border-ink-800"
+      >
+        <div className="mb-3 flex items-start gap-3">
+          <span className="font-display text-2xl font-medium text-accent">{twoDigits(rank)}</span>
+          <p className="flex-1 font-semibold group-hover:text-accent">{course.title}</p>
+          <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
+        </div>
+        <div className="flex items-center gap-3">
+          <Progress value={course.completion_rate} className="flex-1" />
+          <span className="text-xs text-muted-foreground">
+            {formatPercent(course.completion_rate)} de {plural(course.enrolled_count, "persona")}
+          </span>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+export default function AdminDashboardPage() {
+  const { user } = useAuth();
+  const dashboard = useQuery({ queryKey: dashboardKeys.all, queryFn: dashboardApi.get, refetchInterval: 30_000 });
+  const data = dashboard.data;
+
+  return (
+    <>
+      <PageHero
+        eyebrow="Panel"
+        title={`Hola, ${user?.name.split(" ")[0] ?? ""}`.trim()}
+        description="Así va la formación de tu equipo."
+        actions={<NewCourseButton size="lg" />}
+      >
+        {data ? (
+          <dl className="grid grid-cols-2 gap-8 md:grid-cols-4">
+            <Kpi value={String(data.courses.published)} label="Cursos publicados" hint={`${data.courses.draft} en borrador`} />
+            <Kpi
+              value={String(data.learners.active_30d)}
+              label="Personas activas (30 días)"
+              hint={`de ${plural(data.learners.total, "colaborador", "colaboradores")}`}
+            />
+            <Kpi
+              value={formatPercent(data.completion_rate)}
+              label="Tasa de finalización"
+              hint={`${data.enrollments.completed} de ${plural(data.enrollments.total, "inscripción", "inscripciones")}`}
+            />
+            <Kpi value={formatPercent(data.average_score)} label="Puntaje promedio" />
+          </dl>
+        ) : dashboard.isLoading ? (
+          <Skeleton className="h-20 bg-white/10" />
+        ) : null}
+      </PageHero>
+
+      {dashboard.error && !data ? (
+        <section className="container py-12">
+          <QueryError query={dashboard} />
+        </section>
+      ) : (
+      <section className="container grid gap-10 py-12 lg:grid-cols-[1.4fr_1fr]">
+
+        <div>
+          <div className="mb-5 flex items-end justify-between">
+            <h2 className="display-md">Actividad reciente</h2>
+            {data?.courses.generating ? (
+              <span className="inline-flex items-center gap-2 text-sm text-accent">
+                <Sparkles className="h-4 w-4" /> {plural(data.courses.generating, "curso")} generándose
+              </span>
+            ) : null}
+          </div>
+          {dashboard.isLoading ? (
+            <Skeleton className="h-64" />
+          ) : data?.recent_activity.length ? (
+            <ol className="divide-y divide-border border border-border bg-white">
+              {data.recent_activity.map((item) => (
+                <ActivityItem key={`${item.kind}-${item.course_id}-${item.user_name}-${item.at}`} item={item} />
+              ))}
+            </ol>
+          ) : (
+            <EmptyState title="Sin actividad todavía" description="Cuando tu equipo avance en los cursos lo verás aquí." />
+          )}
+        </div>
+
+        <div>
+          <h2 className="display-md mb-5">Cursos con más personas</h2>
+          {data?.top_courses.length ? (
+            <ol className="space-y-3">
+              {data.top_courses.map((course, index) => (
+                <TopCourseItem key={course.id} course={course} rank={index + 1} />
+              ))}
+            </ol>
+          ) : (
+            !dashboard.isLoading && <EmptyState title="Aún no hay inscripciones" description="Asigna cursos a tu equipo desde cada curso." />
+          )}
+        </div>
+      </section>
+      )}
+    </>
   );
 }
