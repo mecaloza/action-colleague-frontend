@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState, type RefObject } from "react";
+import { flushSync } from "react-dom";
+import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Copy, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,14 +11,35 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useAuth } from "@/contexts/auth-context";
+import { ApiError } from "@/lib/api/client";
 import type { Role, UserRow } from "@/lib/api/types";
-import { userKeys, usersApi } from "@/lib/api/users";
+import { type UserInput, userKeys, usersApi } from "@/lib/api/users";
+import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { toastError } from "@/lib/notify";
+import { cn } from "@/lib/utils";
 
 const PASSWORD_CHARS = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O, 1/l/I
 const PASSWORD_LENGTH = 12;
 const MIN_PASSWORD = 8;
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const NAME_ERROR_ID = "person-name-error";
+const EMAIL_ERROR_ID = "person-email-error";
+const PASSWORD_ERROR_ID = "person-password-error";
+const PASSWORD_HINT_ID = "person-password-hint";
+/** Tags the save, so the dialog knows one is running without a copy of the form's state. */
+const SAVE_PERSON = ["users", "save"] as const;
+
+/** "password" ("Nueva contraseña") opens with a temporary password already generated, and focused. */
+export type PersonDialogMode = "details" | "password";
+
+/** Everything the form saves except the password, which travels apart. */
+type PersonFields = Omit<UserInput, "password">;
+
+/** What one save sends. Passed to `mutate`: the callbacks see what was saved even if the form changes meanwhile. */
+interface SaveInput {
+  fields: PersonFields;
+  password: string;
+}
 
 /** A random, readable temporary password (the browser's secure generator). */
 function temporaryPassword(): string {
@@ -26,43 +48,91 @@ function temporaryPassword(): string {
   return Array.from(values, (value) => PASSWORD_CHARS[value % PASSWORD_CHARS.length]).join("");
 }
 
-interface PersonDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Null to add someone new. */
-  person: UserRow | null;
+/** Only what the admin changed: a stale copy of the person never overwrites newer data. */
+function changedFields<T extends object>(saved: T, edited: T): Partial<T> {
+  const changes: Partial<T> = {};
+  for (const key in edited) {
+    if (edited[key] !== saved[key]) changes[key] = edited[key];
+  }
+  return changes;
 }
 
-/** Add a person to the team, or edit one (a new password is optional when editing). */
-export function PersonDialog({ open, onOpenChange, person }: PersonDialogProps) {
-  const [saving, setSaving] = useState(false);
+/**
+ * A field's problem, linked to it with aria-describedby. Always rendered, empty when there is none:
+ * as a live region it is read out even when the field already had focus (Enter from that field).
+ */
+function FieldError({ id, message }: { id: string; message: string | null }) {
+  return (
+    <p id={id} aria-live="polite" className={cn("text-xs text-destructive", message && "mt-1.5")}>
+      {message}
+    </p>
+  );
+}
+
+/** Copies a password; `failureMessage` says what to do when the browser refuses (no permission, insecure page). */
+async function copyPassword(password: string, failureMessage: string) {
+  try {
+    await navigator.clipboard.writeText(password);
+    toast.success("Contraseña copiada");
+  } catch {
+    toast.error(failureMessage);
+  }
+}
+
+interface PersonDialogProps {
+  open: boolean;
+  onClose: () => void;
+  /** Null to add someone new. The page keeps the last one while the dialog animates closed. */
+  person: UserRow | null;
+  mode?: PersonDialogMode;
+}
+
+/**
+ * Add a person to the team, or edit one (a new password is optional when editing).
+ * The page gives it a new `key` on each opening: the form always starts from the saved data.
+ */
+export function PersonDialog({ open, onClose, person, mode = "details" }: PersonDialogProps) {
+  const saving = useIsMutating({ mutationKey: SAVE_PERSON }) > 0;
+  const nameField = useRef<HTMLInputElement>(null);
+  const passwordField = useRef<HTMLInputElement>(null);
   return (
     // While saving, neither Escape nor the X closes it: the admin sees how it went.
-    <Dialog open={open} onOpenChange={(next) => (next || !saving) && onOpenChange(next)}>
-      <DialogContent className="max-w-xl">
-        {/* Keyed by person: each opening starts from their saved data. */}
-        {open && (
-          <PersonForm
-            key={person?.id ?? "new"}
-            person={person}
-            onSavingChange={setSaving}
-            onDone={() => onOpenChange(false)}
-          />
-        )}
+    <Dialog open={open} onOpenChange={(next) => !next && !saving && onClose()}>
+      <DialogContent
+        className="max-w-xl"
+        closeDisabled={saving}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault(); // start on a field; not autoFocus, see useReturnFocus
+          (mode === "password" && passwordField.current ? passwordField : nameField).current?.focus();
+        }}
+      >
+        <PersonForm
+          open={open}
+          person={person}
+          mode={mode}
+          nameField={nameField}
+          passwordField={passwordField}
+          onDone={onClose}
+        />
       </DialogContent>
     </Dialog>
   );
 }
 
 interface PersonFormProps {
+  /** False while the dialog animates closed: the form is still on screen but must not save. */
+  open: boolean;
   person: UserRow | null;
-  onSavingChange: (saving: boolean) => void;
+  mode: PersonDialogMode;
+  nameField: RefObject<HTMLInputElement>;
+  passwordField: RefObject<HTMLInputElement>;
   onDone: () => void;
 }
 
-function PersonForm({ person, onSavingChange, onDone }: PersonFormProps) {
+function PersonForm({ open, person, mode, nameField, passwordField, onDone }: PersonFormProps) {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { refreshPeople } = useCourseCache();
+  const { user, setCurrentUser } = useAuth();
   const editing = person !== null;
   // Admins can't demote themselves (the API refuses) and change their own password in their profile.
   const isSelf = editing && person.id === user?.id;
@@ -71,72 +141,134 @@ function PersonForm({ person, onSavingChange, onDone }: PersonFormProps) {
   const [role, setRole] = useState<Role>(person?.role ?? "collaborator");
   const [position, setPosition] = useState(person?.position ?? "");
   const [department, setDepartment] = useState(person?.department ?? "");
-  const [password, setPassword] = useState(() => (editing ? "" : temporaryPassword()));
+  // A new person, and "Nueva contraseña", start with a temporary password; editing the data leaves it empty.
+  const [password, setPassword] = useState(() => (!editing || (mode === "password" && !isSelf) ? temporaryPassword() : ""));
+  // Problems show once the field is left or a save is attempted, not while it is first typed.
+  const [emailLeft, setEmailLeft] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const [emailTaken, setEmailTaken] = useState<string | null>(null);
+  const emailField = useRef<HTMLInputElement>(null);
 
   // What gets saved: the text fields trimmed. The password travels apart.
-  const fields = {
+  const fields: PersonFields = {
     name: name.trim(),
     email: email.trim(),
     role,
     position: position.trim(),
     department: department.trim(),
   };
+  // An unchanged email isn't checked again: older accounts may have one the pattern rejects.
+  const emailOk = (editing && fields.email === person.email) || EMAIL_PATTERN.test(fields.email);
   // Editing may leave the password empty (it keeps the current one); a new person always needs one.
   const passwordOk = password.length >= MIN_PASSWORD || (editing && !password);
-  const valid = fields.name !== "" && EMAIL_PATTERN.test(fields.email) && passwordOk;
+  const nameError = attempted && !fields.name ? "Escribe su nombre" : null;
+  const emailError = emailTaken ?? (!emailOk && (emailLeft || attempted) ? "Escribe un correo válido" : null);
+  const passwordError = attempted && !passwordOk ? `Usa al menos ${MIN_PASSWORD} caracteres` : null;
+  const firstProblem = !fields.name ? nameField : emailTaken || !emailOk ? emailField : !passwordOk ? passwordField : null;
 
   const save = useMutation({
-    mutationFn: () =>
+    mutationKey: SAVE_PERSON,
+    mutationFn: (input: SaveInput) =>
       editing
-        ? usersApi.update(person.id, { ...fields, ...(password ? { password } : {}) })
-        : usersApi.create({ ...fields, password }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: userKeys.all });
-      if (editing) {
+        ? usersApi.update(person.id, {
+            ...changedFields<PersonFields>(person, input.fields),
+            ...(input.password ? { password: input.password } : {}),
+          })
+        : usersApi.create({ ...input.fields, password: input.password }),
+    onSuccess: (saved, input) => {
+      // The lists show the saved row at once (reopening it finds the new data); the refetch then brings order and counts.
+      queryClient.setQueriesData<UserRow[]>({ queryKey: userKeys.lists }, (rows) =>
+        rows?.map((row) => (row.id === saved.id ? saved : row)),
+      );
+      void refreshPeople();
+      if (isSelf) setCurrentUser(saved); // the header shows the new name and email
+      if (!editing) {
+        toast.success(`${saved.name} ya puede ingresar con su correo y la contraseña temporal.`, {
+          action: {
+            label: "Copiar contraseña",
+            onClick: () => void copyPassword(input.password, "No pudimos copiarla. Si no la tienes, genera otra con «Nueva contraseña»."),
+          },
+          duration: 10_000, // time to use the action
+        });
+      } else if (input.password) {
         toast.success(
-          password ? "Datos guardados. La nueva contraseña cerró sus sesiones abiertas." : "Datos guardados",
+          "Datos guardados. Con la nueva contraseña, sus sesiones abiertas se cierran en menos de una hora; para cortarlas ya, desactiva la cuenta.",
         );
       } else {
-        toast.success(`${fields.name} ya puede ingresar con su correo y la contraseña temporal.`);
+        toast.success("Datos guardados");
       }
       onDone();
     },
-    onError: toastError,
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) {
+        // Someone else has that email: say it under the field (first, so it is read out), then go there.
+        flushSync(() => setEmailTaken(error.message));
+        emailField.current?.focus();
+      } else {
+        toastError(error);
+      }
+    },
   });
-
-  useEffect(() => onSavingChange(save.isPending), [save.isPending, onSavingChange]);
-
-  const copyPassword = async () => {
-    try {
-      await navigator.clipboard.writeText(password);
-      toast.success("Contraseña copiada");
-    } catch {
-      toast.error("No pudimos copiarla; selecciónala y cópiala a mano.");
-    }
-  };
 
   return (
     <form
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        save.mutate();
+        if (!open) return; // closing: an Enter or a click during the exit animation doesn't save
+        if (!firstProblem) {
+          save.mutate({ fields, password });
+          return;
+        }
+        // Show the problems before moving to the first one, so it is read out with its message.
+        flushSync(() => setAttempted(true));
+        firstProblem.current?.focus();
       }}
     >
       <DialogHeader>
         <DialogTitle>{editing ? `Editar a ${person.name}` : "Agregar persona"}</DialogTitle>
         <DialogDescription>
-          {editing ? "Cambia sus datos o dale una contraseña nueva." : "Recibirá acceso con su correo y una contraseña temporal."}
+          {isSelf
+            ? "Cambia tus datos."
+            : editing
+              ? "Cambia sus datos o dale una contraseña nueva."
+              : "Recibirá acceso con su correo y una contraseña temporal."}
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-5">
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <Label htmlFor="person-name">Nombre</Label>
-            <Input id="person-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} required autoFocus />
+            <Input
+              ref={nameField}
+              id="person-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={200}
+              required
+              aria-invalid={nameError ? true : undefined}
+              aria-describedby={nameError ? NAME_ERROR_ID : undefined}
+            />
+            <FieldError id={NAME_ERROR_ID} message={nameError} />
           </div>
           <div>
             <Label htmlFor="person-email">Correo</Label>
-            <Input id="person-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} maxLength={200} required />
+            <Input
+              ref={emailField}
+              id="person-email"
+              type="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setEmailTaken(null);
+              }}
+              onBlur={() => email.trim() && setEmailLeft(true)} // passing through it empty is not a mistake yet
+              maxLength={200}
+              required
+              aria-invalid={emailError ? true : undefined}
+              aria-describedby={emailError ? EMAIL_ERROR_ID : undefined}
+            />
+            <FieldError id={EMAIL_ERROR_ID} message={emailError} />
           </div>
           <div>
             <Label htmlFor="person-position">Cargo</Label>
@@ -172,22 +304,38 @@ function PersonForm({ person, onSavingChange, onDone }: PersonFormProps) {
             <Label htmlFor="person-password">{editing ? "Contraseña nueva (opcional)" : "Contraseña temporal"}</Label>
             <div className="flex gap-2">
               <Input
+                ref={passwordField}
                 id="person-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 maxLength={128}
                 autoComplete="new-password"
+                spellCheck={false}
+                autoCapitalize="none"
+                autoCorrect="off"
                 placeholder={editing ? "Déjala vacía para no cambiarla" : undefined}
+                aria-invalid={passwordError ? true : undefined}
+                aria-describedby={passwordError ? `${PASSWORD_ERROR_ID} ${PASSWORD_HINT_ID}` : PASSWORD_HINT_ID}
                 className="font-mono"
               />
               <Button type="button" variant="outline" size="icon" aria-label="Generar otra contraseña" onClick={() => setPassword(temporaryPassword())}>
                 <RefreshCw />
               </Button>
-              <Button type="button" variant="outline" size="icon" aria-label="Copiar contraseña" onClick={copyPassword} disabled={!password}>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Copiar contraseña"
+                onClick={() => void copyPassword(password, "No pudimos copiarla; selecciónala y cópiala a mano.")}
+                disabled={!password}
+              >
                 <Copy />
               </Button>
             </div>
-            <p className="mt-1.5 text-xs text-muted-foreground">Mínimo {MIN_PASSWORD} caracteres. Compártela por un canal privado; podrá cambiarla en su perfil.</p>
+            <FieldError id={PASSWORD_ERROR_ID} message={passwordError} />
+            <p id={PASSWORD_HINT_ID} className="mt-1.5 text-xs text-muted-foreground">
+              Mínimo {MIN_PASSWORD} caracteres. Compártela por un canal privado; podrá cambiarla en su perfil.
+            </p>
           </div>
         )}
       </div>
@@ -195,7 +343,7 @@ function PersonForm({ person, onSavingChange, onDone }: PersonFormProps) {
         <Button type="button" variant="ghost" onClick={onDone} disabled={save.isPending}>
           Cancelar
         </Button>
-        <Button type="submit" loading={save.isPending} disabled={!valid}>
+        <Button type="submit" loading={save.isPending}>
           {editing ? "Guardar cambios" : "Agregar persona"}
         </Button>
       </DialogFooter>

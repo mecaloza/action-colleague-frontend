@@ -114,7 +114,7 @@ function ParticipantsTable({ participants, onOpen, onRemove }: ParticipantsTable
 
 export function ParticipantsTab({ course }: { course: CourseDetail }) {
   const confirm = useConfirm();
-  const { refreshCourse } = useCourseCache();
+  const { refreshCourse, refreshPeople } = useCourseCache();
   const [assigning, setAssigning] = useState(false);
   const [inspected, setInspected] = useState<Participant | null>(null);
   const participants = useQuery({
@@ -126,6 +126,7 @@ export function ParticipantsTab({ course }: { course: CourseDetail }) {
     mutationFn: (userId: number) => coursesApi.removeParticipant(course.id, userId),
     onSuccess: () => {
       refreshCourse(course.id);
+      refreshPeople(); // their course counts in Equipo, and the panel
       toast.success("Persona retirada del curso");
     },
     onError: toastError,

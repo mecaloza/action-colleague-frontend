@@ -1,6 +1,22 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
+
+const API = process.env.E2E_API_URL ?? "http://localhost:8001/api/v1";
+const admin = { email: process.env.E2E_ADMIN_EMAIL ?? "", password: process.env.E2E_ADMIN_PASSWORD ?? "" };
 
 test.setTimeout(90_000);
+
+/** A new collaborator added through the API; returns their email. */
+async function addPerson(request: APIRequestContext, name: string): Promise<string> {
+  const login = await request.post(`${API}/auth/login`, { data: admin });
+  expect(login.ok()).toBeTruthy();
+  const email = `foco.${Date.now()}@local.test`;
+  const response = await request.post(`${API}/users`, {
+    headers: { Authorization: `Bearer ${(await login.json()).access_token}` },
+    data: { name, email, password: "Temporal-2026", role: "collaborator" },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  return email;
+}
 
 test("un admin agrega a una persona, que entra con su contraseña temporal, y la desactiva", async ({ page, browser }) => {
   const email = `persona.${Date.now()}@local.test`;
@@ -57,4 +73,45 @@ test("un admin agrega a una persona, que entra con su contraseña temporal, y la
   await rowMenu.click();
   await page.getByRole("menuitem", { name: /Reactivar/ }).click();
   await expect(page.getByText("Ana Prueba puede volver a ingresar")).toBeVisible();
+});
+
+test("al cerrar la ficha o un diálogo, el foco vuelve a quien lo abrió", async ({ page, request }) => {
+  const name = `Foco ${Date.now()}`;
+  const email = await addPerson(request, name);
+  await page.goto("/admin/team");
+  await page.getByLabel("Buscar personas").fill(name);
+  const row = page.getByRole("row").filter({ hasText: email });
+  await expect(row).toHaveCount(1);
+
+  // The detail, opened with the keyboard from the name.
+  const nameButton = row.getByRole("button", { name, exact: true });
+  await nameButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(nameButton).toBeFocused();
+
+  // Dialogs opened from the row's menu go back to the menu's button, also those that start on a field.
+  const rowMenu = row.getByRole("button", { name: `Acciones para ${name}` });
+  const edit = page.getByRole("dialog", { name: `Editar a ${name}` });
+  await rowMenu.click();
+  await page.getByRole("menuitem", { name: /Editar datos/ }).click();
+  await expect(edit.getByLabel("Nombre")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(rowMenu).toBeFocused();
+
+  // "Nueva contraseña" starts on a new temporary password.
+  await rowMenu.click();
+  await page.getByRole("menuitem", { name: /Nueva contraseña/ }).click();
+  const password = edit.getByLabel("Contraseña nueva (opcional)");
+  await expect(password).toBeFocused();
+  await expect(password).toHaveValue(/^[A-Za-z0-9]{12}$/);
+  await page.keyboard.press("Escape");
+  await expect(rowMenu).toBeFocused();
+
+  await rowMenu.click();
+  await page.getByRole("menuitem", { name: /Desactivar/ }).click();
+  await page.getByRole("dialog", { name: `¿Desactivar a ${name}?` }).getByRole("button", { name: "Cancelar" }).click();
+  await expect(rowMenu).toBeFocused();
+  await expect(row).not.toContainText("Inactivo");
 });

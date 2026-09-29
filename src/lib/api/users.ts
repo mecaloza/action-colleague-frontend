@@ -25,6 +25,7 @@ export const usersApi = {
 
 export const userKeys = {
   all: ["users"] as const,
+  lists: ["users", "list"] as const,
   list: (params: UserListParams) => ["users", "list", params] as const,
   courses: (id: number) => ["users", id, "courses"] as const,
 };

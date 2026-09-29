@@ -21,6 +21,8 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   // Kept after closing so the text doesn't vanish during the closing animation.
   const [options, setOptions] = useState<ConfirmOptions>({ title: "" });
   const resolver = useRef<(value: boolean) => void>();
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
 
   const confirm = useCallback<Confirm>((next) => {
     resolver.current?.(false); // a newer question replaces one still open
@@ -41,20 +43,27 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       <Dialog open={open} onOpenChange={(next) => !next && close(false)}>
-        <DialogContent className="max-w-md">
+        <DialogContent
+          className="max-w-md"
+          onOpenAutoFocus={(event) => {
+            // Destructive questions start on "Cancelar": Enter never deletes by accident.
+            // Focused here, not with autoFocus, so focus can return to whoever asked (see useReturnFocus).
+            event.preventDefault();
+            (options.destructive ? cancelButton : confirmButton).current?.focus();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{options.title}</DialogTitle>
             {options.description && <DialogDescription>{options.description}</DialogDescription>}
           </DialogHeader>
           <DialogFooter>
-            {/* Destructive questions start on "Cancelar": Enter never deletes by accident. */}
-            <Button variant="ghost" onClick={() => close(false)} autoFocus={options.destructive}>
+            <Button ref={cancelButton} variant="ghost" onClick={() => close(false)}>
               Cancelar
             </Button>
             <Button
+              ref={confirmButton}
               variant={options.destructive ? "destructive" : "default"}
               onClick={() => close(true)}
-              autoFocus={!options.destructive}
             >
               {options.confirmLabel ?? "Confirmar"}
             </Button>

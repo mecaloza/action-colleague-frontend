@@ -81,10 +81,17 @@ function PersonDetail({ person }: { person: UserRow }) {
   );
 }
 
+interface PersonSheetProps {
+  open: boolean;
+  /** The last person shown: kept after closing, so the panel doesn't empty while it slides out. */
+  person: UserRow | null;
+  onClose: () => void;
+}
+
 /** One person: their data and every course they were assigned, with progress. */
-export function PersonSheet({ person, onClose }: { person: UserRow | null; onClose: () => void }) {
+export function PersonSheet({ open, person, onClose }: PersonSheetProps) {
   return (
-    <Sheet open={person !== null} onOpenChange={(open) => !open && onClose()}>
+    <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="max-w-xl">{person && <PersonDetail person={person} />}</SheetContent>
     </Sheet>
   );

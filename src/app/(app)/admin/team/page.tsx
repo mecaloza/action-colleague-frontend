@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { KeyRound, MoreHorizontal, Pencil, Search, UserCheck, UserPlus, UserX, Users } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHero } from "@/components/layout/page-hero";
 import { QueryError } from "@/components/layout/query-state";
-import { PersonDialog } from "@/components/team/person-dialog";
+import { PersonDialog, type PersonDialogMode } from "@/components/team/person-dialog";
 import { PersonSheet } from "@/components/team/person-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuth } from "@/contexts/auth-context";
 import type { Role, UserRow } from "@/lib/api/types";
 import { type UserListParams, userKeys, usersApi } from "@/lib/api/users";
-import { plural } from "@/lib/format";
+import { initials, plural } from "@/lib/format";
+import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { toastError } from "@/lib/notify";
 import { cn } from "@/lib/utils";
@@ -40,15 +42,6 @@ const ROLE_FILTERS: { value: RoleFilterValue; label: string }[] = [
 
 const ACTIVE_USERS: UserListParams = { include_inactive: false };
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-}
-
 /** "12 personas activas · 2 administradores" */
 function teamSummary(activeUsers: UserRow[]): string {
   const admins = activeUsers.filter((person) => person.role === "admin").length;
@@ -58,7 +51,7 @@ function teamSummary(activeUsers: UserRow[]): string {
 
 function RoleFilter({ value, onChange }: { value: RoleFilterValue; onChange: (value: RoleFilterValue) => void }) {
   return (
-    <div role="group" aria-label="Filtrar por rol" className="flex gap-2">
+    <div role="group" aria-label="Filtrar por rol" className="flex flex-wrap gap-2">
       {ROLE_FILTERS.map((filter) => (
         <button
           key={filter.value}
@@ -80,10 +73,21 @@ function RoleFilter({ value, onChange }: { value: RoleFilterValue; onChange: (va
 interface RowActions {
   onOpen: (person: UserRow) => void;
   onEdit: (person: UserRow) => void;
+  onNewPassword: (person: UserRow) => void;
   onToggleActive: (person: UserRow) => void;
 }
 
-function PersonRow({ person, isSelf, onOpen, onEdit, onToggleActive }: RowActions & { person: UserRow; isSelf: boolean }) {
+/** Role, plus "Inactivo" for a deactivated account. */
+function PersonBadges({ person }: { person: UserRow }) {
+  return (
+    <>
+      {person.role === "admin" ? <Badge>Administrador</Badge> : <Badge variant="secondary">Colaborador</Badge>}
+      {!person.is_active && <Badge variant="outline">Inactivo</Badge>}
+    </>
+  );
+}
+
+function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActive }: RowActions & { person: UserRow; isSelf: boolean }) {
   const ToggleIcon = person.is_active ? UserX : UserCheck;
   return (
     <TableRow className={cn("cursor-pointer", !person.is_active && "opacity-60")} onClick={() => onOpen(person)}>
@@ -103,6 +107,10 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onToggleActive }: RowAction
               {isSelf && <span className="ml-2 text-xs font-normal text-muted-foreground">(tú)</span>}
             </button>
             <p className="max-w-[240px] truncate text-xs text-muted-foreground">{person.email}</p>
+            {/* Small screens hide the role column: its badges go here. */}
+            <div className="mt-1 flex flex-wrap gap-1.5 sm:hidden">
+              <PersonBadges person={person} />
+            </div>
           </div>
         </div>
       </TableCell>
@@ -111,12 +119,9 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onToggleActive }: RowAction
         <p className="text-xs text-muted-foreground">{person.department}</p>
       </TableCell>
       <TableCell className="hidden sm:table-cell">
-        {person.role === "admin" ? <Badge>Administrador</Badge> : <Badge variant="secondary">Colaborador</Badge>}
-        {!person.is_active && (
-          <Badge variant="outline" className="ml-2">
-            Inactivo
-          </Badge>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <PersonBadges person={person} />
+        </div>
       </TableCell>
       <TableCell className="hidden text-sm lg:table-cell">
         {person.enrolled_count ? `${person.completed_count} de ${plural(person.enrolled_count, "curso")}` : "Sin cursos"}
@@ -132,13 +137,22 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onToggleActive }: RowAction
             <DropdownMenuItem onSelect={() => onEdit(person)}>
               <Pencil /> Editar datos
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onEdit(person)}>
-              <KeyRound /> Nueva contraseña
-            </DropdownMenuItem>
-            {!isSelf && (
-              <DropdownMenuItem destructive={person.is_active} onSelect={() => onToggleActive(person)}>
-                <ToggleIcon /> {person.is_active ? "Desactivar" : "Reactivar"}
+            {/* Your own password is changed in your profile, with the current one. */}
+            {isSelf ? (
+              <DropdownMenuItem asChild>
+                <Link href="/profile">
+                  <KeyRound /> Cambiar mi contraseña
+                </Link>
               </DropdownMenuItem>
+            ) : (
+              <>
+                <DropdownMenuItem onSelect={() => onNewPassword(person)}>
+                  <KeyRound /> Nueva contraseña
+                </DropdownMenuItem>
+                <DropdownMenuItem destructive={person.is_active} onSelect={() => onToggleActive(person)}>
+                  <ToggleIcon /> {person.is_active ? "Desactivar" : "Reactivar"}
+                </DropdownMenuItem>
+              </>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -177,16 +191,28 @@ function PeopleTable({ people, selfId, ...actions }: PeopleTableProps) {
   );
 }
 
+/**
+ * Open state for a dialog or panel that keeps its last value until the next opening, so it doesn't
+ * empty while animating closed. `key` changes on each opening: keyed content starts afresh.
+ */
+function useOpening<T>(initial: T) {
+  const [state, setState] = useState({ open: false, value: initial, key: 0 });
+  return {
+    ...state,
+    show: (value: T) => setState((current) => ({ open: true, value, key: current.key + 1 })),
+    hide: () => setState((current) => ({ ...current, open: false })),
+  };
+}
+
 export default function TeamPage() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const { refreshPeople } = useCourseCache();
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<RoleFilterValue>("all");
   const [showInactive, setShowInactive] = useState(false);
-  const [editing, setEditing] = useState<UserRow | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [inspected, setInspected] = useState<UserRow | null>(null);
+  const dialog = useOpening<{ person: UserRow | null; mode: PersonDialogMode }>({ person: null, mode: "details" });
+  const sheet = useOpening<UserRow | null>(null);
   const searchTerm = useDebouncedValue(search.trim());
   const params: UserListParams = {
     q: searchTerm || undefined,
@@ -200,7 +226,7 @@ export default function TeamPage() {
   const toggleActive = useMutation({
     mutationFn: (person: UserRow) => usersApi.update(person.id, { is_active: !person.is_active }),
     onSuccess: (updated) => {
-      void queryClient.invalidateQueries({ queryKey: userKeys.all });
+      void refreshPeople();
       toast.success(updated.is_active ? `${updated.name} puede volver a ingresar` : `${updated.name} ya no puede ingresar`);
     },
     onError: toastError,
@@ -221,7 +247,7 @@ export default function TeamPage() {
   };
 
   const addButton = (
-    <Button variant="accent" size="lg" onClick={() => setAdding(true)}>
+    <Button variant="accent" size="lg" onClick={() => dialog.show({ person: null, mode: "details" })}>
       <UserPlus /> Agregar persona
     </Button>
   );
@@ -265,8 +291,9 @@ export default function TeamPage() {
           <PeopleTable
             people={people.data}
             selfId={user?.id}
-            onOpen={setInspected}
-            onEdit={setEditing}
+            onOpen={sheet.show}
+            onEdit={(person) => dialog.show({ person, mode: "details" })}
+            onNewPassword={(person) => dialog.show({ person, mode: "password" })}
             onToggleActive={confirmToggle}
           />
         ) : (
@@ -284,15 +311,13 @@ export default function TeamPage() {
       </section>
 
       <PersonDialog
-        open={adding || editing !== null}
-        onOpenChange={(open) => {
-          if (open) return;
-          setAdding(false);
-          setEditing(null);
-        }}
-        person={editing}
+        key={dialog.key}
+        open={dialog.open}
+        onClose={dialog.hide}
+        person={dialog.value.person}
+        mode={dialog.value.mode}
       />
-      <PersonSheet person={inspected} onClose={() => setInspected(null)} />
+      <PersonSheet open={sheet.open} person={sheet.value} onClose={sheet.hide} />
     </>
   );
 }
