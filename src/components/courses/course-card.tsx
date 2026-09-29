@@ -71,7 +71,8 @@ export function CourseCard({ course }: { course: CourseSummary }) {
           {course.title}
         </h3>
         {course.description && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{course.description}</p>}
-        <dl className="mt-auto grid grid-cols-3 gap-2 border-t border-border pt-4 text-sm">
+        <div className="min-h-4 flex-1" aria-hidden />
+        <dl className="grid grid-cols-3 gap-2 border-t border-border pt-4 text-sm">
           <div className="flex items-center gap-1.5">
             <Layers className="h-4 w-4 text-muted-foreground" aria-hidden />
             <dt className="sr-only">Módulos</dt>

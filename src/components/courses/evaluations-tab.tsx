@@ -78,7 +78,11 @@ function EvaluationForm({ module, courseId, evaluation, onDirtyChange }: Evaluat
   const [passingScore, setPassingScore] = useState(String(evaluation?.passing_score ?? DEFAULT_PASSING_SCORE));
   const attempts = wholeNumberIn(maxAttempts, 1, 20);
   const score = wholeNumberIn(passingScore, 1, 100);
-  const problemCount = questions.filter((question) => questionProblem(question)).length;
+  const problems = questions
+    .map((question, index) => ({ index, message: questionProblem(question) }))
+    .filter((problem): problem is { index: number; message: string } => Boolean(problem.message));
+  const problemCount = problems.length;
+  const firstProblem = problems[0];
 
   const draft = JSON.stringify([questions, maxAttempts, passingScore]);
   const [startedFrom] = useState(draft);
@@ -180,10 +184,10 @@ function EvaluationForm({ module, courseId, evaluation, onDirtyChange }: Evaluat
           </Button>
         </div>
       </div>
-      {problemCount > 0 && (
+      {firstProblem && (
         <p className="text-sm text-warning">
-          {problemCount === 1 ? "Revisa la pregunta marcada" : `Revisa las ${problemCount} preguntas marcadas`} antes de
-          guardar.
+          Pregunta {firstProblem.index + 1}: {firstProblem.message.toLowerCase()}
+          {problemCount > 1 ? ` (y ${problemCount - 1} más por revisar)` : ""}.
         </p>
       )}
     </div>
