@@ -9,6 +9,7 @@ import { UploadProgress } from "@/components/media/upload-progress";
 import { ApiError, errorMessage } from "@/lib/api/client";
 import { mediaApi } from "@/lib/api/media";
 import { useUnsavedChangesWarning } from "@/lib/hooks/use-unsaved-changes-warning";
+import { useReturnFocus } from "@/lib/hooks/use-return-focus";
 import { useUpload } from "@/lib/hooks/use-upload";
 import { type Deck, DeckSetup } from "./deck-setup";
 import { RecordingStudio } from "./recording-studio";
@@ -39,6 +40,7 @@ interface RecordingDialogProps {
 export function RecordingDialog({ open, onOpenChange, courseId, moduleId, moduleTitle, onUploaded }: RecordingDialogProps) {
   const { state, busy: uploading, upload, cancel, reset } = useUpload();
   const confirm = useConfirm();
+  const returnFocus = useReturnFocus(); // closing goes back to what opened the studio
   // undefined: still choosing; null: camera only.
   const [deck, setDeck] = useState<Deck | null | undefined>(undefined);
   const [deckUploading, setDeckUploading] = useState(false);
@@ -147,6 +149,7 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-ink-950 text-white"
+          {...returnFocus}
         >
           <div className="container flex h-16 shrink-0 items-center justify-between">
             <div>

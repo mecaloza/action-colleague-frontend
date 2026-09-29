@@ -38,30 +38,30 @@ const FRAME_SECONDS = 1 / 30;
  * Drops the changes on screen for less than `minSeconds` (the next change replaces them) and the ones
  * that repeat the slide already showing. The first and the last point always stay.
  */
-function compactTimeline(points: TimelinePoint[], minSeconds: number): TimelinePoint[] {
-  const last = points.length - 1;
-  const kept: TimelinePoint[] = [];
-  points.forEach((point, index) => {
-    const between = index > 0 && index < last;
-    if (between && (points[index + 1].at - point.at < minSeconds || point.slide === kept[kept.length - 1].slide)) return;
-    kept.push(point);
-  });
-  return kept;
+/** Consecutive points on the same slide say nothing new: only the first of them stays. */
+function withoutRepeats(points: TimelinePoint[]): TimelinePoint[] {
+  return points.filter((point, index) => index === 0 || point.slide !== points[index - 1].slide);
 }
 
 /**
  * The timeline within the server's limit of `max` points, always the same for the same take (a retry
- * sends the same request): changes shorter than a frame go, and that threshold doubles while too many remain.
+ * sends the same request). Changes shorter than a frame never show, so they go; if too many remain, the
+ * slides that were on screen the shortest go next (each one's time goes to the slide before it). The first
+ * point (the opening slide) and the last change always stay.
  */
 export function fitTimeline(points: TimelinePoint[], max = 2000): TimelinePoint[] {
-  const span = points.length > 0 ? points[points.length - 1].at - points[0].at : 0;
-  let minSeconds = FRAME_SECONDS;
-  let fitted = compactTimeline(points, minSeconds);
-  // Once the threshold passes the whole take only the first and the last point remain: the loop ends.
-  while (fitted.length > max && minSeconds <= span) {
-    minSeconds *= 2;
-    fitted = compactTimeline(points, minSeconds);
-  }
+  const last = points.length - 1;
+  const seconds = (index: number, list: TimelinePoint[]) => list[index + 1].at - list[index].at;
+  let fitted = withoutRepeats(points.filter((_, index) => index === 0 || index === last || seconds(index, points) >= FRAME_SECONDS));
+  if (fitted.length <= max) return fitted;
+  const briefest = fitted
+    .map((point, index) => index)
+    .filter((index) => index > 0 && index < fitted.length - 1)
+    .sort((a, b) => seconds(a, fitted) - seconds(b, fitted) || a - b)
+    .slice(0, fitted.length - max);
+  const dropped: Record<number, true> = {};
+  briefest.forEach((index) => (dropped[index] = true));
+  fitted = withoutRepeats(fitted.filter((_, index) => !dropped[index]));
   return fitted;
 }
 
