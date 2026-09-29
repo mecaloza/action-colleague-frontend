@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api/client";
 import { learnApi, learnKeys } from "@/lib/api/learn";
+import { useReturnFocus } from "@/lib/hooks/use-return-focus";
 import type { AttemptResult, LearnerModule, QuizResponse } from "@/lib/api/types";
 import { plural, twoDigits } from "@/lib/format";
 import { toastError } from "@/lib/notify";
@@ -57,9 +58,13 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
     queryKey: [...learnKeys.quiz(module.id), session, attempt],
     queryFn: () => learnApi.quiz(module.id),
     enabled: open,
-    staleTime: 0,
+    // This copy is this attempt's: a reconnect or a refocus must not shuffle the options again.
+    staleTime: Infinity,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
     gcTime: 0,
   });
+  const focus = useReturnFocus();
   const questions = quiz.data?.questions ?? [];
   const question = questions[index];
   const answered = questions.filter((item) => isAnswered(item, answers[item.id] ?? null)).length;
@@ -88,8 +93,10 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
       void queryClient.invalidateQueries({ queryKey: learnKeys.courses });
     },
     onError: (error) => {
+      // Whatever it was (the quiz changed, no attempts left, already passed elsewhere): show the course as it is.
+      void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
       if (error instanceof ApiError && error.status === 409 && /cambió/.test(error.message)) {
-        toast.error(error.message); // edited by the admin while answering: this attempt didn't count
+        toast.error("La evaluación cambió mientras respondías; este intento no cuenta. Te mostramos la versión nueva.");
         restart();
         return;
       }
@@ -111,6 +118,7 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
   };
 
   const close = async () => {
+    if (submit.isPending) return; // it was sent: its result is on its way
     if (!result && answered > 0) {
       const confirmed = await confirm({
         title: "¿Salir de la evaluación?",
@@ -125,12 +133,24 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
   };
 
   const attemptsLeft = result?.attempts_remaining ?? (quiz.data ? quiz.data.max_attempts - quiz.data.attempts_used : 0);
+  // Passed, or out of attempts, on another device or tab meanwhile: nothing to answer here.
+  const closedReason = !result && quiz.data
+    ? quiz.data.passed
+      ? "Ya aprobaste esta evaluación."
+      : attemptsLeft <= 0
+        ? "Usaste todos los intentos. Habla con tu administrador si necesitas otro."
+        : null
+    : null;
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(next) => (next ? onOpenChange(true) : void close())}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-950/90" />
-        <DialogPrimitive.Content aria-describedby={undefined} className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-ink-950 text-white">
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-ink-950 text-white"
+          {...focus}
+        >
           <div className="container flex h-16 shrink-0 items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="eyebrow text-white/50">Evaluación</p>
@@ -143,11 +163,20 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
 
           <div className="container max-w-3xl flex-1 pb-16 pt-6">
             {quiz.isPending ? (
-              <Skeleton className="h-72 bg-white/10" />
+              <Skeleton className="h-72 bg-white/10 bg-none" />
             ) : !quiz.data ? (
               <p role="alert" className="text-white/80">
                 {quiz.error instanceof Error ? quiz.error.message : "No pudimos cargar la evaluación."}
               </p>
+            ) : closedReason ? (
+              <div className="space-y-6">
+                <p role="status" className="border-l-2 border-white/40 bg-white/5 px-4 py-3 text-white/85">
+                  {closedReason}
+                </p>
+                <Button variant="outline-inverse" size="lg" onClick={() => void close()}>
+                  Volver al módulo
+                </Button>
+              </div>
             ) : result ? (
               <div className="space-y-10">
                 <QuizResult result={result} questions={questions} passingScore={quiz.data.passing_score} />

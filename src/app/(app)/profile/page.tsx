@@ -60,7 +60,7 @@ function NameForm({ user }: { user: CurrentUser }) {
 }
 
 function PasswordForm({ user }: { user: CurrentUser }) {
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -69,16 +69,21 @@ function PasswordForm({ user }: { user: CurrentUser }) {
   const tooShort = next.length > 0 && next.length < MIN_PASSWORD;
 
   const change = useMutation({
-    mutationFn: async () => {
-      await authApi.updateMe({ current_password: current, new_password: next });
-      // Changing it ends every session (a stolen one too): sign this one back in with the new password.
-      await login(user.email, next);
-    },
-    onSuccess: () => {
+    mutationFn: () => authApi.updateMe({ current_password: current, new_password: next }),
+    onSuccess: async () => {
+      const password = next;
       setCurrent("");
       setNext("");
       setConfirmation("");
-      toast.success("Contraseña actualizada. Se cerró la sesión en tus otros dispositivos.");
+      // Changing it ends every session (a stolen one too): sign this one back in with the new password.
+      try {
+        await login(user.email, password);
+        toast.success("Contraseña actualizada. Tus otros dispositivos tendrán que volver a iniciar sesión.");
+      } catch {
+        // The change is done; only this session's renewal failed (network): sign in again by hand.
+        toast.success("Contraseña actualizada. Vuelve a iniciar sesión con la nueva.");
+        logout();
+      }
     },
     onError: toastError,
   });

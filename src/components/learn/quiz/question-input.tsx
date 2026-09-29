@@ -34,6 +34,23 @@ function Letter({ index, selected }: { index: number; selected: boolean }) {
   );
 }
 
+/** Arrow keys move the choice (and the focus) within a radiogroup, as native radio buttons do. */
+function radioKeys(choose: (index: number) => void) {
+  return (event: React.KeyboardEvent<HTMLElement>) => {
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key] ?? 0;
+    const radios = Array.prototype.slice.call(event.currentTarget.querySelectorAll('[role="radio"]')) as HTMLElement[];
+    const from = radios.indexOf(event.target as HTMLElement);
+    if (!step || from < 0) return;
+    event.preventDefault();
+    const next = (from + step + radios.length) % radios.length;
+    choose(next);
+    radios[next].focus();
+  };
+}
+
+/** One tab stop per radiogroup: the chosen option, or the first while nothing is chosen. */
+const rovingTab = (selected: boolean, first: boolean, anyChosen: boolean) => (selected || (!anyChosen && first) ? 0 : -1);
+
 function SingleChoice({ question, response, onChange }: InputProps<Extract<LearnerQuestion, { type: "single_choice" }>>) {
   const chosen = response && "option" in response ? response.option : null;
   return (
@@ -41,7 +58,12 @@ function SingleChoice({ question, response, onChange }: InputProps<Extract<Learn
       {question.scenario && (
         <p className="border-l-2 border-accent bg-white/5 px-5 py-4 text-sm leading-relaxed text-white/85">{question.scenario}</p>
       )}
-      <div role="radiogroup" aria-label="Opciones" className="space-y-2">
+      <div
+        role="radiogroup"
+        aria-label="Opciones"
+        className="space-y-2"
+        onKeyDown={radioKeys((index) => onChange({ option: question.options[index].id }))}
+      >
         {question.options.map((option, index) => {
           const selected = chosen === option.id;
           return (
@@ -50,6 +72,7 @@ function SingleChoice({ question, response, onChange }: InputProps<Extract<Learn
               type="button"
               role="radio"
               aria-checked={selected}
+              tabIndex={rovingTab(selected, index === 0, chosen !== null)}
               onClick={() => onChange({ option: option.id })}
               className={optionClass(selected)}
             >
@@ -66,13 +89,19 @@ function SingleChoice({ question, response, onChange }: InputProps<Extract<Learn
 function TrueFalse({ response, onChange }: InputProps<Extract<LearnerQuestion, { type: "true_false" }>>) {
   const value = response && "value" in response ? response.value : null;
   return (
-    <div role="radiogroup" aria-label="Verdadero o falso" className="grid grid-cols-2 gap-3">
+    <div
+      role="radiogroup"
+      aria-label="Verdadero o falso"
+      className="grid grid-cols-2 gap-3"
+      onKeyDown={radioKeys((index) => onChange({ value: index === 0 }))}
+    >
       {[true, false].map((option) => (
         <button
           key={String(option)}
           type="button"
           role="radio"
           aria-checked={value === option}
+          tabIndex={rovingTab(value === option, option, value !== null)}
           onClick={() => onChange({ value: option })}
           className={cn(
             "h-20 border font-display text-2xl font-medium tracking-tightest transition-colors",
@@ -94,7 +123,7 @@ function Ordering({ question, response, onChange }: InputProps<Extract<LearnerQu
     <ol className="space-y-2" aria-label="Pasos en orden">
       {order.map((item, index) => (
         <li key={item.id} className="flex items-center gap-3 border border-input bg-white px-4 py-3">
-          <span className="w-6 text-center font-display text-lg font-semibold text-accent">{index + 1}</span>
+          <span className="w-6 text-center font-display text-lg font-semibold text-accent-strong">{index + 1}</span>
           <span className="flex-1">{item.text}</span>
           <Button variant="ghost" size="icon-sm" aria-label={`Subir «${item.text}»`} disabled={index === 0} onClick={() => move(index, index - 1)}>
             <ArrowUp />
@@ -152,7 +181,7 @@ function FillBlank({ question, response, onChange }: InputProps<Extract<LearnerQ
         className="h-14 text-lg"
         autoComplete="off"
       />
-      {question.hint && <p className="text-sm text-muted-foreground">Pista: {question.hint}</p>}
+      {question.hint && <p className="text-sm text-white/70">Pista: {question.hint}</p>}
     </div>
   );
 }

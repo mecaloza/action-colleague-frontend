@@ -12,9 +12,9 @@ interface ModuleNavProps {
 }
 
 function StateIcon({ module, current }: { module: LearnerModule; current: boolean }) {
-  if (module.completed) return <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-label="Completado" />;
-  if (!module.unlocked) return <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="Bloqueado" />;
-  return <Circle className={cn("h-4 w-4 shrink-0", current ? "text-accent" : "text-muted-foreground")} aria-label="Pendiente" />;
+  if (module.completed) return <CheckCircle2 className="h-4 w-4 shrink-0 text-success" role="img" aria-label="Completado" />;
+  if (!module.unlocked) return <Lock className="h-4 w-4 shrink-0 text-muted-foreground" role="img" aria-label="Bloqueado" />;
+  return <Circle className={cn("h-4 w-4 shrink-0", current ? "text-accent" : "text-muted-foreground")} role="img" aria-label="Pendiente" />;
 }
 
 /** What a module offers, for the list: its length, or the kind of activity. */
@@ -43,7 +43,7 @@ export function ModuleNav({ modules, currentId, onSelect }: ModuleNavProps) {
                   !module.unlocked && "cursor-not-allowed opacity-60 hover:bg-transparent",
                 )}
               >
-                <span className={cn("font-display text-lg font-medium leading-none", current ? "text-accent" : "text-muted-foreground")}>
+                <span className={cn("font-display text-lg font-medium leading-none", current ? "text-accent-strong" : "text-muted-foreground")}>
                   {twoDigits(module.order)}
                 </span>
                 <span className="min-w-0 flex-1">

@@ -39,7 +39,7 @@ function progressSummary(pending: number, total: number): string | undefined {
 function ContinueCard({ course }: { course: LearnerCourse }) {
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="max-w-2xl border border-white/15 bg-white/5 p-6">
-      <p className="eyebrow mb-3 text-white/60">{course.status === "assigned" ? "Empieza por aquí" : "Continúa donde quedaste"}</p>
+      <p className="eyebrow mb-3 text-white/60">{course.status === "assigned" ? "Empieza por aquí" : "Continúa donde lo dejaste"}</p>
       <p className="font-display text-2xl font-medium tracking-tightest text-white">{course.title}</p>
       {course.next_module_title && <p className="mt-1 text-sm text-white/70">Sigue: {course.next_module_title}</p>}
       <div className="mt-5 flex flex-wrap items-center gap-4">

@@ -88,9 +88,9 @@ export function QuizResult({ result, questions, passingScore }: QuizResultProps)
             <li key={item.question_id} className={cn("border-l-2 bg-white/5 px-5 py-4", item.correct ? "border-success" : "border-destructive")}>
               <p className="flex items-start gap-3 text-white">
                 {item.correct ? (
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-label="Correcta" />
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" role="img" aria-label="Correcta" />
                 ) : (
-                  <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-label="Incorrecta" />
+                  <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" role="img" aria-label="Incorrecta" />
                 )}
                 <span>
                   <span className="mr-2 font-display text-white/50">{index + 1}.</span>

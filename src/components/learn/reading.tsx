@@ -14,6 +14,10 @@ const components: Components = {
     );
   },
   img: () => null, // images from arbitrary URLs could track readers
+  // The module's own title is the page's heading: the reading's headings go below it.
+  h1: "h3",
+  h2: "h3",
+  h3: "h4",
 };
 
 /**

@@ -90,6 +90,13 @@
   /* Long-form reading (module texts written in Markdown). */
   .reading {
     @apply max-w-[68ch] text-[17px] leading-[1.7] text-ink-800;
+    overflow-wrap: anywhere; /* a long URL never widens the page on a phone */
+  }
+  .reading p {
+    white-space: pre-line; /* texts written without Markdown keep their line breaks */
+  }
+  .reading pre {
+    @apply overflow-x-auto;
   }
   .reading > * + * {
     @apply mt-5;
@@ -97,19 +104,19 @@
   .reading > :first-child {
     @apply mt-0;
   }
-  .reading h1,
-  .reading h2 {
+  .reading h3 {
     @apply mt-10 font-display text-2xl font-medium leading-tight tracking-tightest text-ink-950 sm:text-3xl;
   }
-  .reading h3,
-  .reading h4 {
+  .reading h4,
+  .reading h5,
+  .reading h6 {
     @apply mt-8 font-display text-xl font-semibold tracking-tightest text-ink-950;
   }
   .reading strong {
     @apply font-semibold text-ink-950;
   }
   .reading a {
-    @apply font-semibold text-accent underline underline-offset-4;
+    @apply font-semibold text-accent-strong underline underline-offset-4;
   }
   .reading ul {
     @apply space-y-2;
@@ -122,7 +129,7 @@
     @apply absolute left-0 top-[0.72em] h-2 w-2 rotate-45 bg-accent;
   }
   .reading ol {
-    @apply list-decimal space-y-2 pl-6 marker:font-semibold marker:text-accent;
+    @apply list-decimal space-y-2 pl-6 marker:font-semibold marker:text-accent-strong;
   }
   .reading blockquote {
     @apply border-l-2 border-accent bg-accent-soft/60 px-5 py-3 font-display text-xl tracking-tightest text-ink-950;

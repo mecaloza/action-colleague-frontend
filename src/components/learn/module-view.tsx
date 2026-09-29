@@ -10,6 +10,8 @@ import { Reading } from "./reading";
 
 interface ModuleViewProps {
   module: LearnerModule;
+  /** The course's language: its captions are in it. */
+  language: string;
   nextModule: LearnerModule | null;
   completing: boolean;
   onComplete: () => void;
@@ -66,7 +68,7 @@ function QuizCard({ quiz, nextModule, onOpenQuiz, onNext }: QuizCardProps) {
 }
 
 /** Everything a learner studies in a module, and how they complete it. */
-export function ModuleView({ module, nextModule, completing, onComplete, onOpenQuiz, onNext }: ModuleViewProps) {
+export function ModuleView({ module, language, nextModule, completing, onComplete, onOpenQuiz, onNext }: ModuleViewProps) {
   if (!module.unlocked) {
     return (
       <div className="flex flex-col items-center gap-4 border border-border bg-white px-6 py-16 text-center">
@@ -89,7 +91,7 @@ export function ModuleView({ module, nextModule, completing, onComplete, onOpenQ
         {module.description && <p className="mt-3 max-w-3xl text-lg text-muted-foreground">{module.description}</p>}
       </header>
 
-      {module.video && <LearnerVideo module={module} />}
+      {module.video && <LearnerVideo module={module} language={language} />}
       {documentUrl && (
         <Button variant="outline" asChild>
           <a href={documentUrl} target="_blank" rel="noreferrer">

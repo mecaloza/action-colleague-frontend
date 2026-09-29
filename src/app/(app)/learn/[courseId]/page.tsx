@@ -27,6 +27,8 @@ function CoursePlayer() {
   const content = useRef<HTMLDivElement>(null);
   const [quizOpen, setQuizOpen] = useState(false);
   const [quizSession, setQuizSession] = useState(0);
+  // The quiz belongs to the module it was opened from, even when passing it moves `current` along.
+  const [quizModuleId, setQuizModuleId] = useState<number | null>(null);
   const [celebrating, setCelebrating] = useState(false);
 
   const detail = useQuery({ queryKey: learnKeys.course(courseId), queryFn: () => learnApi.course(courseId), enabled: validId });
@@ -38,6 +40,7 @@ function CoursePlayer() {
     modules.find((module) => module.unlocked && !module.completed) ??
     modules[0];
   const nextModule = current ? modules[modules.indexOf(current) + 1] ?? null : null;
+  const quizModule = modules.find((module) => module.id === quizModuleId);
 
   const show = (moduleId: number) => {
     router.replace(`/learn/${courseId}?m=${moduleId}`, { scroll: false });
@@ -55,7 +58,11 @@ function CoursePlayer() {
   const complete = useMutation({
     mutationFn: (moduleId: number) => learnApi.complete(moduleId),
     onSuccess: advance,
-    onError: toastError,
+    onError: (error) => {
+      toastError(error);
+      // e.g. the admin added a quiz meanwhile, or another device completed it: show the course as it is now.
+      void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
+    },
   });
 
   if (!validId) notFound();
@@ -95,11 +102,13 @@ function CoursePlayer() {
             <motion.div key={current.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
               <ModuleView
                 module={current}
+                language={course.language}
                 nextModule={nextModule}
                 completing={complete.isPending}
                 onComplete={() => complete.mutate(current.id)}
                 onOpenQuiz={() => {
-                  setQuizSession((current) => current + 1);
+                  setQuizModuleId(current.id);
+                  setQuizSession((session) => session + 1);
                   setQuizOpen(true);
                 }}
                 onNext={() => nextModule && show(nextModule.id)}
@@ -109,11 +118,11 @@ function CoursePlayer() {
         </AnimatePresence>
       </div>
 
-      {current?.quiz && (
+      {quizModule?.quiz && (
         <QuizDialog
-          key={`${current.id}:${quizSession}`} // a new module or a new opening starts clean, never on a past result
+          key={`${quizModule.id}:${quizSession}`} // a new module or a new opening starts clean, never on a past result
           courseId={courseId}
-          module={current}
+          module={quizModule}
           session={quizSession}
           open={quizOpen}
           onOpenChange={setQuizOpen}

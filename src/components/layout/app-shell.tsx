@@ -177,7 +177,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (status === "anonymous") {
       // After an explicit sign-out go to a clean /login; if the session expired, come back here after signing in.
-      router.replace(signingOut.current ? "/login" : `/login?next=${encodeURIComponent(pathname)}`);
+      const here = `${pathname}${window.location.search}`; // e.g. the course player's ?m=
+      router.replace(signingOut.current ? "/login" : `/login?next=${encodeURIComponent(here)}`);
     } else if (status === "authenticated" && lacksAdminAccess) {
       router.replace(homeFor(user));
     }
