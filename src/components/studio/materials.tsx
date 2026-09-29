@@ -45,9 +45,16 @@ function MaterialRow({ name, detail, state, onRemove }: MaterialRowProps) {
   );
 }
 
-/** How an uploaded document shows up: still being read, read (characters found) or unreadable. */
-function uploadedRow(asset: MediaAsset): Pick<MaterialRowProps, "state" | "detail"> {
+/**
+ * How an uploaded document shows up: still being read, read (characters found), unreadable or never fully uploaded
+ * (`uploading`: this page is uploading one right now, still `pending` until it's done).
+ */
+function uploadedRow(asset: MediaAsset, uploading: boolean): Pick<MaterialRowProps, "state" | "detail"> {
   if (asset.status === "failed") return { state: "failed", detail: asset.error ?? "No pudimos leerlo" };
+  if (asset.status === "pending") {
+    if (uploading) return { state: "processing", detail: "Subiendo…" };
+    return { state: "failed", detail: "Subida incompleta" }; // the AI can't use it
+  }
   if (asset.status === "ready") return { detail: `${(asset.text_chars ?? 0).toLocaleString("es")} caracteres leídos` };
   return { state: "processing", detail: "Leyendo el documento…" };
 }
@@ -60,11 +67,20 @@ interface MaterialsFieldProps {
   uploaded?: MediaAsset[];
   /** Upload right away (existing course). */
   onUpload?: (file: File) => void;
+  /** An upload started here is in progress. */
+  uploading?: boolean;
   busy?: boolean;
 }
 
 /** Documents the AI reads to build the course: PDF, Word, PowerPoint or text. */
-export function MaterialsField({ staged = [], onStagedChange, uploaded = [], onUpload, busy }: MaterialsFieldProps) {
+export function MaterialsField({
+  staged = [],
+  onStagedChange,
+  uploaded = [],
+  onUpload,
+  uploading = false,
+  busy,
+}: MaterialsFieldProps) {
   const add = (file: File) => {
     if (onUpload) return onUpload(file);
     if (staged.some((item) => item.name === file.name && item.size === file.size)) return;
@@ -85,7 +101,11 @@ export function MaterialsField({ staged = [], onStagedChange, uploaded = [], onU
       {!empty && (
         <ul className="border border-border bg-white" aria-label="Materiales">
           {uploaded.map((asset) => (
-            <MaterialRow key={asset.id} name={asset.original_filename ?? "Documento"} {...uploadedRow(asset)} />
+            <MaterialRow
+              key={asset.id}
+              name={asset.original_filename ?? "Documento"}
+              {...uploadedRow(asset, uploading)}
+            />
           ))}
           {staged.map((file) => (
             <MaterialRow

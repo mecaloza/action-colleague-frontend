@@ -49,10 +49,13 @@ export function Dropzone({ rule, label, hint = rule.hint, onFile, disabled = fal
   };
 
   return (
+    // Disabled, it still takes the drag events: a file dropped on it must be ignored, not opened by the browser.
     <label
+      aria-disabled={disabled || undefined}
       onDragOver={(event) => {
         event.preventDefault();
-        setDragging(true);
+        if (disabled) event.dataTransfer.dropEffect = "none";
+        else setDragging(true);
       }}
       onDragLeave={(event) => {
         // Moving over the icon or the text also fires dragleave: only leaving the area counts.
@@ -61,14 +64,15 @@ export function Dropzone({ rule, label, hint = rule.hint, onFile, disabled = fal
       onDrop={(event) => {
         event.preventDefault();
         setDragging(false);
-        handleFile(event.dataTransfer.files[0]);
+        handleFile(event.dataTransfer.files[0]); // ignored while disabled
       }}
       className={cn(
-        "flex cursor-pointer flex-col items-center justify-center gap-3 border border-dashed px-6 py-10 text-center transition-colors",
+        "flex flex-col items-center justify-center gap-3 border border-dashed px-6 py-10 text-center transition-colors",
         // The input is visually hidden: the area shows its keyboard focus.
         "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
-        dragging ? "border-accent bg-accent-soft" : "border-input bg-mist/50 hover:border-ink-800",
-        disabled && "pointer-events-none opacity-50",
+        dragging ? "border-accent bg-accent-soft" : "border-input bg-mist/50",
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+        !disabled && !dragging && "hover:border-ink-800",
         className,
       )}
     >

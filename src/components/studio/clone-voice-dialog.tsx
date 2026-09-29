@@ -20,6 +20,20 @@ const SAMPLE_RULE: UploadRule = {
   hint: "MP3, WAV, M4A o WEBM de hasta 10 MB",
 };
 
+const AUDIO_TYPES: Record<string, string> = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  m4a: "audio/mp4",
+  webm: "audio/webm",
+};
+
+/** Some systems give no type to an audio file: the API only takes audio, so it's named from the extension. */
+function withAudioType(file: File): File {
+  if (file.type) return file;
+  const type = AUDIO_TYPES[file.name.split(".").pop()?.toLowerCase() ?? ""];
+  return type ? new File([file], file.name, { type }) : file;
+}
+
 interface CloneVoiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -68,7 +82,11 @@ export function CloneVoiceDialog({ open, onOpenChange, onCloned }: CloneVoiceDia
               </button>
             </p>
           ) : (
-            <Dropzone rule={SAMPLE_RULE} label="Arrastra la grabación o haz clic para elegirla" onFile={setSample} />
+            <Dropzone
+              rule={SAMPLE_RULE}
+              label="Arrastra la grabación o haz clic para elegirla"
+              onFile={(file) => setSample(withAudioType(file))}
+            />
           )}
         </div>
         <DialogFooter>

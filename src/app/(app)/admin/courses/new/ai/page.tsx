@@ -17,6 +17,7 @@ import type { CourseDetail } from "@/lib/api/types";
 import { twoDigits } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { useStudioCapabilities } from "@/lib/hooks/use-studio-capabilities";
+import { useUnmountSignal } from "@/lib/hooks/use-unmount-signal";
 import { toastError } from "@/lib/notify";
 
 const PROVISIONAL_TITLE_CHARS = 60;
@@ -31,6 +32,7 @@ function provisionalTitle(brief: string): string {
 
 export default function NewAiCoursePage() {
   const router = useRouter();
+  const unmountSignal = useUnmountSignal();
   const { ai } = useStudioCapabilities();
   const { refreshLibrary } = useCourseCache();
   const [values, setValues] = useState<BriefValues>(() => initialBrief());
@@ -40,6 +42,8 @@ export default function NewAiCoursePage() {
   const canStart = values.brief.trim().length >= MIN_BRIEF_CHARS && ai && !starting;
 
   const start = async () => {
+    // Leaving the page stops the work (reading documents can take minutes) and the redirect at the end.
+    const signal = unmountSignal();
     setStarting(true);
     let course: CourseDetail;
     try {
@@ -50,17 +54,17 @@ export default function NewAiCoursePage() {
       });
       refreshLibrary(); // the new course shows in the library right away
     } catch (error) {
-      toastError(error);
+      if (!signal.aborted) toastError(error);
       setStarting(false);
       return;
     }
     // The course exists: whatever is left (or fails) continues in its studio.
     try {
-      await propose(course.id, values, staged);
+      await propose(course.id, values, { staged, signal });
     } catch (error) {
-      toastError(error);
+      if (!signal.aborted) toastError(error);
     }
-    router.replace(`/admin/courses/${course.id}/studio`);
+    if (!signal.aborted) router.replace(`/admin/courses/${course.id}/studio`);
   };
 
   return (

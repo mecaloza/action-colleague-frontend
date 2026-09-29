@@ -29,6 +29,27 @@ const SOURCE_META: Record<ModuleSource, { label: string; icon: LucideIcon }> = {
   text: { label: "Lectura", icon: FileText },
 };
 
+interface ReasonBadgeProps {
+  variant: "destructive" | "warning";
+  label: string;
+  reason: string;
+}
+
+/** A badge whose reason shows in a tooltip. */
+function ReasonBadge({ variant, label, reason }: ReasonBadgeProps) {
+  return (
+    <Tooltip>
+      {/* A button, so the reason also shows with the keyboard and on touch. */}
+      <TooltipTrigger type="button">
+        <Badge variant={variant}>
+          <AlertTriangle className="h-3 w-3" /> {label}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>{reason}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function GenerationBadge({ module }: { module: ModuleAdmin }) {
   // Uploads and recordings are "processed"; AI modules are "generated".
   const busyLabel = module.source === "ai" ? "Generando" : "Procesando";
@@ -36,21 +57,19 @@ function GenerationBadge({ module }: { module: ModuleAdmin }) {
   if (module.generation_status === "generating") return <Badge variant="accent" pulse>{busyLabel}</Badge>;
   if (module.generation_status === "failed")
     return (
-      <Tooltip>
-        {/* A button, so the reason also shows with the keyboard and on touch. */}
-        <TooltipTrigger type="button">
-          <Badge variant="destructive">
-            <AlertTriangle className="h-3 w-3" /> Error
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent>
-          {module.generation_error ||
-            (module.source === "ai" ? "La generación falló. Vuelve a intentarlo." : "El procesamiento falló. Vuelve a intentarlo.")}
-        </TooltipContent>
-      </Tooltip>
+      <ReasonBadge
+        variant="destructive"
+        label="Error"
+        reason={
+          module.generation_error ||
+          (module.source === "ai" ? "La generación falló. Vuelve a intentarlo." : "El procesamiento falló. Vuelve a intentarlo.")
+        }
+      />
     );
   if (!module.video && !module.document && !module.content_text.trim())
     return <Badge variant="warning">Sin contenido</Badge>;
+  // The AI video came out without something (e.g. its presenter): why.
+  if (module.video_warning) return <ReasonBadge variant="warning" label="Aviso" reason={module.video_warning} />;
   return null;
 }
 

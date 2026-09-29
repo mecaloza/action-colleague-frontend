@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { CourseSettings, Language } from "@/lib/api/types";
+import { plural } from "@/lib/format";
 import { ChoiceButton } from "./choice-button";
 
 export interface BriefValues {
@@ -91,8 +92,10 @@ export function BriefForm({ values, onChange, disabled }: BriefFormProps) {
           aria-describedby="brief-hint"
         />
         <p id="brief-hint" className="mt-2 text-xs text-muted-foreground">
-          {missing ? `Escribe al menos ${missing} caracteres más.` : "Entre más contexto, mejor la propuesta."} Tus documentos
-          (abajo) se usan como fuente.
+          {missing
+            ? `Escribe al menos ${plural(missing, "carácter", "caracteres")} más.`
+            : "Cuanto más contexto, mejor la propuesta."}{" "}
+          Tus documentos (abajo) se usan como fuente.
         </p>
       </div>
       <div className="grid gap-6 md:grid-cols-2">

@@ -69,6 +69,8 @@ export interface ModuleAdmin {
   document: MediaRef | null;
   duration_seconds: number | null;
   scene_count: number;
+  /** Something the AI video came out without, and why (e.g. its presenter). */
+  video_warning: string | null;
   evaluation: EvaluationSummary | null;
   updated_at: string | null;
 }

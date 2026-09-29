@@ -2,19 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useMutation } from "@tanstack/react-query";
-import { ArrowRight, Eye, Play, RotateCcw, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, Eye, Play, RotateCcw, Sparkles } from "lucide-react";
 import { ModuleVideo } from "@/components/courses/module-video";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { studioApi } from "@/lib/api/studio";
 import type { CourseDetail, Job, ModuleAdmin } from "@/lib/api/types";
 import { formatDuration, plural, twoDigits } from "@/lib/format";
-import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { useStableUrl } from "@/lib/hooks/use-stable-url";
-import { toastError } from "@/lib/notify";
 import { JobFailure, JobStatus } from "./job-status";
-import { aiModules, isRendering } from "./steps";
+import { aiModules, type ModuleActivity, moduleActivity, moduleJob } from "./steps";
+import { useProduceModule } from "./use-produce-module";
 
 function Thumbnail({ module, onPlay }: { module: ModuleAdmin; onPlay: () => void }) {
   const poster = useStableUrl(module.poster_url);
@@ -42,7 +39,9 @@ function CourseReady({ courseId }: { courseId: number }) {
         <p className="eyebrow mb-3 flex items-center gap-2 text-white/60">
           <Sparkles className="h-4 w-4 text-accent" /> Listo
         </p>
-        <h2 className="display-md text-white">Tu curso está producido.</h2>
+        <h2 tabIndex={-1} className="display-md text-white focus-visible:ring-0">
+          Tu curso está producido.
+        </h2>
         <p className="mt-2 text-white/70">Revisa cada módulo, ajusta la evaluación y publícalo para tu equipo.</p>
       </div>
       <div className="relative z-10 flex flex-wrap gap-3">
@@ -63,22 +62,37 @@ function CourseReady({ courseId }: { courseId: number }) {
 
 interface VideoStateProps {
   module: ModuleAdmin;
+  activity: ModuleActivity;
   job?: Job;
-  rendering: boolean;
 }
 
-/** Where a module's video is: being produced, failed, ready or not started. */
-function VideoState({ module, job, rendering }: VideoStateProps) {
-  if (rendering) return <JobStatus job={job} fallback="En cola para producir" className="max-w-sm" />;
+/** Where a module's video is: being produced, waiting for its script, failed, ready or not started. */
+function VideoState({ module, activity, job }: VideoStateProps) {
+  if (activity) {
+    // Producing its video, or (re)writing its script: the video can be produced once that's done.
+    const fallback = activity === "rendering" ? "En cola para producir" : "En cola para escribir el guion";
+    return <JobStatus job={job} fallback={fallback} className="max-w-sm" />;
+  }
   if (module.generation_status === "failed") {
     return <JobFailure message={module.generation_error || "No se pudo producir el video."} />;
   }
-  if (!module.video) return <p className="text-sm text-muted-foreground">Sin video todavía</p>;
+  if (!module.video) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {module.scene_count ? "Sin video todavía" : "Sin guion: escríbelo en el paso Contenido para producir su video."}
+      </p>
+    );
+  }
   return (
-    <p className="text-sm text-muted-foreground">
-      Video de {formatDuration(module.duration_seconds)}
-      {module.generation_error ? ` · ${module.generation_error}` : ""}
-    </p>
+    <>
+      <p className="text-sm text-muted-foreground">Video de {formatDuration(module.duration_seconds)}</p>
+      {module.video_warning && (
+        <p className="flex items-start gap-2 text-sm text-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          {module.video_warning}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -87,25 +101,18 @@ interface ProductionStepProps {
   jobs: Job[];
 }
 
-/** Each module's video being produced, ready to watch, or failed with a retry. */
+/** Each module's video being produced, ready to watch (and to produce again), or failed with a retry. */
 export function ProductionStep({ course, jobs }: ProductionStepProps) {
-  const { refreshCourse } = useCourseCache();
   const [watching, setWatching] = useState<ModuleAdmin | null>(null);
-  const renderJob = (moduleId: number) => jobs.find((job) => job.module_id === moduleId && job.type === "video.render");
-  // Per AI module: the job producing its video right now (if any) and whether it is being produced.
-  const rows = aiModules(course).map((module) => {
-    const job = renderJob(module.id);
-    return { module, job, rendering: isRendering(module) || Boolean(job) };
-  });
-  const done = rows.filter(({ module, rendering }) => module.video && !rendering).length;
-
-  const retry = useMutation({
-    mutationFn: (moduleId: number) => studioApi.renderModule(moduleId),
-    onSuccess: () => {
-      refreshCourse(course.id);
-    },
-    onError: toastError,
-  });
+  const { produce, producingId } = useProduceModule(course);
+  // Per AI module: what it is doing (producing its video, or writing its script) and the job doing it.
+  const rows = aiModules(course).map((module) => ({
+    module,
+    activity: moduleActivity(module, jobs),
+    job: moduleJob(module, jobs),
+  }));
+  const done = rows.filter(({ module, activity }) => module.video && activity !== "rendering").length;
+  const producing = rows.some(({ activity }) => activity === "rendering");
 
   return (
     <div className="space-y-8">
@@ -113,28 +120,34 @@ export function ProductionStep({ course, jobs }: ProductionStepProps) {
         <CourseReady courseId={course.id} />
       ) : (
         <div>
-          <h2 className="display-md">Produciendo los videos</h2>
+          <h2 tabIndex={-1} className="display-md focus-visible:ring-0">
+            {producing ? "Produciendo los videos" : "Los videos del curso"}
+          </h2>
           <p className="mt-2 text-muted-foreground">
-            {done} de {plural(rows.length, "video")} listos. Puedes cerrar esta página: la producción sigue.
+            {done} de {plural(rows.length, "video")} listos.
+            {producing && " Puedes cerrar esta página: la producción sigue."}
           </p>
         </div>
       )}
 
       <ol className="space-y-3">
-        {rows.map(({ module, job, rendering }) => (
+        {rows.map(({ module, activity, job }) => (
           <li key={module.id} className="flex flex-wrap items-center gap-4 border border-border bg-white px-5 py-4">
             <span className="font-display text-2xl font-medium text-accent">{twoDigits(module.order)}</span>
-            {module.video && !rendering && <Thumbnail module={module} onPlay={() => setWatching(module)} />}
+            {module.video && activity !== "rendering" && <Thumbnail module={module} onPlay={() => setWatching(module)} />}
             <div className="min-w-0 flex-1 basis-60 space-y-1.5">
               <p className="font-semibold">{module.title}</p>
-              <VideoState module={module} job={job} rendering={rendering} />
+              <VideoState module={module} activity={activity} job={job} />
             </div>
-            {!rendering && (module.generation_status === "failed" || !module.video) && (
+            {/* Any module with a script can be produced (again, e.g. after editing it) unless it's being produced;
+                while its script is being written the button waits. */}
+            {module.scene_count > 0 && activity !== "rendering" && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => retry.mutate(module.id)}
-                loading={retry.isPending && retry.variables === module.id}
+                onClick={() => produce(module)}
+                loading={producingId === module.id}
+                disabled={activity === "drafting"}
               >
                 <RotateCcw /> {module.video ? "Volver a producir" : "Producir"}
               </Button>

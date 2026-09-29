@@ -20,7 +20,8 @@ export const mediaApi = {
   removeModuleVideo: (moduleId: number) => http.delete<ModuleAdmin>(`/modules/${moduleId}/video`),
   removeModuleDocument: (moduleId: number) => http.delete<ModuleAdmin>(`/modules/${moduleId}/document`),
   setCover: (courseId: number, assetId: string) => http.put<CourseDetail>(`/courses/${courseId}/cover`, { asset_id: assetId }),
-  materials: (courseId: number) => http.get<MediaAsset[]>(`/courses/${courseId}/materials`),
+  materials: (courseId: number, signal?: AbortSignal) =>
+    http.get<MediaAsset[]>(`/courses/${courseId}/materials`, undefined, signal),
   jobs: (params: { course_id?: number; module_id?: number; active?: boolean }) => http.get<Job[]>("/jobs", { ...params }),
 };
 

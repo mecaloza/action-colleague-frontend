@@ -10,6 +10,16 @@ export const STEPS: { id: StepId; label: string; hint: string }[] = [
   { id: "production", label: "Producción", hint: "Los videos del curso" },
 ];
 
+// The studio's background jobs.
+export const OUTLINE_JOB = "ai.outline";
+const DRAFT_JOB = "ai.module_draft";
+const RENDER_JOB = "video.render";
+
+/** Why a new proposal can't replace the course's modules (the API refuses it too). */
+export const LOCKED_MESSAGE =
+  "El curso ya tiene contenido o lo está generando: una estructura nueva lo reemplazaría. " +
+  "Cambia sus módulos desde el paso Contenido o desde el editor.";
+
 export const aiModules = (course: CourseDetail): ModuleAdmin[] =>
   course.modules.filter((module) => module.source === "ai");
 
@@ -19,12 +29,35 @@ export const videoStyle = (settings: CourseSettings): { theme: SlideTheme; prese
   presenter: settings.presenter ?? true,
 });
 
-const isBusy = (module: ModuleAdmin) =>
+export const isBusy = (module: ModuleAdmin) =>
   module.generation_status === "queued" || module.generation_status === "generating";
 
-// A busy module is doing one of two things: writing its script (no scenes yet) or producing its video.
-export const isRendering = (module: ModuleAdmin) => isBusy(module) && module.scene_count > 0;
-export const isDrafting = (module: ModuleAdmin) => isBusy(module) && module.scene_count === 0;
+/** Created from the approved outline and nothing more yet: what a new proposal may replace (the API's rule). */
+export const isUntouched = (module: ModuleAdmin) =>
+  module.source === "ai" &&
+  !isBusy(module) &&
+  !module.scene_count &&
+  !module.video &&
+  !module.content_text.trim() &&
+  !module.evaluation;
+
+/** A busy module is writing its script or producing its video. */
+export type ModuleActivity = "drafting" | "rendering" | null;
+
+/** The module's active job that writes its script or produces its video, if any. */
+export const moduleJob = (module: ModuleAdmin, jobs: Job[]): Job | undefined =>
+  jobs.find((job) => job.module_id === module.id && (job.type === DRAFT_JOB || job.type === RENDER_JOB));
+
+/**
+ * What the module is doing, as its active job says. Without one (the list of jobs may lag behind the course),
+ * a busy module with a script is taken as producing its video and one without as writing it.
+ */
+export function moduleActivity(module: ModuleAdmin, jobs: Job[]): ModuleActivity {
+  const job = moduleJob(module, jobs);
+  if (job) return job.type === DRAFT_JOB ? "drafting" : "rendering";
+  if (!isBusy(module)) return null;
+  return module.scene_count > 0 ? "rendering" : "drafting";
+}
 
 /**
  * Where the course is, from what the server has: the studio resumes there after a reload.
@@ -32,10 +65,10 @@ export const isDrafting = (module: ModuleAdmin) => isBusy(module) && module.scen
  */
 export function currentStep(course: CourseDetail, hasOutline: boolean, jobs: Job[]): StepId {
   const modules = aiModules(course);
-  if (!modules.length) return hasOutline || jobs.some((job) => job.type === "ai.outline") ? "outline" : "brief";
-  if (modules.some((module) => module.scene_count === 0)) return "content";
-  if (modules.some((module) => module.video || isRendering(module)) || jobs.some((job) => job.type === "video.render"))
-    return "production";
+  if (!modules.length) return hasOutline || jobs.some((job) => job.type === OUTLINE_JOB) ? "outline" : "brief";
+  // Modules still waiting for their script (one brought with its own video from the previous app can do without).
+  if (modules.some((module) => !module.scene_count && !module.video)) return "content";
+  if (modules.some((module) => module.video || moduleActivity(module, jobs) === "rendering")) return "production";
   return "style";
 }
 

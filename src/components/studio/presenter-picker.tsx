@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { studioApi, studioKeys } from "@/lib/api/studio";
 import type { Avatar } from "@/lib/api/types";
+import { safeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 
 interface AvatarCardProps {
@@ -16,6 +17,7 @@ interface AvatarCardProps {
 }
 
 function AvatarCard({ avatar, selected, onSelect }: AvatarCardProps) {
+  const image = safeHttpUrl(avatar.preview_image_url); // only http(s) images load
   return (
     <li>
       <button
@@ -28,9 +30,9 @@ function AvatarCard({ avatar, selected, onSelect }: AvatarCardProps) {
         )}
       >
         <span className="relative block aspect-square overflow-hidden rounded-full bg-mist">
-          {avatar.preview_image_url ? (
+          {image ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatar.preview_image_url} alt="" className="h-full w-full object-cover" />
+            <img src={image} alt="" className="h-full w-full object-cover" />
           ) : (
             <UserRound className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground" />
           )}
@@ -81,9 +83,14 @@ export function PresenterPicker({
           <Skeleton className="h-40" />
         ) : avatars.error ? (
           <QueryError query={avatars} />
+        ) : !avatars.data.length ? (
+          <p className="text-sm text-muted-foreground">
+            No hay presentadores disponibles en el servicio. Desactiva el presentador para producir los videos con tus
+            diapositivas y la voz.
+          </p>
         ) : (
           <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-            {(avatars.data ?? []).map((avatar) => (
+            {avatars.data.map((avatar) => (
               <AvatarCard
                 key={avatar.id}
                 avatar={avatar}

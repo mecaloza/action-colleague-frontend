@@ -8,10 +8,45 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { studioApi, studioKeys } from "@/lib/api/studio";
 import type { Language, Voice } from "@/lib/api/types";
+import { safeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 import { CloneVoiceDialog } from "./clone-voice-dialog";
 
-const GENDERS: Record<string, string> = { female: "Femenina", male: "Masculina", neutral: "Neutra" };
+// The voice catalog labels its voices in English: the common values, in Spanish (others are shown as they come).
+const GENDERS: Record<string, string> = {
+  female: "Femenina",
+  male: "Masculina",
+  neutral: "Neutra",
+  "non binary": "No binaria",
+};
+const ACCENTS: Record<string, string> = {
+  american: "Acento estadounidense",
+  british: "Acento británico",
+  australian: "Acento australiano",
+  canadian: "Acento canadiense",
+  irish: "Acento irlandés",
+  scottish: "Acento escocés",
+  indian: "Acento indio",
+  african: "Acento africano",
+  "latin american": "Acento latinoamericano",
+  mexican: "Acento mexicano",
+  colombian: "Acento colombiano",
+  argentine: "Acento argentino",
+  argentinian: "Acento argentino",
+  chilean: "Acento chileno",
+  peruvian: "Acento peruano",
+  venezuelan: "Acento venezolano",
+  spanish: "Acento español",
+  castilian: "Acento castellano",
+  peninsular: "Acento peninsular",
+  brazilian: "Acento brasileño",
+  portuguese: "Acento portugués",
+  neutral: "Acento neutro",
+};
+
+/** A catalog label in Spanish when it's a common English one ("latin-american" and "Latin American" alike). */
+const translated = (labels: Record<string, string>, value: string) =>
+  labels[value.trim().toLowerCase().replace(/[-_]+/g, " ")] ?? value;
 
 /** One audio element for every preview: starting a sample stops the one playing. */
 function usePreviewPlayer() {
@@ -44,8 +79,8 @@ interface VoiceCardProps {
 
 function VoiceCard({ voice, selected, playing, onSelect, onPreview }: VoiceCardProps) {
   const meta = [
-    GENDERS[voice.gender] ?? voice.gender,
-    voice.accent,
+    translated(GENDERS, voice.gender),
+    translated(ACCENTS, voice.accent),
     voice.category === "cloned" ? "Clonada" : "",
   ].filter(Boolean);
   return (
@@ -113,16 +148,19 @@ export function VoicePicker({ language, selectedId, onSelect }: VoicePickerProps
         <QueryError query={voices} />
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
-          {sortedVoices.map((voice) => (
-            <VoiceCard
-              key={voice.id}
-              voice={voice}
-              selected={voice.id === selectedId}
-              playing={playing === voice.id}
-              onSelect={() => onSelect(voice)}
-              onPreview={voice.preview_url ? () => toggle(voice.id, voice.preview_url) : undefined}
-            />
-          ))}
+          {sortedVoices.map((voice) => {
+            const sample = safeHttpUrl(voice.preview_url); // only http(s) links play
+            return (
+              <VoiceCard
+                key={voice.id}
+                voice={voice}
+                selected={voice.id === selectedId}
+                playing={playing === voice.id}
+                onSelect={() => onSelect(voice)}
+                onPreview={sample ? () => toggle(voice.id, sample) : undefined}
+              />
+            );
+          })}
         </ul>
       )}
       <Button variant="link" className="mt-4" onClick={() => setCloning(true)}>

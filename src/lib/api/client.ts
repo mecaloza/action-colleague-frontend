@@ -82,7 +82,11 @@ const LEGACY_DETAILS: Record<string, string> = {
 };
 
 function messageFrom(status: number, detail: unknown): string {
-  if (status >= 500) return SERVER_ERROR;
+  if (status >= 500) {
+    // The API explains its 502 and 503 (a provider failed, a service isn't configured) in Spanish.
+    const explained = (status === 502 || status === 503) && typeof detail === "string" ? detail.trim() : "";
+    return explained || SERVER_ERROR;
+  }
   const text =
     typeof detail === "string"
       ? detail.trim()

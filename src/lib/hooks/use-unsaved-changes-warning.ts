@@ -4,7 +4,10 @@ import { useEffect } from "react";
 export function useUnsavedChangesWarning(dirty: boolean) {
   useEffect(() => {
     if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = ""; // some browsers only ask when this is set
+    };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);

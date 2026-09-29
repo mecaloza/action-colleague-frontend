@@ -19,6 +19,12 @@ export interface QuizSuggestion {
   questions: Question[];
 }
 
+/** The API lists jobs without filtering by type: the newest ones of a course are searched (200 is its maximum). */
+const RECENT_JOBS = 200;
+
+/** How long the studio trusts what it loaded: coming back to the tab refetches it (another tab may have changed it). */
+export const STUDIO_STALE_MS = 5_000;
+
 export const studioApi = {
   capabilities: () => http.get<StudioCapabilities>("/studio/capabilities"),
 
@@ -56,6 +62,11 @@ export const studioApi = {
 
   job: (jobId: string) => http.get<Job>(`/jobs/${jobId}`),
   activeJobs: (courseId: number) => http.get<Job[]>("/jobs", { course_id: courseId, active: true }),
+  /** The course's newest job of `type` (queued, running or finished), or null. */
+  latestJob: async (courseId: number, type: string) => {
+    const jobs = await http.get<Job[]>("/jobs", { course_id: courseId, limit: RECENT_JOBS });
+    return jobs.find((job) => job.type === type) ?? null;
+  },
 };
 
 export const studioKeys = {
@@ -65,6 +76,7 @@ export const studioKeys = {
   // Under the course's key: refreshing the course (`useCourseCache`) refreshes these too.
   outline: (courseId: number) => ["courses", courseId, "outline"] as const,
   jobs: (courseId: number) => ["courses", courseId, "jobs"] as const,
+  latestJob: (courseId: number, type: string) => ["courses", courseId, "latest-job", type] as const,
   materials: (courseId: number) => ["courses", courseId, "materials"] as const,
   job: (jobId: string) => ["jobs", jobId] as const,
   storyboard: (moduleId: number) => ["modules", moduleId, "storyboard"] as const,

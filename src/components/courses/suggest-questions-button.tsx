@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { type QuizSuggestion, studioApi } from "@/lib/api/studio";
+import { type QuizSuggestion, studioApi, studioKeys } from "@/lib/api/studio";
 import type { Question } from "@/lib/api/types";
 import { plural } from "@/lib/format";
 import { isActiveJob, useJob } from "@/lib/hooks/use-jobs";
@@ -24,8 +24,9 @@ interface SuggestQuestionsButtonProps {
 /** Asks the AI for questions based on the module's content (reading, script, transcript or document). */
 export function SuggestQuestionsButton({ moduleId, onSuggested, limit, disabled }: SuggestQuestionsButtonProps) {
   const { ai } = useStudioCapabilities();
+  const queryClient = useQueryClient();
   const [jobId, setJobId] = useState<string | null>(null);
-  const { data: job } = useJob(jobId);
+  const { data: job, error: jobError } = useJob(jobId);
   const start = useMutation({
     mutationFn: () => studioApi.suggestQuiz(moduleId),
     onSuccess: (created) => setJobId(created.id),
@@ -49,6 +50,15 @@ export function SuggestQuestionsButton({ moduleId, onSuggested, limit, disabled 
     }
     setJobId(null);
   }, [job, limit, onSuggested]);
+
+  // The job can't be followed (its polling stops on errors): say why and let the button be used again. Its failed
+  // query goes too: asking again may return the same job (still running), which must be followed afresh.
+  useEffect(() => {
+    if (!jobError || !jobId) return;
+    toastError(jobError);
+    queryClient.removeQueries({ queryKey: studioKeys.job(jobId) });
+    setJobId(null);
+  }, [jobError, jobId, queryClient]);
 
   if (!ai) return null;
   return (
