@@ -73,8 +73,8 @@ export function VideoRecorder({
       analyserRef.current = analyser;
 
       updateAudioLevel();
-    } catch (error) {
-      console.error("Error setting up audio monitoring:", error);
+    } catch {
+      // The level meter is optional; recording works without it.
     }
   }, []);
 
@@ -104,8 +104,7 @@ export function VideoRecorder({
 
       // Setup audio level monitoring
       setupAudioMonitoring(stream);
-    } catch (error) {
-      console.error("Error accessing media devices:", error);
+    } catch {
       setErrorMessage(
         "No se pudo acceder a la cámara o micrófono. Verifica los permisos."
       );
@@ -165,8 +164,7 @@ export function VideoRecorder({
         setState("stopped");
       };
 
-      mediaRecorder.onerror = (event) => {
-        console.error("MediaRecorder error:", event);
+      mediaRecorder.onerror = () => {
         setErrorMessage("Error durante la grabación");
         setState("error");
       };
@@ -187,8 +185,7 @@ export function VideoRecorder({
           return newDuration;
         });
       }, 1000);
-    } catch (error) {
-      console.error("Error starting recording:", error);
+    } catch {
       setErrorMessage("Error al iniciar la grabación");
       setState("error");
     }

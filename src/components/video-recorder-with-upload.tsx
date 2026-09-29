@@ -105,7 +105,6 @@ export function VideoRecorderWithUpload({
       // Send request
       xhr.send(formData);
     } catch (error) {
-      console.error("Upload error:", error);
       setUploadError(
         error instanceof Error ? error.message : "Error desconocido al subir el video"
       );

@@ -1,143 +1,174 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/auth-context";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
+import { AlertCircle, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { DiamondMotif } from "@/components/brand/motif";
+import { Logo } from "@/components/brand/logo";
+import { SplashScreen } from "@/components/layout/splash-screen";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { GraduationCap, Loader2, AlertCircle } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { homeFor, useAuth } from "@/contexts/auth-context";
+import { errorMessage } from "@/lib/api/client";
+import { safeNext } from "@/lib/safe-next";
 
-export default function LoginPage() {
-  const t = useTranslations("login");
+const HIGHLIGHTS = [
+  "Convierte tus documentos en cursos con video, voz y evaluación.",
+  "Sube tu propio material o grábate con tus diapositivas.",
+  "Sigue el avance de cada persona de tu equipo.",
+];
+
+const ERROR_ID = "login-error";
+
+function LoginForm() {
   const { login } = useAuth();
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const invalid = Boolean(error) || undefined;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    // Read the fields from the form: browser autofill may not have fired onChange yet.
+    const data = new FormData(event.currentTarget);
+    const formEmail = String(data.get("email") ?? "").trim();
+    const formPassword = String(data.get("password") ?? "");
+    if (!formEmail || !formPassword) {
+      setError("Escribe tu correo y tu contraseña.");
+      return;
+    }
     setError("");
-    setLoading(true);
-
+    setSubmitting(true);
     try {
-      await login(email, password);
-      const savedUser = localStorage.getItem("ac_user");
-      if (savedUser) {
-        const userData = JSON.parse(savedUser);
-        router.push(
-          userData.role === "admin" ? "/admin/dashboard" : "/dashboard"
-        );
-      } else {
-        router.push("/dashboard");
-      }
+      await login(formEmail, formPassword);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("errors.failed")
-      );
-    } finally {
-      setLoading(false);
+      setError(errorMessage(err));
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-[#0f0f1a] via-[#1a1a2e] to-[#16132b] p-4 relative overflow-hidden">
-      {/* Background pattern */}
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-1/4 -left-20 h-72 w-72 rounded-full bg-violet-600/20 blur-[100px]" />
-        <div className="absolute bottom-1/4 -right-20 h-72 w-72 rounded-full bg-purple-600/20 blur-[100px]" />
+    <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+      <div>
+        <Label htmlFor="email">Correo electrónico</Label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="nombre@empresa.com"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          aria-invalid={invalid}
+          aria-describedby={error ? ERROR_ID : undefined}
+          required
+          autoFocus
+        />
       </div>
-
-      <div className="absolute right-4 top-4 z-10">
-        <ThemeToggle />
-      </div>
-
-      <div className="mb-8 flex items-center gap-3 animate-fade-in relative z-10">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/30">
-          <GraduationCap className="h-6 w-6 text-white" />
+      <div>
+        <Label htmlFor="password">Contraseña</Label>
+        <div className="relative">
+          <Input
+            id="password"
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            aria-invalid={invalid}
+            aria-describedby={error ? ERROR_ID : undefined}
+            className="pr-11"
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((value) => !value)}
+            className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-ink-800"
+            aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            aria-pressed={showPassword}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
         </div>
-        <h1 className="text-3xl font-bold gradient-text">Action Colleague</h1>
       </div>
 
-      <p className="mb-8 text-center text-muted-foreground animate-fade-in relative z-10">
-        {t("subtitle")}
-      </p>
+      {error && (
+        <p id={ERROR_ID} role="alert" className="flex items-start gap-2 border-l-2 border-destructive bg-red-50 px-3 py-2.5 text-sm">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          {error}
+        </p>
+      )}
 
-      <Card className="w-full max-w-md glass-strong glow-violet animate-slide-up relative z-10">
-        <CardHeader>
-          <CardTitle className="text-center text-xl">{t("title")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
+      <Button type="submit" size="lg" className="w-full" loading={submitting}>
+        Ingresar <ArrowRight />
+      </Button>
+    </form>
+  );
+}
 
-            <div className="space-y-2">
-              <Label htmlFor="email">{t("email")}</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder={t("emailPlaceholder")}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                disabled={loading}
-              />
-            </div>
+function LoginScreen() {
+  const { status, user } = useAuth();
+  const router = useRouter();
+  const next = safeNext(useSearchParams().get("next"));
 
-            <div className="space-y-2">
-              <Label htmlFor="password">{t("password")}</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder={t("passwordPlaceholder")}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                disabled={loading}
-              />
-            </div>
+  useEffect(() => {
+    if (status === "authenticated") router.replace(next ?? homeFor(user));
+  }, [status, user, next, router]);
 
-            <Button type="submit" className="w-full" size="lg" disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t("signingIn")}
-                </>
-              ) : (
-                t("title")
-              )}
-            </Button>
-          </form>
+  // Signed-in users (or a session still being checked) never see the form.
+  if (status !== "anonymous") return <SplashScreen />;
 
-          <div className="mt-6 rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
-            <p className="text-xs font-medium text-muted-foreground mb-2">
-              {t("demo.title")}
-            </p>
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <p>
-                <span className="font-medium text-violet-400">{t("demo.admin")}:</span>{" "}
-                admin@actioncolleague.com / admin123
-              </p>
-              <p>
-                <span className="font-medium text-violet-400">{t("demo.collaborator")}:</span>{" "}
-                carlos.lopez@actioncolleague.com / password123
-              </p>
-            </div>
+  return (
+    <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
+      <section className="band-dark hidden flex-col justify-between p-12 lg:flex xl:p-16">
+        <Logo inverse />
+        <DiamondMotif className="absolute right-12 top-10 h-[210px] w-[140px] xl:right-16" />
+        <div className="relative z-10 max-w-xl">
+          <p className="eyebrow mb-6 text-white/60">Estudio de cursos</p>
+          <p className="display-xl text-white">
+            Formación que tu equipo <span className="text-accent">sí termina.</span>
+          </p>
+          <ul className="mt-10 space-y-4">
+            {HIGHLIGHTS.map((item, index) => (
+              <motion.li
+                key={item}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 + index * 0.08 }}
+                className="flex items-start gap-3 text-white/80"
+              >
+                <span className="mt-2 h-2 w-2 shrink-0 rotate-45 bg-accent" />
+                {item}
+              </motion.li>
+            ))}
+          </ul>
+        </div>
+        <p className="relative z-10 text-xs text-white/40">© {new Date().getFullYear()} Action Colleague</p>
+      </section>
+
+      <section className="flex flex-col justify-center px-6 py-12 sm:px-12">
+        <div className="mx-auto w-full max-w-sm">
+          <div className="mb-12 lg:hidden">
+            <Logo />
           </div>
-        </CardContent>
-      </Card>
+          <p className="eyebrow mb-3">Bienvenido</p>
+          <h1 className="display-md mb-2">Inicia sesión</h1>
+          <p className="mb-10 text-sm text-muted-foreground">Usa el correo con el que te registró tu empresa.</p>
+          <LoginForm />
+        </div>
+      </section>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<SplashScreen />}>
+      <LoginScreen />
+    </Suspense>
   );
 }
