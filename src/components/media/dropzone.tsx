@@ -13,6 +13,8 @@ interface DropzoneProps {
   /** Replaces the rule's own hint under the label. */
   hint?: string;
   onFile: (file: File) => void;
+  /** While something else is in progress: the area can't take files. */
+  disabled?: boolean;
   className?: string;
 }
 
@@ -36,11 +38,11 @@ function rejectionOf(file: File, rule: UploadRule): string | null {
 }
 
 /** Drag-and-drop area that also opens the file picker; a file that breaks the rule is rejected with a toast. */
-export function Dropzone({ rule, label, hint = rule.hint, onFile, className }: DropzoneProps) {
+export function Dropzone({ rule, label, hint = rule.hint, onFile, disabled = false, className }: DropzoneProps) {
   const [dragging, setDragging] = useState(false);
 
   const handleFile = (file: File | undefined) => {
-    if (!file) return;
+    if (!file || disabled) return;
     const rejection = rejectionOf(file, rule);
     if (rejection) toast.error(rejection);
     else onFile(file);
@@ -66,6 +68,7 @@ export function Dropzone({ rule, label, hint = rule.hint, onFile, className }: D
         // The input is visually hidden: the area shows its keyboard focus.
         "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
         dragging ? "border-accent bg-accent-soft" : "border-input bg-mist/50 hover:border-ink-800",
+        disabled && "pointer-events-none opacity-50",
         className,
       )}
     >
@@ -76,6 +79,7 @@ export function Dropzone({ rule, label, hint = rule.hint, onFile, className }: D
         type="file"
         accept={rule.accept}
         className="sr-only"
+        disabled={disabled}
         onChange={(event) => {
           handleFile(event.target.files?.[0]);
           event.target.value = ""; // choosing the same file again must trigger onChange

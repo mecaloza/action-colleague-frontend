@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, Eye, MoreHorizontal, Rocket, Trash2, Undo2 } from "lucide-react";
+import { Archive, Eye, MoreHorizontal, Rocket, Sparkles, Trash2, Undo2 } from "lucide-react";
 import { DiamondMotif } from "@/components/brand/motif";
 import { BackLink } from "@/components/layout/back-link";
 import { useConfirm } from "@/components/layout/confirm-dialog";
@@ -85,6 +85,13 @@ export function CourseHeader({ course }: { course: CourseDetail }) {
               {course.description && <p className="mt-3 max-w-2xl text-white/70">{course.description}</p>}
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              {course.source === "ai" && (
+                <Button variant="outline-inverse" asChild>
+                  <Link href={`/admin/courses/${course.id}/studio`}>
+                    <Sparkles /> Estudio IA
+                  </Link>
+                </Button>
+              )}
               <Button variant="outline-inverse" asChild>
                 <Link href={`/admin/courses/${course.id}/preview`}>
                   <Eye /> Vista previa

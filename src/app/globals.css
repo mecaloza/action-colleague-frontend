@@ -57,7 +57,7 @@
 @layer components {
   /* Small uppercase label with a diamond, as used across the brand. */
   .eyebrow {
-    @apply inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-label text-muted-foreground;
+    @apply flex items-center gap-2 text-[11px] font-bold uppercase tracking-label text-muted-foreground;
   }
   .eyebrow::before {
     content: "";

@@ -169,6 +169,8 @@ export interface RequestOptions {
   query?: Query;
   auth?: boolean;
   signal?: AbortSignal;
+  /** "blob" for binary responses (images, audio); JSON otherwise. */
+  as?: "json" | "blob";
 }
 
 function buildUrl(path: string, query?: Query): string {
@@ -180,7 +182,7 @@ function buildUrl(path: string, query?: Query): string {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, query, auth = true, signal } = options;
+  const { method = "GET", body, query, auth = true, signal, as = "json" } = options;
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   const url = buildUrl(path, query);
 
@@ -206,6 +208,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (response.status === 401 && auth) response = await send(await refreshAccessToken(usedToken));
 
   if (!response.ok) throw await toApiError(response);
+  if (as === "blob") return (await response.blob()) as T;
   if (response.status === 204) return undefined as T;
   const text = await response.text();
   if (!text) return undefined as T;

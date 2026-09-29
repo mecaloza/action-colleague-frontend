@@ -10,6 +10,8 @@ const REDIRECTS = [
   ["/admin/documents", "/admin"],
   ["/admin/series/:path*", "/admin/courses"],
   ["/documents", "/learn"],
+  // The previous AI wizard.
+  ["/admin/courses/create", "/admin/courses/new/ai"],
 ];
 
 /** @type {import('next').NextConfig} */

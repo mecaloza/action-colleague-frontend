@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronDown, HelpCircle, Plus, Trash2 } from "lucide-react";
@@ -23,10 +23,12 @@ import type { CourseDetail, EvaluationAdmin, ModuleAdmin, Question, QuestionType
 import { moveItem, removeAt, replaceAt } from "@/lib/array";
 import { plural, twoDigits } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
+import { useUnsavedChangesWarning } from "@/lib/hooks/use-unsaved-changes-warning";
 import { toastError } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { QuestionEditor } from "./question-editor";
 import { QUESTION_TYPES, blankQuestion, questionProblem } from "./question-model";
+import { SuggestQuestionsButton } from "./suggest-questions-button";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_PASSING_SCORE = 70;
@@ -73,6 +75,13 @@ function EvaluationForm({ module, courseId, evaluation, onDirtyChange }: Evaluat
   const confirm = useConfirm();
   const { refreshEvaluation } = useCourseCache();
   const [questions, setQuestions] = useState<Question[]>(evaluation?.questions ?? []);
+  // Suggestions are added to the draft with fresh ids (never colliding with the questions already there).
+  const addSuggested = useCallback((suggested: Question[]) => {
+    const stamp = Date.now().toString(36);
+    setQuestions((list) =>
+      [...list, ...suggested.map((question, index) => ({ ...question, id: `ai${stamp}${index}` }))].slice(0, MAX_QUESTIONS),
+    );
+  }, []);
   // Raw text while typing; validated below instead of clamped on every keystroke.
   const [maxAttempts, setMaxAttempts] = useState(String(evaluation?.max_attempts ?? DEFAULT_MAX_ATTEMPTS));
   const [passingScore, setPassingScore] = useState(String(evaluation?.passing_score ?? DEFAULT_PASSING_SCORE));
@@ -160,7 +169,15 @@ function EvaluationForm({ module, courseId, evaluation, onDirtyChange }: Evaluat
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
         {questions.length < MAX_QUESTIONS ? (
-          <AddQuestionMenu onAdd={(type) => setQuestions((list) => [...list, blankQuestion(type)])} />
+          <div className="flex flex-wrap items-center gap-2">
+            <AddQuestionMenu onAdd={(type) => setQuestions((list) => [...list, blankQuestion(type)])} />
+            <SuggestQuestionsButton
+              moduleId={module.id}
+              onSuggested={addSuggested}
+              limit={MAX_QUESTIONS - questions.length}
+              disabled={save.isPending}
+            />
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">Máximo {MAX_QUESTIONS} preguntas por evaluación.</p>
         )}
@@ -238,12 +255,7 @@ export function EvaluationsTab({ course }: { course: CourseDetail }) {
   const [dirty, setDirty] = useState(false);
 
   // Leaving the page (reload, close) with unsaved questions asks first.
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  useUnsavedChangesWarning(dirty);
 
   /** Opening or closing a module unmounts the open form: ask before discarding its draft. */
   const toggle = async (moduleId: number) => {
