@@ -1,17 +1,27 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { UploadProgress } from "@/components/media/upload-progress";
+import { ApiError, errorMessage } from "@/lib/api/client";
 import { mediaApi } from "@/lib/api/media";
+import { useUnsavedChangesWarning } from "@/lib/hooks/use-unsaved-changes-warning";
 import { useUpload } from "@/lib/hooks/use-upload";
-import { toastError } from "@/lib/notify";
 import { type Deck, DeckSetup } from "./deck-setup";
 import { RecordingStudio } from "./recording-studio";
-import type { Recording } from "./use-recorder";
+import { fitTimeline, type Recording } from "./use-recorder";
+
+/** Asking for the composition only queues it: no answer after this long means the connection hung. */
+const COMPOSE_TIMEOUT_MS = 30_000;
+
+/** A 409 because the server lost the upload (never confirmed, or failed): only uploading it again helps. */
+function uploadLost(error: unknown): boolean {
+  const detail = error instanceof ApiError && error.status === 409 ? error.detail : null;
+  return typeof detail === "object" && detail !== null && "code" in detail && detail.code === "upload_not_ready";
+}
 
 interface RecordingDialogProps {
   open: boolean;
@@ -36,16 +46,25 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
   // This take's recording once uploaded: if asking for the composition fails, trying again doesn't upload it again.
   const uploaded = useRef<{ blob: Blob; assetId: string } | null>(null);
   const busy = uploading || composing || deckUploading;
-  const hasTake = useRef(false);
-  const setHasTake = useRef((value: boolean) => {
-    hasTake.current = value;
-  }).current;
+  // A countdown, a recording in progress or a take not used yet: closing now would lose it.
+  const [hasTake, setHasTake] = useState(false);
+  // Why asking for the composition failed, shown under the studio (a toast goes away).
+  const [composeError, setComposeError] = useState<string | null>(null);
+
+  // Reloading or closing the tab would lose the take, or what is being uploaded: the browser asks first.
+  useUnsavedChangesWarning(open && (hasTake || busy));
+
+  // A new take (after "Repetir") starts without the previous one's error.
+  useEffect(() => {
+    if (!hasTake) setComposeError(null);
+  }, [hasTake]);
 
   // The dialog stays mounted between sessions: nothing chosen or recorded in this one may reach the next.
   const close = () => {
     reset();
     setDeck(undefined);
-    hasTake.current = false;
+    setHasTake(false);
+    setComposeError(null);
     uploaded.current = null;
     onOpenChange(false);
   };
@@ -54,7 +73,7 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
   const requestClose = async () => {
     if (busy) return; // closing mid-upload would lose the recording
     if (
-      hasTake.current &&
+      hasTake &&
       !(await confirm({
         title: "¿Descartar la grabación?",
         description: "Todavía no la usas en el módulo; si cierras el estudio, se pierde.",
@@ -67,6 +86,7 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
   };
 
   const handleFinish = async (recording: Recording) => {
+    setComposeError(null);
     const filename = `grabacion.${recording.extension}`;
     if (!deck) {
       const asset = await upload(recording.blob, { filename, kind: "recording", courseId, moduleId, purpose: "recording" });
@@ -80,16 +100,35 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
         uploaded.current = { blob: recording.blob, assetId: asset.id };
       }
       setComposing(true);
+      const controller = new AbortController();
+      let timer = 0;
+      // Also gives up while the request waits for a session refresh, which takes no signal.
+      const timeLimit = new Promise<never>((_, reject) => {
+        timer = window.setTimeout(() => {
+          controller.abort();
+          reject(new Error("timeout"));
+        }, COMPOSE_TIMEOUT_MS);
+      });
       try {
-        await mediaApi.composeRecording(moduleId, {
-          recording_asset_id: uploaded.current.assetId,
-          deck_asset_id: deck.assetId,
-          timeline: recording.timeline,
-        });
+        const composition = mediaApi.composeRecording(
+          moduleId,
+          {
+            recording_asset_id: uploaded.current.assetId,
+            deck_asset_id: deck.assetId,
+            // Within the server's 2000 points, and the same on every try (it tells a retry from another take).
+            timeline: fitTimeline(recording.timeline),
+          },
+          controller.signal,
+        );
+        await Promise.race([composition, timeLimit]);
       } catch (error) {
-        toastError(error);
+        if (uploadLost(error)) uploaded.current = null; // the next try uploads the take again
+        const message = controller.signal.aborted ? "El servidor no respondió a tiempo. Intenta de nuevo." : errorMessage(error);
+        setComposeError(message);
+        toast.error(message);
         return;
       } finally {
+        window.clearTimeout(timer);
         setComposing(false);
       }
       toast.success("Grabación subida. Estamos combinándola con tus diapositivas; aparecerá en el módulo en unos minutos.");
@@ -134,6 +173,12 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
                   onTakeChange={setHasTake}
                 />
               ))}
+            {composeError && (
+              <div role="alert" className="flex items-start gap-3 border-l-2 border-destructive bg-red-50 p-4 text-sm text-ink-900">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <p>{composeError}</p>
+              </div>
+            )}
             <div className="text-ink-900">
               <UploadProgress state={state} onCancel={cancel} />
             </div>

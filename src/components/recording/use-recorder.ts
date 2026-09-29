@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { TimelinePoint } from "@/lib/api/types";
 
 export interface RecordingFormat {
   mimeType: string;
@@ -26,8 +27,42 @@ export interface Recording {
   blob: Blob;
   extension: RecordingFormat["extension"];
   durationSeconds: number;
-  /** Slide changes: [second, slide index] — the server composes the slides with these timings. */
-  timeline: { at: number; slide: number }[];
+  /** Slide changes, in order: the server composes the slides with these timings. */
+  timeline: TimelinePoint[];
+}
+
+/** A slide on screen for less than this is never seen: one frame of the final video (30 fps). */
+const FRAME_SECONDS = 1 / 30;
+
+/**
+ * Drops the changes on screen for less than `minSeconds` (the next change replaces them) and the ones
+ * that repeat the slide already showing. The first and the last point always stay.
+ */
+function compactTimeline(points: TimelinePoint[], minSeconds: number): TimelinePoint[] {
+  const last = points.length - 1;
+  const kept: TimelinePoint[] = [];
+  points.forEach((point, index) => {
+    const between = index > 0 && index < last;
+    if (between && (points[index + 1].at - point.at < minSeconds || point.slide === kept[kept.length - 1].slide)) return;
+    kept.push(point);
+  });
+  return kept;
+}
+
+/**
+ * The timeline within the server's limit of `max` points, always the same for the same take (a retry
+ * sends the same request): changes shorter than a frame go, and that threshold doubles while too many remain.
+ */
+export function fitTimeline(points: TimelinePoint[], max = 2000): TimelinePoint[] {
+  const span = points.length > 0 ? points[points.length - 1].at - points[0].at : 0;
+  let minSeconds = FRAME_SECONDS;
+  let fitted = compactTimeline(points, minSeconds);
+  // Once the threshold passes the whole take only the first and the last point remain: the loop ends.
+  while (fitted.length > max && minSeconds <= span) {
+    minSeconds *= 2;
+    fitted = compactTimeline(points, minSeconds);
+  }
+  return fitted;
 }
 
 /** Starts reading the microphone's loudness (0 to 1) on every animation frame. */
@@ -237,9 +272,12 @@ export function useRecorder() {
       if (slide === currentSlide.current) return;
       currentSlide.current = slide;
       const state = recorder.current?.state;
-      if (state === "recording" || state === "paused") {
-        timeline.current.push({ at: Math.round(seconds() * 100) / 100, slide });
-      }
+      if (state !== "recording" && state !== "paused") return;
+      const point = { at: Math.round(seconds() * 100) / 100, slide };
+      const points = timeline.current;
+      // Another change at the same time (e.g. several during a pause) replaces the last: only it is ever seen.
+      if (points.length > 0 && points[points.length - 1].at === point.at) points[points.length - 1] = point;
+      else points.push(point);
     },
     [seconds],
   );

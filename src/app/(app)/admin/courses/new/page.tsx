@@ -22,7 +22,7 @@ const OPTIONS = [
     title: "Con mi material",
     description:
       "¿Ya tienes el contenido? Sube tus videos o documentos, o grábate con tus diapositivas desde el navegador. Agrega evaluaciones a mano o con ayuda de la IA.",
-    points: ["Sube videos de cualquier formato", "Graba cámara + presentación PDF", "Evaluaciones manuales o con IA"],
+    points: ["Sube videos de cualquier formato", "Grábate con tus diapositivas", "Evaluaciones manuales o con IA"],
   },
 ];
 
