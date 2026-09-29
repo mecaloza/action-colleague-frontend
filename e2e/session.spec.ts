@@ -29,7 +29,7 @@ test("el parámetro next no permite salir del dominio", async ({ page, baseURL }
 test("una contraseña incorrecta muestra el error en español", async ({ page }) => {
   await page.goto("/login");
   await signIn(page, admin.email, "contraseña-incorrecta");
-  await expect(page.getByRole("alert")).toHaveText(/Correo o contraseña incorrectos/);
+  await expect(page.locator("#login-error")).toHaveText(/Correo o contraseña incorrectos/);
 });
 
 test("cerrar sesión lleva al login sin next", async ({ page }) => {

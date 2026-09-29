@@ -21,7 +21,7 @@ type MyCourse = {
   enrolled_at: string;
 };
 
-export default function MyCoursesPage() {
+function MyCoursesPage() {
   const t = useTranslations("collaboratorCourses");
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,6 +112,15 @@ export default function MyCoursesPage() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Previous-version screen: keeps the page padding the old layout used to add. */
+export default function Page() {
+  return (
+    <div className="container py-8">
+      <MyCoursesPage />
     </div>
   );
 }
