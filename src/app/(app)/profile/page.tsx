@@ -94,39 +94,6 @@ function ProfilePage() {
                   <p className="text-xs text-muted-foreground">{t("role")}</p>
                   <p className="text-sm font-medium capitalize">{user.role}</p>
                 </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">{t("permissions")}</p>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {user.role === "admin" ? (
-                      <>
-                        <Badge variant="outline" className="text-xs">
-                          {t("permission.manageUsers")}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {t("permission.manageCourses")}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {t("permission.viewReports")}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {t("permission.generateDocuments")}
-                        </Badge>
-                      </>
-                    ) : (
-                      <>
-                        <Badge variant="outline" className="text-xs">
-                          {t("permission.viewCourses")}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {t("permission.takeQuizzes")}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {t("permission.viewDocuments")}
-                        </Badge>
-                      </>
-                    )}
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>

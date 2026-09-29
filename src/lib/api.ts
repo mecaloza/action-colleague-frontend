@@ -50,49 +50,18 @@ export const api = {
     const raw = await fetchAPI<any[]>("/users/");
     // Guard: Ensure raw is array before mapping
     if (!Array.isArray(raw)) return [];
-    // Map reports_to -> leader_id/leader_name for frontend
-    return raw.map((u: any) => ({
-      ...u,
-      id: String(u.id),
-      leader_id: u.reports_to ? String(u.reports_to) : undefined,
-      leader_name: u.reports_to
-        ? raw.find((x: any) => x.id === u.reports_to)?.name || undefined
-        : undefined,
-    }));
+    return raw.map((u: any) => ({ ...u, id: String(u.id) }));
   },
-  createUser: (data: CreateUserRequest) => {
-    const { leader_id, ...rest } = data as any;
-    const payload = {
-      ...rest,
-      reports_to: leader_id ? parseInt(leader_id) : null,
-    };
-    return fetchAPI<User>("/users/", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  },
-  updateUser: (id: string, data: UpdateUserRequest) => {
-    const { leader_id, ...rest } = data as any;
-    const payload: any = { ...rest };
-    if (leader_id !== undefined) {
-      payload.reports_to = leader_id ? parseInt(leader_id) : null;
-    }
-    return fetchAPI<User>(`/users/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-  },
+  createUser: (data: CreateUserRequest) =>
+    fetchAPI<User>("/users/", { method: "POST", body: JSON.stringify(data) }),
+  updateUser: (id: string, data: UpdateUserRequest) =>
+    fetchAPI<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 
   // Courses
   getCourses: () => fetchAPI<any[]>("/courses/"),
   getCourse: (id: string) => fetchAPI<any>(`/courses/${id}`),
   createCourse: (data: any) =>
     fetchAPI<any>("/courses/", { method: "POST", body: JSON.stringify(data) }),
-  updateCourse: (id: string, data: any) =>
-    fetchAPI<any>(`/courses/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
 
   // Modules
   getModules: (courseId: string) =>
@@ -248,26 +217,6 @@ export const api = {
     fetchAPI<any>("/enrollments/", {
       method: "POST",
       body: JSON.stringify({ course_id: courseId, user_id: userId }),
-    }),
-  updateProgress: (enrollmentId: string, progress: number) =>
-    fetchAPI<any>(`/enrollments/${enrollmentId}/progress`, {
-      method: "PUT",
-      body: JSON.stringify({ progress }),
-    }),
-
-  // Employees
-  getEmployees: () => fetchAPI<any[]>("/employees/"),
-  getEmployee: (id: string) => fetchAPI<any>(`/employees/${id}`),
-
-  // Documents
-  getDocuments: (userId?: string) =>
-    fetchAPI<any[]>(
-      userId ? `/documents?user_id=${userId}` : "/documents"
-    ),
-  generateDocument: (data: any) =>
-    fetchAPI<any>("/documents/generate/", {
-      method: "POST",
-      body: JSON.stringify(data),
     }),
 
   // Dashboard

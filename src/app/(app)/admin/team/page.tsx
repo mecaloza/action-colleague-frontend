@@ -42,7 +42,6 @@ interface UserForm {
   role: Role;
   department: string;
   position: string;
-  leader_id: string;
 }
 
 const emptyForm: UserForm = {
@@ -52,7 +51,6 @@ const emptyForm: UserForm = {
   role: "collaborator",
   department: "",
   position: "",
-  leader_id: "",
 };
 
 function AdminEmployeesPage() {
@@ -107,7 +105,6 @@ function AdminEmployeesPage() {
       role: user.role,
       department: user.department || "",
       position: user.position || "",
-      leader_id: user.leader_id || "",
     });
     setFormMode("edit");
     setEditingId(user.id);
@@ -129,7 +126,6 @@ function AdminEmployeesPage() {
           role: form.role,
           department: form.department || undefined,
           position: form.position || undefined,
-          leader_id: form.leader_id || undefined,
         };
         await api.createUser(data);
       } else if (editingId) {
@@ -139,7 +135,6 @@ function AdminEmployeesPage() {
           role: form.role,
           department: form.department || undefined,
           position: form.position || undefined,
-          leader_id: form.leader_id || undefined,
         };
         await api.updateUser(editingId, data);
       }
@@ -166,10 +161,6 @@ function AdminEmployeesPage() {
       );
     }
   };
-
-  const leaders = safeUsers.filter(
-    (u) => u.is_active !== false && u.id !== editingId
-  );
 
   return (
     <div className="space-y-6 animate-slide-up">
@@ -207,7 +198,6 @@ function AdminEmployeesPage() {
                 {t("table.department")}
               </TableHead>
               <TableHead>{t("table.role")}</TableHead>
-              <TableHead className="hidden lg:table-cell">{t("table.leader")}</TableHead>
               <TableHead>{t("table.status")}</TableHead>
               <TableHead></TableHead>
             </TableRow>
@@ -246,9 +236,6 @@ function AdminEmployeesPage() {
                   >
                     {user.role}
                   </Badge>
-                </TableCell>
-                <TableCell className="hidden lg:table-cell text-muted-foreground">
-                  {user.leader_name || "\u2014"}
                 </TableCell>
                 <TableCell>
                   {user.is_active === false ? (
@@ -296,7 +283,7 @@ function AdminEmployeesPage() {
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={7}
                   className="text-center text-muted-foreground py-8"
                 >
                   {t("empty")}
@@ -402,26 +389,6 @@ function AdminEmployeesPage() {
                 >
                   <option value="collaborator">{t("role.collaborator")}</option>
                   <option value="admin">{t("role.admin")}</option>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="form-leader">{t("form.leader")}</Label>
-                <Select
-                  id="form-leader"
-                  value={form.leader_id}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      leader_id: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">{t("form.noLeader")}</option>
-                  {leaders.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name} — {l.position}
-                    </option>
-                  ))}
                 </Select>
               </div>
             </div>

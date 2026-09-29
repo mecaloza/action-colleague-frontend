@@ -66,8 +66,8 @@
       "completedPct": "{percent}% completado"
     },
     "certificates": {
-      "title": "Certificados",
-      "issued": "Certificados emitidos"
+      "title": "Completados",
+      "issued": "Cursos completados"
     }
   },
   "adminCourses": {
