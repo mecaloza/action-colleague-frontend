@@ -38,6 +38,8 @@ export default function NewAiCoursePage() {
   const [values, setValues] = useState<BriefValues>(() => initialBrief());
   const [staged, setStaged] = useState<File[]>([]);
   const [starting, setStarting] = useState(false);
+  // What the wait says outside the proposal's own steps: creating the course, then opening its studio.
+  const [phase, setPhase] = useState("Creando el curso");
   const { propose, status } = useProposeOutline();
   const canStart = values.brief.trim().length >= MIN_BRIEF_CHARS && ai && !starting;
 
@@ -59,6 +61,7 @@ export default function NewAiCoursePage() {
       return;
     }
     // The course exists: whatever is left (or fails) continues in its studio.
+    setPhase("Abriendo el estudio"); // on screen once the proposal's steps are done, until the studio opens
     try {
       await propose(course.id, values, { staged, signal });
     } catch (error) {
@@ -116,7 +119,7 @@ export default function NewAiCoursePage() {
           </div>
 
           {starting ? (
-            <ProposeStatus status={status ?? "Creando el curso"} />
+            <ProposeStatus status={status ?? phase} />
           ) : (
             <Button variant="accent" size="lg" className="w-full" onClick={start} disabled={!canStart}>
               Proponer estructura <ArrowRight />

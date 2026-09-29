@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Check } from "lucide-react";
 import { twoDigits } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -15,8 +16,16 @@ interface StudioStepperProps {
 /** Numbered steps of the AI studio; done steps show a check, future ones are not clickable yet. */
 export function StudioStepper({ current, reached, onSelect }: StudioStepperProps) {
   const reachedIndex = stepIndex(reached);
+  const nav = useRef<HTMLElement>(null);
+  // On a phone the steps scroll sideways: the one on screen is kept in view (without scrolling the page).
+  useEffect(() => {
+    const container = nav.current;
+    const active = container?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (!container || !active || container.scrollWidth <= container.clientWidth) return;
+    container.scrollLeft = active.offsetLeft - (container.clientWidth - active.offsetWidth) / 2;
+  }, [current]);
   return (
-    <nav aria-label="Pasos del estudio" className="scrollbar-thin -mx-4 overflow-x-auto px-4">
+    <nav ref={nav} aria-label="Pasos del estudio" className="scrollbar-thin relative -mx-4 overflow-x-auto px-4">
       <ol className="flex min-w-max gap-2 md:grid md:min-w-0 md:grid-cols-5">
         {STEPS.map((step, index) => {
           const active = step.id === current;

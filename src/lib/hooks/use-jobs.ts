@@ -6,6 +6,10 @@ const POLL_MS = 2000;
 
 export const isActiveJob = (job: Pick<Job, "status">) => job.status === "queued" || job.status === "running";
 
+/** A job that ended without its result: it failed or was canceled. */
+export const endedBadly = (job: Job | null | undefined): job is Job =>
+  Boolean(job && (job.status === "failed" || job.status === "canceled"));
+
 /** One background job, polled until it succeeds or fails (or it can't be fetched: the caller shows the error). */
 export function useJob(jobId: string | null) {
   return useQuery({

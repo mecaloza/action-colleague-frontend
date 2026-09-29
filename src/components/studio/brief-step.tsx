@@ -32,8 +32,7 @@ export function BriefStep({ course, aiReady, locked, onProposed, onDirtyChange }
   const { upload, busy: uploading, state: uploadState } = useUpload();
   // Edits not sent yet, or a proposal on its way (leaving stops it): leaving the step asks first.
   const saved = initialBrief(course.language, course.settings);
-  const persisted = (brief: BriefValues) => JSON.stringify([brief.brief, brief.audience, brief.tone, brief.minutes, brief.language]);
-  const dirty = Boolean(status) || persisted(values) !== persisted(saved);
+  const dirty = Boolean(status) || JSON.stringify(values) !== JSON.stringify(saved);
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   const materials = useQuery({

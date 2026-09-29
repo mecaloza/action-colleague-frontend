@@ -90,7 +90,13 @@ export function useProposeOutline() {
         setStatus("Guardando el brief");
         const saved = await coursesApi.update(courseId, {
           language: values.language,
-          settings: { brief: values.brief, audience: values.audience, tone: values.tone, minutes: values.minutes },
+          settings: {
+            brief: values.brief,
+            audience: values.audience,
+            tone: values.tone,
+            minutes: values.minutes,
+            modules: values.modules,
+          },
         });
         queryClient.setQueryData(courseKeys.detail(courseId), saved); // the Brief step reopens with what was sent
         for (let index = 0; index < staged.length; index += 1) {

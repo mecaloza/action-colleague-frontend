@@ -16,7 +16,7 @@ import type { CourseDetail, CourseOutline, Job, OutlineModule } from "@/lib/api/
 import { moveItem, removeAt, replaceAt } from "@/lib/array";
 import { plural } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
-import { isActiveJob, useJob } from "@/lib/hooks/use-jobs";
+import { endedBadly, isActiveJob, useJob } from "@/lib/hooks/use-jobs";
 import { initialBrief } from "./brief-form";
 import { JobFailure, JobStatus, ProposeStatus } from "./job-status";
 import { ListEditor } from "./list-editor";
@@ -26,9 +26,6 @@ import { type ProposalRequest, useProposeOutline } from "./use-propose-outline";
 import { useStudioCache } from "./use-studio-cache";
 
 const MAX_MODULES = 12;
-
-const endedBadly = (job: Job | null | undefined): job is Job =>
-  Boolean(job && (job.status === "failed" || job.status === "canceled"));
 
 /**
  * A heading that takes the focus when it replaces the "working" panel, which had it (or it would fall to the page).

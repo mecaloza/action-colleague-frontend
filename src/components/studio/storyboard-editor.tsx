@@ -46,6 +46,8 @@ interface StoryboardEditorProps {
 
 /** The module's script scene by scene; saving applies to the next video production. */
 export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChange }: StoryboardEditorProps) {
+  // Out here: saving remounts the form with the saved copy, and the instructions must survive it.
+  const [feedback, setFeedback] = useState("");
   const storyboard = useQuery({
     queryKey: studioKeys.storyboard(module.id),
     queryFn: () => studioApi.storyboard(module.id),
@@ -64,9 +66,18 @@ export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChan
       module={module}
       rendering={rendering}
       saved={storyboard.data}
+      feedback={feedback}
+      onFeedbackChange={setFeedback}
       onDirtyChange={onDirtyChange}
     />
   );
+}
+
+interface StoryboardFormProps extends Omit<StoryboardEditorProps, "dirty"> {
+  saved: Storyboard;
+  /** Owned by the editor: this form is remounted whenever the saved script changes. */
+  feedback: string;
+  onFeedbackChange: (feedback: string) => void;
 }
 
 function StoryboardForm({
@@ -74,14 +85,15 @@ function StoryboardForm({
   module,
   rendering,
   saved,
+  feedback,
+  onFeedbackChange: setFeedback,
   onDirtyChange,
-}: Omit<StoryboardEditorProps, "dirty"> & { saved: Storyboard }) {
+}: StoryboardFormProps) {
   const queryClient = useQueryClient();
   const { refreshCourse } = useCourseCache();
   const { trackJobs, failed } = useStudioCache();
   const { produce } = useProduceModule(course);
   const [scenes, setScenes] = useState(saved.scenes);
-  const [feedback, setFeedback] = useState("");
   const dirty = JSON.stringify(scenes) !== JSON.stringify(saved.scenes);
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   // Closed (or replaced by the AI's rewrite): nothing is left unsaved.

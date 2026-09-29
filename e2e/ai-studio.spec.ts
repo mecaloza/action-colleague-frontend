@@ -67,8 +67,12 @@ test("un admin crea un curso con IA de principio a fin", async ({ page }) => {
   const narration = page.getByLabel("Narración").first();
   await narration.fill("Bienvenidos. En este módulo veremos por qué el casco es obligatorio.");
   await expect(page.getByRole("img", { name: "Diapositiva de la escena 1" })).toBeVisible();
+  const rewrite = page.getByLabel("¿Prefieres que la IA lo reescriba?");
+  await rewrite.fill("Más ejemplos de la planta");
   await page.getByRole("button", { name: /Guardar guion/ }).click();
   await expect(page.getByText("Guion guardado")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Descartar cambios" })).toBeHidden(); // the form has the saved copy
+  await expect(rewrite).toHaveValue("Más ejemplos de la planta"); // and it kept the instructions for a rewrite
   await page.getByRole("button", { name: /Elegir voz y estilo/ }).click();
 
   // 04 Style and voice
@@ -197,13 +201,18 @@ test("si la IA no puede proponer la estructura, el paso lo dice y deja volver al
     headers: { "access-control-allow-origin": "*" },
     body: JSON.stringify(body),
   });
-  await page.route(`${api.base}/courses/${course.id}/outline/generate`, (route) => route.fulfill(reply(job, 202)));
-  await page.route(`${api.base}/jobs/${job.id}`, (route) =>
-    route.fulfill(reply({ ...job, status: "failed", error: "La IA no respondió. Intenta de nuevo." })),
-  );
+  const failed = { ...job, status: "failed", error: "La IA no respondió. Intenta de nuevo." };
+  const asked: { modules?: number | null }[] = [];
+  await page.route(`${api.base}/courses/${course.id}/outline/generate`, (route) => {
+    asked.push(route.request().postDataJSON());
+    return route.fulfill(reply(job, 202));
+  });
+  await page.route(`${api.base}/jobs/${job.id}`, (route) => route.fulfill(reply(failed)));
 
   await page.goto(`/admin/courses/${course.id}/studio`);
   await page.getByLabel("¿Qué deben aprender?").fill("Cómo atender a un cliente molesto en la tienda, paso a paso.");
+  const threeModules = page.getByRole("group", { name: "Módulos" }).getByRole("button", { name: "3", exact: true });
+  await threeModules.click();
   await page.getByRole("button", { name: /Proponer estructura/ }).click();
 
   const failure = page.getByRole("heading", { name: "No se pudo proponer la estructura" });
@@ -211,7 +220,125 @@ test("si la IA no puede proponer la estructura, el paso lo dice y deja volver al
   await expect(failure).toBeFocused(); // it replaced the "working" panel, which had the focus
   await expect(page.getByRole("alert").filter({ hasText: "La IA no respondió. Intenta de nuevo." })).toBeVisible();
   await expect(page.getByRole("button", { name: /Reintentar/ })).toBeEnabled();
+
+  // After a reload the step still shows why (the course's newest proposal failed)...
+  await page.route(
+    (url) => url.pathname.endsWith("/api/v1/jobs") && url.searchParams.get("course_id") === String(course.id),
+    (route) => route.fulfill(reply(new URL(route.request().url()).searchParams.has("active") ? [] : [failed])),
+  );
+  await page.reload();
+  await expect(failure).toBeVisible({ timeout: 30_000 });
+  // ...and retrying, now from the brief saved with the course, asks for the same number of modules.
+  await page.getByRole("button", { name: /Reintentar/ }).click();
+  await expect.poll(() => asked.length).toBe(2);
+  await expect(failure).toBeVisible({ timeout: 30_000 });
+  expect(asked.map((body) => body.modules)).toEqual([3, 3]);
   await page.getByRole("button", { name: /Volver al brief/ }).click();
   await expect(page.getByLabel("¿Qué deben aprender?")).toHaveValue(/cliente molesto/);
+  await expect(threeModules).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: /Proponer estructura/ })).toBeEnabled();
+});
+
+/** A course whose proposal is running when the studio opens (asked elsewhere); `finish` ends it. */
+async function courseWithRunningProposal(page: Page) {
+  const api = await adminApi(page);
+  const course = await api.call<{ id: number }>("POST", "/courses", { title: `Propuesta en curso ${Date.now()}`, source: "ai" });
+  await api.call("PATCH", `/courses/${course.id}`, {
+    settings: { brief: "Brief guardado: atender a un cliente molesto en la tienda, paso a paso.", modules: 3 },
+  });
+  const job = {
+    id: `e2e-running-${course.id}`,
+    type: "ai.outline",
+    status: "running",
+    progress: 30,
+    step: "Leyendo tus materiales",
+    error: null as string | null,
+    course_id: course.id,
+    module_id: null,
+    result: null,
+    created_at: null,
+    updated_at: null,
+  };
+  let ended: typeof job | null = null;
+  const reply = (body: unknown, status = 200) => ({
+    status,
+    contentType: "application/json",
+    headers: { "access-control-allow-origin": "*" },
+    body: JSON.stringify(body),
+  });
+  await page.route(`${api.base}/jobs/${job.id}`, (route) => route.fulfill(reply(ended ?? job)));
+  await page.route(
+    (url) => url.pathname.endsWith("/api/v1/jobs") && url.searchParams.get("course_id") === String(course.id),
+    async (route) => {
+      const active = new URL(route.request().url()).searchParams.has("active");
+      if (!active) await new Promise((resolve) => setTimeout(resolve, 1500)); // a slow network makes any wait visible
+      return route.fulfill(reply(active ? (ended ? [] : [job]) : [ended ?? job]));
+    },
+  );
+  let proposed = false;
+  await page.route(
+    (url) => url.pathname.endsWith(`/api/v1/courses/${course.id}/outline`),
+    (route) =>
+      proposed
+        ? route.fulfill(
+            reply({
+              title: "Atención al cliente",
+              description: "D",
+              audience: "A",
+              objectives: ["O"],
+              modules: [
+                { title: "M1", summary: "S", objectives: ["o"], key_points: ["k"], estimated_minutes: 5, include_quiz: true },
+              ],
+            }),
+          )
+        : route.fulfill(reply({ detail: "No hay propuesta" }, 404)),
+  );
+  // The studio's title is never replaced by the page's loading state.
+  const watchStudio = async () => {
+    await page.evaluate(() => {
+      const w = window as unknown as { studioBlanked: boolean };
+      w.studioBlanked = false;
+      const title = document.querySelector("h1");
+      new MutationObserver(() => {
+        if (title && !document.body.contains(title)) w.studioBlanked = true;
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+    return () => page.evaluate(() => (window as unknown as { studioBlanked: boolean }).studioBlanked);
+  };
+  const finish = (status: "failed" | "succeeded") => {
+    proposed = status === "succeeded";
+    ended = { ...job, status, progress: 100, error: status === "failed" ? "La IA no respondió." : null };
+  };
+  return { course, watchStudio, finish };
+}
+
+test("cuando termina una propuesta pedida en otra visita, el estudio sigue en pantalla con lo que se estaba escribiendo", async ({
+  page,
+}) => {
+  const { course, watchStudio, finish } = await courseWithRunningProposal(page);
+  await page.goto(`/admin/courses/${course.id}/studio`);
+  await expect(page.getByRole("heading", { name: "La IA está armando tu curso" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Pasos del estudio" }).getByRole("button", { name: /Brief/ }).click();
+  const brief = page.getByLabel("¿Qué deben aprender?");
+  await expect(brief).toHaveValue(/Brief guardado/);
+  await brief.fill("Texto nuevo que el admin todavía no envía a la IA.");
+  const blanked = await watchStudio();
+
+  finish("failed");
+  await page.getByRole("navigation", { name: "Pasos del estudio" }).getByRole("button", { name: /Estructura/ }).click();
+  await page.getByRole("button", { name: "Descartar" }).click(); // leaving the brief with unsent text asks first
+  await expect(page.getByRole("heading", { name: "No se pudo proponer la estructura" })).toBeVisible({ timeout: 15_000 });
+  expect(await blanked()).toBe(false);
+});
+
+test("cuando termina bien una propuesta pedida en otra visita, el foco llega a la estructura propuesta", async ({ page }) => {
+  const { course, watchStudio, finish } = await courseWithRunningProposal(page);
+  await page.goto(`/admin/courses/${course.id}/studio`);
+  await expect(page.getByRole("heading", { name: "La IA está armando tu curso" })).toBeVisible();
+  const blanked = await watchStudio();
+
+  finish("succeeded");
+  await expect(page.getByLabel("Título del curso")).toHaveValue("Atención al cliente", { timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Estructura propuesta" })).toBeFocused();
+  expect(await blanked()).toBe(false);
 });

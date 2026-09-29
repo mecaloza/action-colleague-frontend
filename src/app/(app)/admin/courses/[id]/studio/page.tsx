@@ -12,7 +12,7 @@ import { BriefStep } from "@/components/studio/brief-step";
 import { ContentStep } from "@/components/studio/content-step";
 import { OutlineStep } from "@/components/studio/outline-step";
 import { ProductionStep } from "@/components/studio/production-step";
-import { currentStep, furthestStep, isUntouched, OUTLINE_JOB, type StepId } from "@/components/studio/steps";
+import { aiModules, currentStep, furthestStep, isUntouched, OUTLINE_JOB, type StepId } from "@/components/studio/steps";
 import { StudioStepper } from "@/components/studio/studio-stepper";
 import { StyleStep } from "@/components/studio/style-step";
 import type { ProposalRequest } from "@/components/studio/use-propose-outline";
@@ -20,7 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ApiError } from "@/lib/api/client";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import { STUDIO_STALE_MS, studioApi, studioKeys } from "@/lib/api/studio";
-import { useActiveJobs } from "@/lib/hooks/use-jobs";
+import { endedBadly, useActiveJobs } from "@/lib/hooks/use-jobs";
 import { useStudioCapabilities } from "@/lib/hooks/use-studio-capabilities";
 import { useUnsavedChangesWarning } from "@/lib/hooks/use-unsaved-changes-warning";
 
@@ -87,16 +87,29 @@ export default function CourseStudioPage() {
     previousJobIds.current = jobIds;
   }, [jobIds, courseId, queryClient]);
 
-  // The step to open depends on the course, its proposal and its jobs: nothing is shown until the three are known.
-  // A proposal that can't be loaded counts as there: its step shows the error, the others work without it.
-  const loading = course.isPending || outline.isPending || jobs.isPending;
-  const ready = !loading && Boolean(course.data);
-  const hasOutline = Boolean(outline.data) || outline.isError;
-  const reached: StepId = ready ? currentStep(course.data!, hasOutline, activeJobs) : "brief";
-  const furthest: StepId = ready ? furthestStep(course.data!, hasOutline, activeJobs) : "brief";
   // The step on screen stays where the admin is: it only moves by their choice or when a step finishes
   // (e.g. the proposal was asked for), never while they are editing a script.
   const [selected, setSelected] = useState<StepId | null>(null);
+
+  // The step to open depends on the course, its proposal and its jobs: nothing is shown until the three are known.
+  // A proposal that can't be loaded counts as there: its step shows the error, the others work without it.
+  const hasOutline = Boolean(outline.data) || outline.isError;
+  // Nothing proposed yet, and nothing being proposed: did the last proposal fail? Then its step shows why.
+  const nothingProposed =
+    Boolean(course.data) && !outline.isPending && !hasOutline && !aiModules(course.data!).length &&
+    !jobs.isPending && !activeJobs.some((job) => job.type === OUTLINE_JOB);
+  const lastProposal = useQuery({
+    queryKey: studioKeys.latestJob(courseId, OUTLINE_JOB), // shared with the Structure step
+    queryFn: () => studioApi.latestJob(courseId, OUTLINE_JOB),
+    enabled: nothingProposed,
+  });
+  const proposalFailed = nothingProposed && endedBadly(lastProposal.data);
+  // Only the first choice of step waits for it: later (a proposal just ended) the studio stays on screen.
+  const loading =
+    course.isPending || outline.isPending || jobs.isPending || (selected === null && nothingProposed && lastProposal.isPending);
+  const ready = !loading && Boolean(course.data);
+  const reached: StepId = !ready ? "brief" : proposalFailed ? "outline" : currentStep(course.data!, hasOutline, activeJobs);
+  const furthest: StepId = !ready ? "brief" : proposalFailed ? "outline" : furthestStep(course.data!, hasOutline, activeJobs);
   useEffect(() => {
     if (ready && selected === null) setSelected(reached);
   }, [ready, selected, reached]);
@@ -181,7 +194,6 @@ export default function CourseStudioPage() {
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
-            ref={stepRoot}
             variants={STEP_MOTION}
             initial="hidden"
             animate="shown"
@@ -193,52 +205,54 @@ export default function CourseStudioPage() {
               stepRoot.current?.querySelector<HTMLElement>("h2")?.focus();
             }}
           >
-            {step === "brief" && (
-              <BriefStep
-                course={data}
-                aiReady={capabilities.ai}
-                locked={locked}
-                onProposed={(request) => {
-                  setAsked(request);
-                  advance("brief", "outline");
-                }}
-                onDirtyChange={setDirty}
-              />
-            )}
-            {step === "outline" && (
-              <OutlineStep
-                course={data}
-                outline={outline}
-                activeJob={outlineJob}
-                asked={asked}
-                locked={locked}
-                onProposed={setAsked}
-                onBrief={() => void goTo("brief")}
-                onApproved={() => {
-                  setAsked(null); // what failed before approving is no longer news
-                  advance("outline", "content");
-                }}
-                onDirtyChange={setDirty}
-              />
-            )}
-            {step === "content" && (
-              <ContentStep
-                course={data}
-                jobs={activeJobs}
-                dirty={dirty}
-                onDirtyChange={setDirty}
-                onContinue={() => void goTo("style")}
-              />
-            )}
-            {step === "style" && (
-              <StyleStep
-                course={data}
-                jobs={activeJobs}
-                capabilities={capabilities}
-                onProducing={() => advance("style", "production")}
-              />
-            )}
-            {step === "production" && <ProductionStep course={data} jobs={activeJobs} />}
+            <div ref={stepRoot}>
+              {step === "brief" && (
+                <BriefStep
+                  course={data}
+                  aiReady={capabilities.ai}
+                  locked={locked}
+                  onProposed={(request) => {
+                    setAsked(request);
+                    advance("brief", "outline");
+                  }}
+                  onDirtyChange={setDirty}
+                />
+              )}
+              {step === "outline" && (
+                <OutlineStep
+                  course={data}
+                  outline={outline}
+                  activeJob={outlineJob}
+                  asked={asked}
+                  locked={locked}
+                  onProposed={setAsked}
+                  onBrief={() => void goTo("brief")}
+                  onApproved={() => {
+                    setAsked(null); // what failed before approving is no longer news
+                    advance("outline", "content");
+                  }}
+                  onDirtyChange={setDirty}
+                />
+              )}
+              {step === "content" && (
+                <ContentStep
+                  course={data}
+                  jobs={activeJobs}
+                  dirty={dirty}
+                  onDirtyChange={setDirty}
+                  onContinue={() => void goTo("style")}
+                />
+              )}
+              {step === "style" && (
+                <StyleStep
+                  course={data}
+                  jobs={activeJobs}
+                  capabilities={capabilities}
+                  onProducing={() => advance("style", "production")}
+                />
+              )}
+              {step === "production" && <ProductionStep course={data} jobs={activeJobs} />}
+            </div>
           </motion.div>
         </AnimatePresence>
       </div>

@@ -21,6 +21,8 @@ export interface CourseSettings {
   /** What the admin asked the AI studio for (kept to resume and to regenerate). */
   brief: string;
   minutes: number;
+  /** Modules the admin asked for; null lets the AI choose. */
+  modules?: number | null;
   voice_id: string;
   voice_name: string;
   avatar_id: string;

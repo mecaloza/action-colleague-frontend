@@ -181,7 +181,7 @@ function EvaluationForm({ module, courseId, evaluation, onDirtyChange }: Evaluat
         ) : (
           <p className="text-sm text-muted-foreground">Máximo {MAX_QUESTIONS} preguntas por evaluación.</p>
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {evaluation && (
             <Button
               variant="ghost"

@@ -31,7 +31,7 @@ export function initialBrief(language: Language = "es", settings?: Partial<Cours
     audience: settings?.audience ?? "",
     tone: settings?.tone || TONES[0],
     minutes: settings?.minutes || 20,
-    modules: null,
+    modules: settings?.modules ?? null,
     language,
   };
 }
