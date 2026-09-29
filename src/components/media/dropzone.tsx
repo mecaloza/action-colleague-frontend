@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { UploadCloud } from "lucide-react";
 import { toast } from "sonner";
-import { MB, type UploadRule } from "@/lib/api/media";
+import { MB, mimeTypeOf, type UploadRule } from "@/lib/api/media";
 import { cn } from "@/lib/utils";
 
 interface DropzoneProps {
@@ -18,17 +18,19 @@ interface DropzoneProps {
 
 function matchesAccept(file: File, accept: string): boolean {
   const name = file.name.toLowerCase();
+  const type = mimeTypeOf(file); // the same type the upload will declare (some systems leave `file.type` empty)
   return accept.split(",").some((entry) => {
     const pattern = entry.trim().toLowerCase();
     if (pattern.startsWith(".")) return name.endsWith(pattern);
-    if (pattern.endsWith("/*")) return file.type.startsWith(pattern.slice(0, -1));
-    return file.type === pattern;
+    if (pattern.endsWith("/*")) return type.startsWith(pattern.slice(0, -1));
+    return type === pattern;
   });
 }
 
 /** Why the file cannot be uploaded, or null when it can. */
 function rejectionOf(file: File, rule: UploadRule): string | null {
   if (!matchesAccept(file, rule.accept)) return "Este tipo de archivo no se admite aquí.";
+  if (file.size === 0) return "El archivo está vacío.";
   if (file.size > rule.maxBytes) return `El archivo supera el máximo de ${Math.round(rule.maxBytes / MB)} MB.`;
   return null;
 }
@@ -50,7 +52,10 @@ export function Dropzone({ rule, label, hint = rule.hint, onFile, className }: D
         event.preventDefault();
         setDragging(true);
       }}
-      onDragLeave={() => setDragging(false)}
+      onDragLeave={(event) => {
+        // Moving over the icon or the text also fires dragleave: only leaving the area counts.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+      }}
       onDrop={(event) => {
         event.preventDefault();
         setDragging(false);
@@ -58,6 +63,8 @@ export function Dropzone({ rule, label, hint = rule.hint, onFile, className }: D
       }}
       className={cn(
         "flex cursor-pointer flex-col items-center justify-center gap-3 border border-dashed px-6 py-10 text-center transition-colors",
+        // The input is visually hidden: the area shows its keyboard focus.
+        "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
         dragging ? "border-accent bg-accent-soft" : "border-input bg-mist/50 hover:border-ink-800",
         className,
       )}

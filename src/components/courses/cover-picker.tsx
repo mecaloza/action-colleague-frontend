@@ -8,6 +8,7 @@ import { UploadProgress } from "@/components/media/upload-progress";
 import { UPLOAD_RULES } from "@/lib/api/media";
 import type { CourseDetail } from "@/lib/api/types";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
+import { useStableUrl } from "@/lib/hooks/use-stable-url";
 import { useUpload } from "@/lib/hooks/use-upload";
 import { CoverArt } from "./course-card";
 
@@ -16,6 +17,8 @@ export function CoverPicker({ course }: { course: CourseDetail }) {
   const { refreshLibrary } = useCourseCache();
   const { state, busy, upload, cancel, reset } = useUpload();
   const [pendingAssetId, setPendingAssetId] = useState<string | null>(null);
+  // Re-signed on every refetch (the editor polls while modules process): keep the image loaded.
+  const cover = useStableUrl(course.cover_url);
 
   const uploadCover = async (file: File) => {
     const asset = await upload(file, { kind: "image", courseId: course.id, purpose: "course_cover" });
@@ -25,9 +28,9 @@ export function CoverPicker({ course }: { course: CourseDetail }) {
   return (
     <div className="grid gap-4 sm:grid-cols-[240px_1fr]">
       <div className="aspect-[16/9] overflow-hidden border border-border">
-        {course.cover_url ? (
+        {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={course.cover_url} alt="Portada actual" className="h-full w-full object-cover" />
+          <img src={cover} alt="Portada actual" className="h-full w-full object-cover" />
         ) : (
           <CoverArt title={course.title} seed={course.id} />
         )}

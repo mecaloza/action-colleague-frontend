@@ -23,12 +23,15 @@ interface ModuleFormProps {
   startRecording: boolean;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
+  onUploadingChange: (uploading: boolean) => void;
 }
 
-function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange }: ModuleFormProps) {
+function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange, onUploadingChange }: ModuleFormProps) {
   const confirm = useConfirm();
   const { refreshCourse } = useCourseCache();
-  const [initial] = useState(module); // the values this form started from
+  const [initial, setInitial] = useState(module); // the values this form started from (or last saved)
+  const [uploading, setUploading] = useState(false);
+  useEffect(() => onUploadingChange(uploading), [uploading, onUploadingChange]);
   const [title, setTitle] = useState(module.title);
   const [description, setDescription] = useState(module.description);
   const [content, setContent] = useState(module.content_text);
@@ -49,7 +52,16 @@ function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange }
 
   const save = useMutation({
     mutationFn: () => coursesApi.updateModule(module.id, changes),
-    onSuccess: () => finish("Módulo guardado"),
+    onSuccess: (saved) => {
+      if (!uploading) return finish("Módulo guardado");
+      // A file is still uploading in this panel: closing it would cancel the upload, so stay.
+      toast.success("Módulo guardado");
+      refreshCourse(courseId);
+      setInitial(saved);
+      setTitle(saved.title);
+      setDescription(saved.description);
+      setContent(saved.content_text);
+    },
     onError: toastError,
   });
 
@@ -87,7 +99,7 @@ function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange }
         {module.source === "ai" ? (
           <ModuleVideo module={module} />
         ) : (
-          <ModuleMedia module={module} startRecording={startRecording} />
+          <ModuleMedia module={module} startRecording={startRecording} onUploadingChange={setUploading} />
         )}
         <div>
           <Label htmlFor="module-title">Título</Label>
@@ -143,9 +155,23 @@ export function ModuleSheet({
   const setDirty = useRef((value: boolean) => {
     dirty.current = value;
   }).current;
+  const uploading = useRef(false);
+  const setUploading = useRef((value: boolean) => {
+    uploading.current = value;
+  }).current;
 
-  // Escape, the overlay or the close button: ask before dropping unsaved edits.
+  // Escape, the overlay or the close button: ask before cancelling an upload or dropping unsaved edits.
   const requestClose = async () => {
+    if (
+      uploading.current &&
+      !(await confirm({
+        title: "¿Cerrar y cancelar la subida?",
+        description: "El archivo todavía se está subiendo; si cierras el panel ahora, la subida se cancela.",
+        confirmLabel: "Cerrar de todos modos",
+        destructive: true,
+      }))
+    )
+      return;
     if (
       dirty.current &&
       !(await confirm({ title: "¿Descartar los cambios sin guardar?", confirmLabel: "Descartar", destructive: true }))
@@ -170,6 +196,7 @@ export function ModuleSheet({
               onClose();
             }}
             onDirtyChange={setDirty}
+            onUploadingChange={setUploading}
           />
         )}
       </SheetContent>

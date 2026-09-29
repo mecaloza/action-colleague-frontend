@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileText, Loader2, RefreshCw, Trash2, Video, type LucideIcon } from "lucide-react";
@@ -18,6 +18,7 @@ import { formatDuration } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { useUpload } from "@/lib/hooks/use-upload";
 import { toastError } from "@/lib/notify";
+import { safeHttpUrl } from "@/lib/safe-url";
 import { ModuleVideo } from "./module-video";
 
 const PROCESSING = new Set(["queued", "generating"]);
@@ -55,11 +56,18 @@ function ProcessingStatus({ moduleId }: { moduleId: number }) {
   );
 }
 
+interface SectionProps {
+  module: ModuleAdmin;
+  /** Whether an upload is running here (closing the panel would cancel it). */
+  onBusyChange: (busy: boolean) => void;
+}
+
 /** The module's video: play it, replace or remove it, or upload or record one. */
-function VideoSection({ module, startRecording }: { module: ModuleAdmin; startRecording: boolean }) {
+function VideoSection({ module, startRecording, onBusyChange }: SectionProps & { startRecording: boolean }) {
   const { refreshCourse } = useCourseCache();
   const confirm = useConfirm();
   const { state, busy, upload, cancel, reset } = useUpload();
+  useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
   const [recording, setRecording] = useState(startRecording);
   const [replacing, setReplacing] = useState(false);
 
@@ -153,9 +161,11 @@ function VideoSection({ module, startRecording }: { module: ModuleAdmin; startRe
 }
 
 /** The module's attached document (PDF, Word, PowerPoint or text). */
-function DocumentSection({ module }: { module: ModuleAdmin }) {
+function DocumentSection({ module, onBusyChange }: SectionProps) {
   const { refreshCourse } = useCourseCache();
+  const confirm = useConfirm();
   const { state, busy, upload, cancel, reset } = useUpload();
+  useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
   const [pendingAssetId, setPendingAssetId] = useState<string | null>(null);
 
   const uploadDocument = async (file: File) => {
@@ -171,6 +181,17 @@ function DocumentSection({ module }: { module: ModuleAdmin }) {
     },
     onError: toastError,
   });
+
+  const confirmRemove = async () => {
+    const confirmed = await confirm({
+      title: "¿Quitar el documento del módulo?",
+      description: "El archivo se borrará.",
+      confirmLabel: "Quitar documento",
+      destructive: true,
+    });
+    if (confirmed) remove.mutate();
+  };
+  const documentUrl = safeHttpUrl(module.document?.url);
 
   return (
     <section>
@@ -188,10 +209,12 @@ function DocumentSection({ module }: { module: ModuleAdmin }) {
       ) : module.document ? (
         <div className="flex flex-wrap items-center gap-2 border border-border bg-white p-4">
           <FileText className="h-5 w-5 text-accent" />
-          <a href={module.document.url} target="_blank" rel="noreferrer" className="mr-auto text-sm font-semibold hover:text-accent">
-            Ver documento
-          </a>
-          <RemoveButton loading={remove.isPending} onClick={() => remove.mutate()} />
+          {documentUrl && (
+            <a href={documentUrl} target="_blank" rel="noreferrer" className="mr-auto text-sm font-semibold hover:text-accent">
+              Ver documento
+            </a>
+          )}
+          <RemoveButton loading={remove.isPending} onClick={confirmRemove} />
         </div>
       ) : (
         !busy && <Dropzone rule={UPLOAD_RULES.document} label="Adjunta un documento para leer o descargar" onFile={uploadDocument} />
@@ -207,14 +230,20 @@ interface ModuleMediaProps {
   module: ModuleAdmin;
   /** Open the recording studio right away (the module was just created to record it). */
   startRecording?: boolean;
+  /** Whether a video or document upload is running (closing the panel would cancel it). */
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
 /** Video and document of a module: upload, record, replace or remove. */
-export function ModuleMedia({ module, startRecording = false }: ModuleMediaProps) {
+export function ModuleMedia({ module, startRecording = false, onUploadingChange }: ModuleMediaProps) {
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [documentBusy, setDocumentBusy] = useState(false);
+  const uploading = videoBusy || documentBusy;
+  useEffect(() => onUploadingChange?.(uploading), [uploading, onUploadingChange]);
   return (
     <div className="space-y-8">
-      <VideoSection module={module} startRecording={startRecording} />
-      <DocumentSection module={module} />
+      <VideoSection module={module} startRecording={startRecording} onBusyChange={setVideoBusy} />
+      <DocumentSection module={module} onBusyChange={setDocumentBusy} />
     </div>
   );
 }

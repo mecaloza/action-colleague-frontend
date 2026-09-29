@@ -13,6 +13,10 @@ interface RecordingStudioProps {
   slides: string[];
   maxSeconds?: number;
   onFinish: (recording: Recording) => void;
+  /** The take is being uploaded: it can be neither discarded nor sent again. */
+  locked?: boolean;
+  /** Whether closing now would lose something (a countdown, a recording in progress or a take not sent yet). */
+  onTakeChange?: (hasTake: boolean) => void;
 }
 
 function LevelMeter({ level }: { level: number }) {
@@ -33,7 +37,7 @@ function LevelMeter({ level }: { level: number }) {
  * Teleprompter-style studio: your slides big, your camera small, keyboard arrows to change slide.
  * Every slide change is timestamped so the server can rebuild the exact presentation.
  */
-export function RecordingStudio({ slides, maxSeconds = 1800, onFinish }: RecordingStudioProps) {
+export function RecordingStudio({ slides, maxSeconds = 1800, onFinish, locked = false, onTakeChange }: RecordingStudioProps) {
   const video = useRef<HTMLVideoElement>(null);
   const { status, error, elapsed, level, countdown, recording, openCamera, start, pause, resume, stop, markSlide, discard } =
     useRecorder();
@@ -67,6 +71,17 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish }: Recordi
   });
 
   const live = status === "recording" || status === "paused";
+  const hasTake = status === "countdown" || live || recording !== null;
+  useEffect(() => onTakeChange?.(hasTake), [hasTake, onTakeChange]);
+
+  // The finished take, to watch it before using it (the camera preview has no sound).
+  const [takeUrl, setTakeUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!recording || status !== "stopped") return setTakeUrl(null);
+    const url = URL.createObjectURL(recording.blob);
+    setTakeUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [recording, status]);
 
   return (
     <div className="overflow-hidden border border-ink-800 bg-ink-950 text-white">
@@ -86,6 +101,15 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish }: Recordi
               : "h-full w-full object-contain",
           )}
         />
+        {takeUrl && (
+          <video
+            src={takeUrl}
+            controls
+            playsInline
+            aria-label="Tu grabación"
+            className="absolute inset-0 h-full w-full bg-black object-contain"
+          />
+        )}
         {status === "countdown" && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60">
             <span className="font-display text-[10rem] font-semibold leading-none text-white">{countdown}</span>
@@ -98,7 +122,7 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish }: Recordi
           </span>
         )}
         {status === "error" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 p-8 text-center">
+          <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 p-8 text-center">
             <p className="max-w-md text-white/80">{error}</p>
             <Button variant="inverse" onClick={() => openCamera(video.current)}>Reintentar</Button>
           </div>
@@ -118,7 +142,8 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish }: Recordi
           </div>
         )}
         <LevelMeter level={level} />
-        <div className="ml-auto flex items-center gap-2">
+        {/* Wraps on phones: "Usar esta grabación" must not be cut off at 375 px. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {(status === "ready" || status === "idle") && !recording && (
             <Button variant="accent" onClick={start} disabled={status !== "ready"}>
               <Circle className="fill-current" /> Grabar
@@ -135,8 +160,8 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish }: Recordi
           )}
           {recording && status === "stopped" && (
             <>
-              <Button variant="outline-inverse" onClick={discard}><RotateCcw /> Repetir</Button>
-              <Button variant="accent" onClick={() => onFinish(recording)}><Upload /> Usar esta grabación</Button>
+              <Button variant="outline-inverse" onClick={discard} disabled={locked}><RotateCcw /> Repetir</Button>
+              <Button variant="accent" onClick={() => onFinish(recording)} loading={locked}><Upload /> Usar esta grabación</Button>
             </>
           )}
         </div>

@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/layout/confirm-dialog";
 import { UploadProgress } from "@/components/media/upload-progress";
 import { useUpload } from "@/lib/hooks/use-upload";
 import { RecordingStudio } from "./recording-studio";
@@ -20,6 +22,28 @@ interface RecordingDialogProps {
 /** Full-screen studio: record with the camera, review, and upload as the module's video. */
 export function RecordingDialog({ open, onOpenChange, courseId, moduleId, moduleTitle, onUploaded }: RecordingDialogProps) {
   const { state, busy, upload, cancel, reset } = useUpload();
+  const confirm = useConfirm();
+  const hasTake = useRef(false);
+  const setHasTake = useRef((value: boolean) => {
+    hasTake.current = value;
+  }).current;
+
+  // The close button or Escape: never mid-upload, and a take not used yet is only dropped on purpose.
+  const requestClose = async () => {
+    if (busy) return; // closing mid-upload would lose the recording
+    if (
+      hasTake.current &&
+      !(await confirm({
+        title: "¿Descartar la grabación?",
+        description: "Todavía no la usas en el módulo; si cierras el estudio, se pierde.",
+        confirmLabel: "Descartar",
+        destructive: true,
+      }))
+    )
+      return;
+    reset();
+    onOpenChange(false);
+  };
 
   const handleFinish = async (recording: Recording) => {
     const asset = await upload(recording.blob, {
@@ -39,11 +63,7 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
   return (
     <DialogPrimitive.Root
       open={open}
-      onOpenChange={(next) => {
-        if (busy) return; // closing mid-upload would lose the recording
-        if (!next) reset();
-        onOpenChange(next);
-      }}
+      onOpenChange={(next) => (next ? onOpenChange(true) : void requestClose())}
     >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-950/90" />
@@ -65,7 +85,7 @@ export function RecordingDialog({ open, onOpenChange, courseId, moduleId, module
             </DialogPrimitive.Close>
           </div>
           <div className="container flex-1 space-y-4 pb-10">
-            {open && <RecordingStudio slides={[]} onFinish={handleFinish} />}
+            {open && <RecordingStudio slides={[]} onFinish={handleFinish} locked={busy} onTakeChange={setHasTake} />}
             <div className="text-ink-900">
               <UploadProgress state={state} onCancel={cancel} />
             </div>
