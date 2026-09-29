@@ -82,6 +82,7 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
   const videoCount = modules.filter((module) => module.scene_count > 0).length;
   // The API refuses to produce a module while its script is being written.
   const drafting = modules.some((module) => moduleActivity(module, jobs) === "drafting");
+  const rendering = modules.some((module) => moduleActivity(module, jobs) === "rendering");
   const sample = modules[0];
 
   const produce = useMutation({
@@ -200,13 +201,15 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
             className="mt-5 w-full"
             onClick={start}
             loading={produce.isPending}
-            disabled={!voice || (presenter && !avatar) || drafting || !videoCount}
+            disabled={!voice || (presenter && !avatar) || drafting || rendering || !videoCount}
           >
             <Clapperboard /> Producir {plural(videoCount, "video")}
           </Button>
           <p className="mt-3 text-xs text-muted-foreground">
             {drafting
               ? "La IA está escribiendo algún guion: podrás producir los videos cuando termine."
+              : rendering
+                ? "Hay videos produciéndose: podrás producir de nuevo cuando terminen."
               : videoCount
                 ? "Cada video tarda unos minutos. Puedes cerrar esta página."
                 : "Ningún módulo tiene guion todavía: escríbelos en el paso Contenido."}

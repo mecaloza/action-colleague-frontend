@@ -131,8 +131,8 @@ test("un video fallido o un módulo sin guion no dejan el estudio sin salida", a
 
   // What failed was the video: the script stays reviewable and nothing offers to write it again.
   const scriptedRow = page.getByRole("listitem").filter({ hasText: "Guion listo" });
-  await expect(scriptedRow).toContainText("La última operación falló: El servicio de voz no respondió.");
-  await expect(scriptedRow.getByRole("button", { name: "Reintentar" })).toHaveCount(0);
+  await expect(scriptedRow).toContainText("La última operación falló. El servicio de voz no respondió.");
+  await expect(scriptedRow.getByRole("button", { name: "Reintentar", exact: true })).toHaveCount(0);
 
   // A module without a script isn't "being written": it waits for the admin, who is asked before replacing its reading.
   const legacyRow = page.getByRole("listitem").filter({ hasText: "Video anterior" });

@@ -375,7 +375,7 @@ function OutlineEditor({
         Estructura propuesta
       </h2>
       <div className="grid gap-10 lg:grid-cols-[1fr_320px]">
-        <fieldset disabled={locked} className="min-w-0 space-y-8">
+        <fieldset disabled={locked || Boolean(status)} className="min-w-0 space-y-8">
           <OutlineDetails outline={draft} onChange={update} />
 
           <ol className="space-y-4" aria-label="Módulos propuestos">
@@ -428,7 +428,7 @@ function OutlineEditor({
             ) : (
               incomplete && <p className="mt-3 text-xs text-warning">El curso y cada módulo necesitan un título.</p>
             )}
-            {dirty && (
+            {dirty && !status && (
               <Button
                 variant="ghost"
                 size="sm"

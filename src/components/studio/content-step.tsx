@@ -45,7 +45,7 @@ function ModuleState({ module, activity, job }: { module: ModuleAdmin; activity:
         <JobFailure
           message={
             module.generation_error
-              ? `La última operación falló: ${module.generation_error}`
+              ? `La última operación falló. ${module.generation_error}`
               : "La última operación falló."
           }
         />

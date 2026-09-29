@@ -72,4 +72,19 @@ export function currentStep(course: CourseDetail, hasOutline: boolean, jobs: Job
   return "style";
 }
 
+/**
+ * The furthest step worth visiting: any produced (or failed) video opens Production to it, any script
+ * the Style step, even while another module still waits for its script (`currentStep` opens there).
+ */
+export function furthestStep(course: CourseDetail, hasOutline: boolean, jobs: Job[]): StepId {
+  const modules = aiModules(course);
+  if (!modules.length) return currentStep(course, hasOutline, jobs);
+  const inProduction = (module: ModuleAdmin) =>
+    Boolean(module.video) ||
+    moduleActivity(module, jobs) === "rendering" ||
+    (module.generation_status === "failed" && module.scene_count > 0);
+  if (modules.some(inProduction)) return "production";
+  return modules.some((module) => module.scene_count > 0) ? "style" : "content";
+}
+
 export const stepIndex = (id: StepId) => STEPS.findIndex((step) => step.id === id);

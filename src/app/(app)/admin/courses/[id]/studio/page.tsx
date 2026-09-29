@@ -12,7 +12,7 @@ import { BriefStep } from "@/components/studio/brief-step";
 import { ContentStep } from "@/components/studio/content-step";
 import { OutlineStep } from "@/components/studio/outline-step";
 import { ProductionStep } from "@/components/studio/production-step";
-import { currentStep, isUntouched, OUTLINE_JOB, type StepId } from "@/components/studio/steps";
+import { currentStep, furthestStep, isUntouched, OUTLINE_JOB, type StepId } from "@/components/studio/steps";
 import { StudioStepper } from "@/components/studio/studio-stepper";
 import { StyleStep } from "@/components/studio/style-step";
 import type { ProposalRequest } from "@/components/studio/use-propose-outline";
@@ -93,6 +93,7 @@ export default function CourseStudioPage() {
   const ready = !loading && Boolean(course.data);
   const hasOutline = Boolean(outline.data) || outline.isError;
   const reached: StepId = ready ? currentStep(course.data!, hasOutline, activeJobs) : "brief";
+  const furthest: StepId = ready ? furthestStep(course.data!, hasOutline, activeJobs) : "brief";
   // The step on screen stays where the admin is: it only moves by their choice or when a step finishes
   // (e.g. the proposal was asked for), never while they are editing a script.
   const [selected, setSelected] = useState<StepId | null>(null);
@@ -161,7 +162,7 @@ export default function CourseStudioPage() {
             <p className="eyebrow mb-3 mt-6 text-white/60">Estudio IA</p>
             <h1 className="display-lg text-balance text-white">{data.title}</h1>
           </div>
-          <StudioStepper current={step} reached={reached} onSelect={(next) => void goTo(next, false)} />
+          <StudioStepper current={step} reached={furthest} onSelect={(next) => void goTo(next, false)} />
         </div>
       </section>
 

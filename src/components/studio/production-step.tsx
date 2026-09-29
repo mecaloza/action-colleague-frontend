@@ -73,7 +73,7 @@ function VideoState({ module, activity, job }: VideoStateProps) {
     const fallback = activity === "rendering" ? "En cola para producir" : "En cola para escribir el guion";
     return <JobStatus job={job} fallback={fallback} className="max-w-sm" />;
   }
-  if (module.generation_status === "failed") {
+  if (module.generation_status === "failed" && !module.video) {
     return <JobFailure message={module.generation_error || "No se pudo producir el video."} />;
   }
   if (!module.video) {
@@ -86,6 +86,12 @@ function VideoState({ module, activity, job }: VideoStateProps) {
   return (
     <>
       <p className="text-sm text-muted-foreground">Video de {formatDuration(module.duration_seconds)}</p>
+      {module.generation_status === "failed" && (
+        <p className="text-sm text-muted-foreground">
+          La última operación falló{module.generation_error ? `. ${module.generation_error}` : "."} El video anterior sigue
+          publicado.
+        </p>
+      )}
       {module.video_warning && (
         <p className="flex items-start gap-2 text-sm text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

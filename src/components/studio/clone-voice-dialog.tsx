@@ -27,9 +27,9 @@ const AUDIO_TYPES: Record<string, string> = {
   webm: "audio/webm",
 };
 
-/** Some systems give no type to an audio file: the API only takes audio, so it's named from the extension. */
+/** Some systems give no type (or a generic one) to an audio file: the API only takes audio, so it's named from the extension. */
 function withAudioType(file: File): File {
-  if (file.type) return file;
+  if (file.type.startsWith("audio/") || file.type === "video/webm" || file.type === "video/mp4") return file;
   const type = AUDIO_TYPES[file.name.split(".").pop()?.toLowerCase() ?? ""];
   return type ? new File([file], file.name, { type }) : file;
 }
