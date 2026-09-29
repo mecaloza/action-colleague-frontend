@@ -87,6 +87,53 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
+  /* Long-form reading (module texts written in Markdown). */
+  .reading {
+    @apply max-w-[68ch] text-[17px] leading-[1.7] text-ink-800;
+  }
+  .reading > * + * {
+    @apply mt-5;
+  }
+  .reading > :first-child {
+    @apply mt-0;
+  }
+  .reading h1,
+  .reading h2 {
+    @apply mt-10 font-display text-2xl font-medium leading-tight tracking-tightest text-ink-950 sm:text-3xl;
+  }
+  .reading h3,
+  .reading h4 {
+    @apply mt-8 font-display text-xl font-semibold tracking-tightest text-ink-950;
+  }
+  .reading strong {
+    @apply font-semibold text-ink-950;
+  }
+  .reading a {
+    @apply font-semibold text-accent underline underline-offset-4;
+  }
+  .reading ul {
+    @apply space-y-2;
+  }
+  .reading ul > li {
+    @apply relative pl-6;
+  }
+  .reading ul > li::before {
+    content: "";
+    @apply absolute left-0 top-[0.72em] h-2 w-2 rotate-45 bg-accent;
+  }
+  .reading ol {
+    @apply list-decimal space-y-2 pl-6 marker:font-semibold marker:text-accent;
+  }
+  .reading blockquote {
+    @apply border-l-2 border-accent bg-accent-soft/60 px-5 py-3 font-display text-xl tracking-tightest text-ink-950;
+  }
+  .reading code {
+    @apply rounded-sm bg-mist px-1.5 py-0.5 text-[0.9em];
+  }
+  .reading hr {
+    @apply my-10 border-border;
+  }
+
   .skeleton {
     @apply animate-shimmer rounded-sm bg-[length:200%_100%];
     background-image: linear-gradient(90deg, #f1f1f1 25%, #e6e6e6 50%, #f1f1f1 75%);
