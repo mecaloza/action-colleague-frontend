@@ -14,16 +14,18 @@ import { coursesApi } from "@/lib/api/courses";
 import type { ModuleAdmin } from "@/lib/api/types";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { toastError } from "@/lib/notify";
+import { ModuleMedia } from "./module-media";
 import { ModuleVideo } from "./module-video";
 
 interface ModuleFormProps {
   module: ModuleAdmin;
   courseId: number;
+  startRecording: boolean;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
 }
 
-function ModuleForm({ module, courseId, onClose, onDirtyChange }: ModuleFormProps) {
+function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange }: ModuleFormProps) {
   const confirm = useConfirm();
   const { refreshCourse } = useCourseCache();
   const [initial] = useState(module); // the values this form started from
@@ -75,13 +77,18 @@ function ModuleForm({ module, courseId, onClose, onDirtyChange }: ModuleFormProp
         <SheetDescription className="sr-only">Editar el módulo</SheetDescription>
       </SheetHeader>
       <SheetBody className="space-y-6">
-        {module.generation_status === "failed" && (
+        {module.generation_status === "failed" && module.source === "ai" && (
           <p role="alert" className="flex items-start gap-2 border-l-2 border-destructive bg-red-50 px-3 py-2.5 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             {module.generation_error || "La generación falló. Vuelve a intentarlo."}
           </p>
         )}
-        <ModuleVideo module={module} />
+        {/* AI videos are produced by the studio; every other module manages its own media here. */}
+        {module.source === "ai" ? (
+          <ModuleVideo module={module} />
+        ) : (
+          <ModuleMedia module={module} startRecording={startRecording} />
+        )}
         <div>
           <Label htmlFor="module-title">Título</Label>
           <Input id="module-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={300} />
@@ -122,10 +129,13 @@ function ModuleForm({ module, courseId, onClose, onDirtyChange }: ModuleFormProp
 export function ModuleSheet({
   module,
   courseId,
+  startRecording = false,
   onClose,
 }: {
   module: ModuleAdmin | null;
   courseId: number;
+  /** Open the recording studio as soon as the sheet opens ("Grabarme"). */
+  startRecording?: boolean;
   onClose: () => void;
 }) {
   const confirm = useConfirm();
@@ -154,6 +164,7 @@ export function ModuleSheet({
             key={module.id}
             module={module}
             courseId={courseId}
+            startRecording={startRecording}
             onClose={() => {
               dirty.current = false;
               onClose();

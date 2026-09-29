@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 
 const CONTENT_KINDS: { value: ModuleSource; label: string; description: string; icon: LucideIcon }[] = [
   { value: "text", label: "Lectura", description: "Texto con formato; ideal para políticas o guías.", icon: FileText },
-  { value: "upload", label: "Video propio", description: "Sube un video que ya tienes.", icon: Film },
+  { value: "upload", label: "Video o documento", description: "Sube un video o un PDF que ya tienes.", icon: Film },
   { value: "recording", label: "Grabarme", description: "Graba tu cámara con tus diapositivas.", icon: Video },
 ];
 
@@ -28,7 +28,7 @@ export function NewModuleDialog({
   courseId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: (moduleId: number) => void;
+  onCreated: (moduleId: number, source: ModuleSource) => void;
 }) {
   const { refreshCourse } = useCourseCache();
   const [title, setTitle] = useState("");
@@ -40,7 +40,7 @@ export function NewModuleDialog({
       refreshCourse(courseId);
       setTitle("");
       onOpenChange(false);
-      onCreated(module.id);
+      onCreated(module.id, kind);
     },
     onError: toastError,
   });

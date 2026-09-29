@@ -30,8 +30,10 @@ const SOURCE_META: Record<ModuleSource, { label: string; icon: LucideIcon }> = {
 };
 
 function GenerationBadge({ module }: { module: ModuleAdmin }) {
+  // Uploads and recordings are "processed"; AI modules are "generated".
+  const busyLabel = module.source === "ai" ? "Generando" : "Procesando";
   if (module.generation_status === "queued") return <Badge variant="secondary" pulse>En cola</Badge>;
-  if (module.generation_status === "generating") return <Badge variant="accent" pulse>Generando</Badge>;
+  if (module.generation_status === "generating") return <Badge variant="accent" pulse>{busyLabel}</Badge>;
   if (module.generation_status === "failed")
     return (
       <Tooltip>
@@ -41,7 +43,10 @@ function GenerationBadge({ module }: { module: ModuleAdmin }) {
             <AlertTriangle className="h-3 w-3" /> Error
           </Badge>
         </TooltipTrigger>
-        <TooltipContent>{module.generation_error || "La generación falló. Vuelve a intentarlo."}</TooltipContent>
+        <TooltipContent>
+          {module.generation_error ||
+            (module.source === "ai" ? "La generación falló. Vuelve a intentarlo." : "El procesamiento falló. Vuelve a intentarlo.")}
+        </TooltipContent>
       </Tooltip>
     );
   if (!module.video && !module.document && !module.content_text.trim())

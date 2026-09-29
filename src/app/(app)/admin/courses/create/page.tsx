@@ -32,7 +32,6 @@ import {
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CourseCreationManual } from "@/components/course-creation-manual";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -94,9 +93,9 @@ interface VoiceOption {
   provider: string;
 }
 
+/** The AI course wizard. Choosing between AI and your own material happens at /admin/courses/new. */
 function CreateCoursePage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"ai" | "manual" | null>(null);
   const [step, setStep] = useState(0);
 
   // Step 1: Materials
@@ -365,74 +364,20 @@ function CreateCoursePage() {
       <div>
         <h1 className="text-3xl font-bold">Crear Curso</h1>
         <p className="text-muted-foreground">
-          Elige cómo crear tu curso: con IA automática o grabación manual
+          Crea el curso con IA a partir de tus documentos
         </p>
       </div>
 
-      {/* ─── MODE SELECTION ─────────────────────────────────────── */}
-      {mode === null && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card
-            className="cursor-pointer hover:border-violet-500/40 hover:bg-violet-500/5 transition-all"
-            onClick={() => setMode("ai")}
-          >
-            <CardContent className="p-8 text-center space-y-3">
-              <Bot className="h-12 w-12 mx-auto text-violet-400" />
-              <h3 className="text-xl font-bold">Crear con IA ✨</h3>
-              <p className="text-sm text-muted-foreground">
-                HeyGen genera el video automáticamente con avatar y voz
-              </p>
-            </CardContent>
-          </Card>
+      <Button
+        variant="ghost"
+        onClick={() => router.push("/admin/courses/new")}
+        className="mb-4"
+      >
+        <ChevronLeft className="mr-2 h-4 w-4" />
+        Volver
+      </Button>
 
-          <Card
-            className="cursor-pointer hover:border-blue-500/40 hover:bg-blue-500/5 transition-all"
-            onClick={() => setMode("manual")}
-          >
-            <CardContent className="p-8 text-center space-y-3">
-              <Video className="h-12 w-12 mx-auto text-blue-400" />
-              <h3 className="text-xl font-bold">Grabar Manual 🎥</h3>
-              <p className="text-sm text-muted-foreground">
-                Grábate tú mismo con presentación de slides
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* ─── MANUAL MODE ────────────────────────────────────────── */}
-      {mode === "manual" && (
-        <div className="space-y-4">
-          <Button
-            variant="ghost"
-            onClick={() => setMode(null)}
-            className="mb-4"
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver a selección de modo
-          </Button>
-          <CourseCreationManual
-            onComplete={(courseId) => {
-              router.push(`/admin/courses/${courseId}`);
-            }}
-          />
-        </div>
-      )}
-
-      {/* ─── AI MODE (existing wizard) ──────────────────────────── */}
-      {mode === "ai" && (
-        <>
-          <Button
-            variant="ghost"
-            onClick={() => setMode(null)}
-            className="mb-4"
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver a selección de modo
-          </Button>
-
-      {/* Step indicator (AI mode only) */}
-      {mode === "ai" && (
+      {/* Step indicator */}
       <div className="flex items-center gap-1 overflow-x-auto pb-2">
         {STEPS.map((s, i) => {
           const Icon = s.icon;
@@ -466,10 +411,9 @@ function CreateCoursePage() {
           );
         })}
       </div>
-      )}
 
       {/* ─── STEP 0: Materials ──────────────────────────────────── */}
-      {mode === "ai" && step === 0 && (
+      {step === 0 && (
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -583,7 +527,7 @@ function CreateCoursePage() {
       )}
 
       {/* ─── STEP 1: Breakdown ─────────────────────────────────── */}
-      {mode === "ai" && step === 1 && breakdown && (
+      {step === 1 && breakdown && (
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -795,7 +739,7 @@ function CreateCoursePage() {
       )}
 
       {/* ─── STEP 2: Scripts ───────────────────────────────────── */}
-      {mode === "ai" && step === 2 && (
+      {step === 2 && (
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -941,7 +885,7 @@ function CreateCoursePage() {
       )}
 
       {/* ─── STEP 3: Avatar + Voice ───────────────────────────── */}
-      {mode === "ai" && step === 3 && (
+      {step === 3 && (
         <div className="space-y-6">
           {/* Avatar Selection */}
           <Card>
@@ -1116,7 +1060,7 @@ function CreateCoursePage() {
       )}
 
       {/* ─── STEP 4: Generate ──────────────────────────────────── */}
-      {mode === "ai" && step === 4 && (
+      {step === 4 && (
         <div className="space-y-6">
           {!result ? (
             <>
@@ -1254,8 +1198,6 @@ function CreateCoursePage() {
             </Card>
           )}
         </div>
-      )}
-      </>
       )}
     </div>
   );

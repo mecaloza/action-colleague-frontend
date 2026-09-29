@@ -30,7 +30,8 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
   const queryClient = useQueryClient();
   const { refreshCourse } = useCourseCache();
   const [modules, setModules] = useState(course.modules);
-  const [openId, setOpenId] = useState<number | null>(null);
+  // The module open in the sheet; `startRecording` opens its recording studio at once ("Grabarme").
+  const [opened, setOpened] = useState<{ id: number; startRecording: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
 
   const sensors = useSensors(
@@ -60,7 +61,7 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
     reorder.mutate(next.map((m) => m.id));
   };
 
-  const openModule = modules.find((m) => m.id === openId) ?? null;
+  const openModule = modules.find((m) => m.id === opened?.id) ?? null;
 
   // dnd-kit speaks English by default ("Picked up draggable item 12").
   const titleOf = (id: UniqueIdentifier) => `«${modules.find((m) => m.id === id)?.title ?? "Módulo"}»`;
@@ -112,15 +113,25 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
           <SortableContext items={modules.map((m) => m.id)} strategy={verticalListSortingStrategy}>
             <ol className="space-y-2">
               {modules.map((module) => (
-                <ModuleRow key={module.id} module={module} onOpen={() => setOpenId(module.id)} />
+                <ModuleRow key={module.id} module={module} onOpen={() => setOpened({ id: module.id, startRecording: false })} />
               ))}
             </ol>
           </SortableContext>
         </DndContext>
       )}
 
-      <NewModuleDialog courseId={course.id} open={creating} onOpenChange={setCreating} onCreated={setOpenId} />
-      <ModuleSheet module={openModule} courseId={course.id} onClose={() => setOpenId(null)} />
+      <NewModuleDialog
+        courseId={course.id}
+        open={creating}
+        onOpenChange={setCreating}
+        onCreated={(id, source) => setOpened({ id, startRecording: source === "recording" })}
+      />
+      <ModuleSheet
+        module={openModule}
+        courseId={course.id}
+        startRecording={opened?.startRecording}
+        onClose={() => setOpened(null)}
+      />
     </div>
   );
 }

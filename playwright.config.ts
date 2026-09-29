@@ -20,9 +20,14 @@ export default defineConfig({
     },
     {
       name: 'chromium',
-      use: { 
+      use: {
         ...devices['Desktop Chrome'],
         storageState: 'playwright/.auth/user.json',
+        // Fake camera and microphone for the recording studio.
+        permissions: ['camera', 'microphone'],
+        launchOptions: {
+          args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+        },
       },
       dependencies: ['setup'],
     },
