@@ -31,7 +31,7 @@ function Badge({ className, variant, pulse, children, ...props }: BadgeProps) {
     <span className={cn(badgeVariants({ variant }), className)} {...props}>
       {pulse && (
         <span className="relative flex h-1.5 w-1.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+          <span className="absolute inline-flex h-full w-full rounded-full motion-safe:animate-ping bg-current opacity-60" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
         </span>
       )}
