@@ -50,4 +50,4 @@ Otros comandos: `npm run test:e2e:headed` (con navegador visible) y `npm run tes
 - `e2e/uploads.spec.ts`: subir video y documento a un módulo, grabarse con la cámara y subir una portada.
 - `e2e/ai-studio.spec.ts`: el estudio IA completo (brief, estructura, guiones, voz y presentador, producción).
 - `e2e/learner.spec.ts`: el colaborador toma un curso (lectura, completar, reprobar y aprobar la evaluación, terminar) y edita su perfil.
-- `e2e/team.spec.ts`: agregar a una persona (entra con su contraseña temporal), editarla, desactivarla y reactivarla.
+- `e2e/team.spec.ts`: agregar a una persona (entra con su contraseña temporal), editarla, desactivarla y reactivarla; y que el foco vuelva a quien abrió cada diálogo o panel (también desde el menú de una fila).

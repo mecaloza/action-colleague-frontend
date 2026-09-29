@@ -193,6 +193,13 @@ function PersonForm({ open, person, mode, nameField, passwordField, onDone }: Pe
       } else if (input.password) {
         toast.success(
           "Datos guardados. Con la nueva contraseña, sus sesiones abiertas se cierran en menos de una hora; para cortarlas ya, desactiva la cuenta.",
+          {
+            action: {
+              label: "Copiar contraseña",
+              onClick: () => void copyPassword(input.password, "No pudimos copiarla. Si no la tienes, genera otra con «Nueva contraseña»."),
+            },
+            duration: 10_000,
+          },
         );
       } else {
         toast.success("Datos guardados");

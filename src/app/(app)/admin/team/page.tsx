@@ -97,7 +97,7 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActi
           <div className="min-w-0">
             <button
               type="button"
-              className="block max-w-[220px] truncate text-left font-semibold hover:text-accent"
+              className="block max-w-[40vw] truncate text-left font-semibold hover:text-accent sm:max-w-[220px]"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpen(person);
@@ -106,7 +106,7 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActi
               {person.name}
               {isSelf && <span className="ml-2 text-xs font-normal text-muted-foreground">(tú)</span>}
             </button>
-            <p className="max-w-[240px] truncate text-xs text-muted-foreground">{person.email}</p>
+            <p className="max-w-[40vw] truncate text-xs text-muted-foreground sm:max-w-[240px]">{person.email}</p>
             {/* Small screens hide the role column: its badges go here. */}
             <div className="mt-1 flex flex-wrap gap-1.5 sm:hidden">
               <PersonBadges person={person} />
