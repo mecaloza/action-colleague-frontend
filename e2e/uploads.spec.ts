@@ -62,12 +62,18 @@ test("subir un video y un documento a un módulo", async ({ page }) => {
   await expect(row).not.toContainText("Sin contenido");
 });
 
+/** Adds a "Grabarme" module and opens its studio on camera only, ready to record. */
+async function openCameraStudio(page: Page, title: string) {
+  await newModule(page, title, /Grabarme/);
+  const studio = page.getByRole("dialog", { name: title }).last();
+  await studio.getByRole("button", { name: /Solo cámara/ }).click();
+  await expect(studio.getByRole("button", { name: "Grabar" })).toBeEnabled({ timeout: 15_000 });
+  return studio;
+}
+
 test("grabarse con la cámara desde el navegador", async ({ page }) => {
   await newManualCourse(page, `Curso grabado ${Date.now()}`);
-  await newModule(page, "Mensaje del gerente", /Grabarme/);
-
-  const studio = page.getByRole("dialog", { name: "Mensaje del gerente" }).last();
-  await expect(studio.getByRole("button", { name: "Grabar" })).toBeEnabled({ timeout: 15_000 });
+  const studio = await openCameraStudio(page, "Mensaje del gerente");
   await studio.getByRole("button", { name: "Grabar" }).click();
   await expect(studio.getByText(/Grabando/)).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(2_500); // let the fake camera record a couple of seconds
@@ -77,6 +83,172 @@ test("grabarse con la cámara desde el navegador", async ({ page }) => {
   await expect(page.getByText(/Grabación subida/)).toBeVisible({ timeout: 60_000 });
   const sheet = page.getByRole("dialog", { name: "Mensaje del gerente" });
   await expect(sheet.locator("video")).toBeVisible({ timeout: 90_000 });
+});
+
+/** A small real PDF, one page per text (the server renders each page as a slide). */
+function makePdf(pages: string[]): Buffer {
+  // Objects 1 to 3 are the catalog, the page tree and the font; each page is then an object followed by its content.
+  const pageObject = (i: number) => 4 + i * 2;
+  const objects: string[] = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    `<< /Type /Pages /Kids [${pages.map((_, i) => `${pageObject(i)} 0 R`).join(" ")}] /Count ${pages.length} >>`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  pages.forEach((text, i) => {
+    const literal = text.replace(/[\\()]/g, "\\$&"); // a PDF string ends at an unescaped ")"
+    const stream = `BT /F1 48 Tf 72 300 Td (${literal}) Tj ET`;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 960 540] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageObject(i) + 1} 0 R >>`);
+    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  });
+  let pdf = "%PDF-1.4\n";
+  const offsets = objects.map((body, i) => {
+    const offset = pdf.length;
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+    return offset;
+  });
+  const xref = pdf.length;
+  const entries = objects.length + 1; // the free entry 0 counts too
+  pdf += `xref\n0 ${entries}\n0000000000 65535 f \n`;
+  pdf += offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
+  pdf += `trailer\n<< /Size ${entries} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, "latin1");
+}
+
+/** The uploads the page starts (one POST per file sent), to check what is uploaded again and what is not. */
+function trackUploads(page: Page): string[] {
+  const uploads: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/media/uploads")) uploads.push(request.url());
+  });
+  return uploads;
+}
+
+interface ComposeRequest {
+  recording_asset_id: string;
+  timeline: { at: number; slide: number }[];
+}
+
+/** Answers the first request to combine a recording with an error, lets the next ones through and keeps every body. */
+async function failFirstCompose(page: Page, status: number, detail: unknown): Promise<ComposeRequest[]> {
+  const requests: ComposeRequest[] = [];
+  await page.route("**/modules/*/recording", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    requests.push(route.request().postDataJSON());
+    if (requests.length > 1) return route.continue();
+    await route.fulfill({
+      status,
+      contentType: "application/json",
+      headers: { "access-control-allow-origin": "*" },
+      body: JSON.stringify({ detail }),
+    });
+  });
+  return requests;
+}
+
+test("grabarse con las diapositivas de un PDF", async ({ page }) => {
+  test.slow(); // the server processes the PDF and then combines it with the take
+  const uploads = trackUploads(page);
+  // The first request to combine fails: trying again must reuse the recording already uploaded.
+  const composes = await failFirstCompose(page, 500, "Error interno");
+  await newManualCourse(page, `Curso con diapositivas ${Date.now()}`);
+  await newModule(page, "Presentación de seguridad", /Grabarme/);
+
+  const studio = page.getByRole("dialog", { name: "Presentación de seguridad" }).last();
+  await studio.getByRole("button", { name: /Cámara y diapositivas/ }).click();
+  await studio.locator('input[type="file"]').setInputFiles({
+    name: "diapositivas.pdf",
+    mimeType: "application/pdf",
+    buffer: makePdf(["Uno: el casco (siempre)", "Dos: los guantes \\ las gafas"]),
+  });
+  await expect(studio.getByRole("img", { name: /^Diapositiva 1\b/ })).toBeVisible({ timeout: 60_000 });
+
+  await expect(studio.getByRole("button", { name: "Grabar" })).toBeEnabled({ timeout: 15_000 });
+  await studio.getByRole("button", { name: "Grabar" }).click();
+  await expect(studio.getByText(/Grabando/)).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1_000);
+  await studio.getByRole("button", { name: "Diapositiva siguiente" }).click();
+  await expect(studio.getByRole("img", { name: /^Diapositiva 2\b/ })).toBeVisible();
+  await page.waitForTimeout(1_000);
+  // The keyboard too, as a presentation clicker would.
+  await page.keyboard.press("ArrowLeft");
+  await expect(studio.getByRole("img", { name: /^Diapositiva 1\b/ })).toBeVisible();
+  await page.waitForTimeout(1_000);
+  await page.keyboard.press("ArrowRight");
+  await expect(studio.getByRole("img", { name: /^Diapositiva 2\b/ })).toBeVisible();
+  await page.waitForTimeout(1_000);
+  await studio.getByRole("button", { name: "Terminar" }).click();
+  await studio.getByRole("button", { name: "Usar esta grabación" }).click();
+
+  // The failure shows under the studio; the second try sends the same take without uploading it again.
+  await expect(studio.getByRole("alert")).toContainText("El servidor tuvo un problema", { timeout: 60_000 });
+  const uploadsBeforeRetry = uploads.length;
+  await studio.getByRole("button", { name: "Usar esta grabación" }).click();
+  await expect(page.getByText(/combinándola con tus diapositivas/)).toBeVisible({ timeout: 60_000 });
+  expect(uploads).toHaveLength(uploadsBeforeRetry);
+  expect(uploads).toHaveLength(2); // the deck and the recording, once each
+  expect(composes).toHaveLength(2);
+  expect(composes[1]).toEqual(composes[0]);
+  expect(composes[1].timeline[0]).toEqual({ at: 0, slide: 0 });
+  expect(composes[1].timeline.some((point) => point.slide === 1)).toBe(true);
+
+  const sheet = page.getByRole("dialog", { name: "Presentación de seguridad" });
+  await expect(sheet.locator("video")).toBeVisible({ timeout: 120_000 });
+});
+
+test("si las diapositivas llegan sin páginas o el servidor perdió la grabación, el estudio se recupera", async ({ page }) => {
+  test.slow(); // the server processes the PDF and then combines it with the take
+  const uploads = trackUploads(page);
+  // The deck's first "ready" answer comes without its page images (e.g. they could not be signed).
+  let emptied = false;
+  await page.route(
+    (url) => /\/media\/[0-9a-f-]{36}$/.test(url.pathname),
+    async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      const response = await route.fetch();
+      const asset = await response.json();
+      const empty = !emptied && asset.kind === "deck" && asset.status === "ready";
+      if (empty) emptied = true;
+      await route.fulfill({
+        status: response.status(),
+        headers: { "access-control-allow-origin": "*" },
+        json: empty ? { ...asset, pages: [] } : asset,
+      });
+    },
+  );
+  // The first request to combine finds the recording lost: the next try must upload it again.
+  const composes = await failFirstCompose(page, 409, {
+    code: "upload_not_ready",
+    message: "La grabación o la presentación no terminó de subirse; súbela de nuevo",
+  });
+  await newManualCourse(page, `Curso diapositivas perdidas ${Date.now()}`);
+  await newModule(page, "Tomas perdidas", /Grabarme/);
+
+  const studio = page.getByRole("dialog", { name: "Tomas perdidas" }).last();
+  await studio.getByRole("button", { name: /Cámara y diapositivas/ }).click();
+  await studio.locator('input[type="file"]').setInputFiles({
+    name: "diapositivas.pdf",
+    mimeType: "application/pdf",
+    buffer: makePdf(["Una sola diapositiva"]),
+  });
+  await expect(studio.getByRole("alert")).toContainText("No pudimos cargar tus diapositivas", { timeout: 60_000 });
+  await studio.getByRole("button", { name: "Intentar de nuevo" }).click();
+  await expect(studio.getByRole("img", { name: /^Diapositiva 1\b/ })).toBeVisible();
+
+  await expect(studio.getByRole("button", { name: "Grabar" })).toBeEnabled({ timeout: 15_000 });
+  await studio.getByRole("button", { name: "Grabar" }).click();
+  await expect(studio.getByText(/Grabando · 0:0[1-9]/)).toBeVisible({ timeout: 10_000 });
+  await studio.getByRole("button", { name: "Terminar" }).click();
+  await studio.getByRole("button", { name: "Usar esta grabación" }).click();
+  await expect(studio.getByRole("alert")).toContainText("súbela de nuevo", { timeout: 60_000 });
+  expect(uploads).toHaveLength(2); // the deck and the recording
+
+  await studio.getByRole("button", { name: "Usar esta grabación" }).click();
+  await expect(page.getByText(/combinándola con tus diapositivas/)).toBeVisible({ timeout: 60_000 });
+  expect(uploads).toHaveLength(3); // the recording went up again
+  expect(composes).toHaveLength(2);
+  expect(composes[1].recording_asset_id).not.toBe(composes[0].recording_asset_id);
+  const sheet = page.getByRole("dialog", { name: "Tomas perdidas" });
+  await expect(sheet.locator("video")).toBeVisible({ timeout: 120_000 });
 });
 
 test("subir una portada al curso", async ({ page }) => {
@@ -129,9 +301,7 @@ async function slowUploads(page: Page, ms: number) {
 test("el estudio devuelve la cámara y el micrófono al cerrarse", async ({ page }) => {
   await trackMediaDevices(page);
   await newManualCourse(page, `Curso cámara ${Date.now()}`);
-  await newModule(page, "Prueba de cámara", /Grabarme/);
-  const studio = page.getByRole("dialog", { name: "Prueba de cámara" }).last();
-  await expect(studio.getByRole("button", { name: "Grabar" })).toBeEnabled({ timeout: 15_000 });
+  const studio = await openCameraStudio(page, "Prueba de cámara");
 
   await studio.getByRole("button", { name: "Cerrar estudio" }).click();
   await expect(page.getByRole("button", { name: "Cerrar estudio" })).toBeHidden();
@@ -139,17 +309,12 @@ test("el estudio devuelve la cámara y el micrófono al cerrarse", async ({ page
 });
 
 test("una grabación se sube una sola vez y no se descarta sin confirmar", async ({ page }) => {
-  const uploads: string[] = [];
-  page.on("request", (request) => {
-    if (request.method() === "POST" && request.url().endsWith("/media/uploads")) uploads.push(request.url());
-  });
+  const uploads = trackUploads(page);
   await slowUploads(page, 3000);
   await newManualCourse(page, `Curso toma ${Date.now()}`);
-  await newModule(page, "Toma única", /Grabarme/);
-  const studio = page.getByRole("dialog", { name: "Toma única" }).last();
-  await expect(studio.getByRole("button", { name: "Grabar" })).toBeEnabled({ timeout: 15_000 });
+  const studio = await openCameraStudio(page, "Toma única");
   await studio.getByRole("button", { name: "Grabar" }).click();
-  await expect(studio.getByText(/Grabando · 0:01/)).toBeVisible({ timeout: 10_000 });
+  await expect(studio.getByText(/Grabando · 0:0[1-9]/)).toBeVisible({ timeout: 10_000 });
   await studio.getByRole("button", { name: "Terminar" }).click();
 
   // Closing with a take not used yet asks first.
@@ -171,9 +336,7 @@ test("una grabación se sube una sola vez y no se descarta sin confirmar", async
 test("si la cámara se corta durante la cuenta regresiva, el estudio lo dice y se recupera", async ({ page }) => {
   await trackMediaDevices(page);
   await newManualCourse(page, `Curso sin cámara ${Date.now()}`);
-  await newModule(page, "Cámara perdida", /Grabarme/);
-  const studio = page.getByRole("dialog", { name: "Cámara perdida" }).last();
-  await expect(studio.getByRole("button", { name: "Grabar" })).toBeEnabled({ timeout: 15_000 });
+  const studio = await openCameraStudio(page, "Cámara perdida");
   await studio.getByRole("button", { name: "Grabar" }).click();
   await page.evaluate(() => {
     const w = window as unknown as { __streams: MediaStream[] };

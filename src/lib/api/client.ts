@@ -228,7 +228,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
 export const http = {
   get: <T>(path: string, query?: Query, signal?: AbortSignal) => apiRequest<T>(path, { query, signal }),
-  post: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: "POST", body }),
+  post: <T>(path: string, body?: unknown, signal?: AbortSignal) => apiRequest<T>(path, { method: "POST", body, signal }),
   put: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: "PUT", body }),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: "PATCH", body }),
   delete: <T = void>(path: string) => apiRequest<T>(path, { method: "DELETE" }),

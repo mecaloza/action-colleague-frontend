@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { TimelinePoint } from "@/lib/api/types";
 
 export interface RecordingFormat {
   mimeType: string;
@@ -26,8 +27,42 @@ export interface Recording {
   blob: Blob;
   extension: RecordingFormat["extension"];
   durationSeconds: number;
-  /** Slide changes: [second, slide index] — the server composes the slides with these timings. */
-  timeline: { at: number; slide: number }[];
+  /** Slide changes, in order: the server composes the slides with these timings. */
+  timeline: TimelinePoint[];
+}
+
+/** A slide on screen for less than this is never seen: one frame of the final video (30 fps). */
+const FRAME_SECONDS = 1 / 30;
+
+/**
+ * Drops the changes on screen for less than `minSeconds` (the next change replaces them) and the ones
+ * that repeat the slide already showing. The first and the last point always stay.
+ */
+/** Consecutive points on the same slide say nothing new: only the first of them stays. */
+function withoutRepeats(points: TimelinePoint[]): TimelinePoint[] {
+  return points.filter((point, index) => index === 0 || point.slide !== points[index - 1].slide);
+}
+
+/**
+ * The timeline within the server's limit of `max` points, always the same for the same take (a retry
+ * sends the same request). Changes shorter than a frame never show, so they go; if too many remain, the
+ * slides that were on screen the shortest go next (each one's time goes to the slide before it). The first
+ * point (the opening slide) and the last change always stay.
+ */
+export function fitTimeline(points: TimelinePoint[], max = 2000): TimelinePoint[] {
+  const last = points.length - 1;
+  const seconds = (index: number, list: TimelinePoint[]) => list[index + 1].at - list[index].at;
+  let fitted = withoutRepeats(points.filter((_, index) => index === 0 || index === last || seconds(index, points) >= FRAME_SECONDS));
+  if (fitted.length <= max) return fitted;
+  const briefest = fitted
+    .map((point, index) => index)
+    .filter((index) => index > 0 && index < fitted.length - 1)
+    .sort((a, b) => seconds(a, fitted) - seconds(b, fitted) || a - b)
+    .slice(0, fitted.length - max);
+  const dropped: Record<number, true> = {};
+  briefest.forEach((index) => (dropped[index] = true));
+  fitted = withoutRepeats(fitted.filter((_, index) => !dropped[index]));
+  return fitted;
 }
 
 /** Starts reading the microphone's loudness (0 to 1) on every animation frame. */
@@ -228,13 +263,21 @@ export function useRecorder() {
     if (recorder.current && recorder.current.state !== "inactive") recorder.current.stop();
   }, []);
 
-  /** Remembers the slide on screen and, while recording, timestamps the change. */
+  /**
+   * Remembers the slide on screen and, during a take, timestamps the change. Paused, the time stands
+   * still: the new slide shows from where the recording resumes.
+   */
   const markSlide = useCallback(
     (slide: number) => {
+      if (slide === currentSlide.current) return;
       currentSlide.current = slide;
-      if (recorder.current?.state === "recording") {
-        timeline.current.push({ at: Math.round(seconds() * 100) / 100, slide });
-      }
+      const state = recorder.current?.state;
+      if (state !== "recording" && state !== "paused") return;
+      const point = { at: Math.round(seconds() * 100) / 100, slide };
+      const points = timeline.current;
+      // Another change at the same time (e.g. several during a pause) replaces the last: only it is ever seen.
+      if (points.length > 0 && points[points.length - 1].at === point.at) points[points.length - 1] = point;
+      else points.push(point);
     },
     [seconds],
   );

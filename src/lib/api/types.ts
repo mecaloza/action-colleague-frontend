@@ -330,8 +330,16 @@ export interface MediaAsset {
   url: string | null;
   error: string | null;
   pages: string[];
+  /** Decks: how many pages the processed PDF has, more than `pages` if some could not be signed (older servers leave it out). */
+  page_count?: number | null;
   text_chars: number | null;
   created_at: string | null;
+}
+
+/** A slide change in a recording: from `at` seconds into it, the deck page `slide` (from 0) is on screen. */
+export interface TimelinePoint {
+  at: number;
+  slide: number;
 }
 
 export interface UploadTarget {

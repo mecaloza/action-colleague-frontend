@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Circle, Pause, Play, RotateCcw, Square, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -33,16 +33,39 @@ function LevelMeter({ level }: { level: number }) {
   );
 }
 
+/** How many slides a key moves, as in presentation software (a clicker sends PageDown and PageUp); 0 for any other key. */
+function slideStep(key: string): number {
+  if (key === "ArrowRight" || key === "PageDown") return 1;
+  if (key === "ArrowLeft" || key === "PageUp") return -1;
+  return 0;
+}
+
+/** Whether a key pressed on `target` is for the studio: not for a field or a player, nor for a dialog open over it. */
+function isForStudio(target: EventTarget | null, studio: HTMLElement | null): boolean {
+  if (!(target instanceof Element)) return true;
+  if (target.closest("input, textarea, select, [contenteditable], video, audio")) return false;
+  const dialog = target.closest('[role="dialog"], [role="alertdialog"]');
+  return !dialog || dialog.contains(studio);
+}
+
+// An arrow at the first or the last slide looks disabled but keeps the focus (`disabled` would drop it).
+const LOOKS_DISABLED = "aria-disabled:pointer-events-none aria-disabled:opacity-45";
+
 /**
  * Teleprompter-style studio: your slides big, your camera small, keyboard arrows to change slide.
  * Every slide change is timestamped so the server can rebuild the exact presentation.
  */
 export function RecordingStudio({ slides, maxSeconds = 1800, onFinish, locked = false, onTakeChange }: RecordingStudioProps) {
+  const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
+  const recordButton = useRef<HTMLButtonElement>(null);
   const { status, error, elapsed, level, countdown, recording, openCamera, start, pause, resume, stop, markSlide, discard } =
     useRecorder();
   const [slide, setSlide] = useState(0);
-  const hasSlides = slides.length > 0;
+  // The slide on screen, for the keyboard listener: it outlives renders, so `slide` would be stale there.
+  const shown = useRef(0);
+  const slideCount = slides.length;
+  const hasSlides = slideCount > 0;
 
   // The recorder releases the camera by itself when the studio unmounts.
   useEffect(() => {
@@ -53,22 +76,48 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish, locked = 
     if (elapsed >= maxSeconds && status === "recording") stop();
   }, [elapsed, maxSeconds, status, stop]);
 
-  const goTo = (next: number) => {
-    const clamped = Math.max(0, Math.min(slides.length - 1, next));
-    setSlide(clamped);
-    markSlide(clamped);
-  };
-
+  // Ready to record (the studio just opened, or after "Repetir"): Grabar takes the focus if nothing has it
+  // (it is on the page or the dialog itself, e.g. after the button that had it went away).
   useEffect(() => {
-    if (!hasSlides) return;
+    const focused = document.activeElement;
+    if (status === "ready" && (!focused || focused.contains(root.current))) recordButton.current?.focus();
+  }, [status]);
+
+  const goTo = useCallback(
+    (next: number) => {
+      const clamped = Math.max(0, Math.min(slideCount - 1, next));
+      if (clamped === shown.current) return; // an arrow held down at the first or last slide changes nothing
+      shown.current = clamped;
+      setSlide(clamped);
+      markSlide(clamped);
+    },
+    [slideCount, markSlide],
+  );
+
+  // The buttons, the arrows or a presentation clicker change slide, except while reviewing the finished take.
+  const navigable = hasSlides && status !== "stopped";
+  const step = (delta: number) => {
+    if (navigable) goTo(shown.current + delta);
+  };
+  useEffect(() => {
+    if (!navigable) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      if (event.key === "ArrowRight" || event.key === "PageDown") goTo(slide + 1);
-      if (event.key === "ArrowLeft" || event.key === "PageUp") goTo(slide - 1);
+      const step = slideStep(event.key);
+      if (!step || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (!isForStudio(event.target, root.current)) return;
+      event.preventDefault(); // PageDown and the arrows would also scroll the studio
+      goTo(shown.current + step);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [navigable, goTo]);
+
+  // The neighbouring slides load ahead, so a change mid-sentence never shows an empty stage.
+  useEffect(() => {
+    [slide + 1, slide - 1, slide + 2].forEach((index) => {
+      if (slides[index]) new Image().src = slides[index];
+    });
+  }, [slide, slides]);
 
   const live = status === "recording" || status === "paused";
   const hasTake = status === "countdown" || live || recording !== null;
@@ -84,11 +133,17 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish, locked = 
   }, [recording, status]);
 
   return (
-    <div className="overflow-hidden border border-ink-800 bg-ink-950 text-white">
-      <div className="relative aspect-video">
+    <div ref={root} className="overflow-hidden border border-ink-800 bg-ink-950 text-white">
+      {/* Never taller than the window: a clicker's PageDown must not push the controls out of sight. */}
+      <div className="relative mx-auto aspect-video max-w-[calc((100dvh_-_12rem)*16/9)]">
+        {/* As in the final video (1920x1080): 48 px around the slide, a 340 px bubble 64 px from the corner. */}
         {hasSlides && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={slides[slide]} alt={`Diapositiva ${slide + 1}`} className="h-full w-full object-contain" />
+          <img
+            src={slides[slide]}
+            alt={`Diapositiva ${slide + 1} de ${slideCount}`}
+            className="h-full w-full object-contain p-[2.5%]"
+          />
         )}
         <video
           ref={video}
@@ -97,7 +152,7 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish, locked = 
           className={cn(
             "bg-black [transform:scaleX(-1)]",
             hasSlides
-              ? "absolute bottom-4 right-4 aspect-square w-[22%] rounded-full object-cover ring-4 ring-accent"
+              ? "absolute bottom-[5.93%] right-[3.33%] aspect-square w-[17.7%] rounded-full object-cover ring-4 ring-accent"
               : "h-full w-full object-contain",
           )}
         />
@@ -132,11 +187,28 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish, locked = 
       <div className="flex flex-wrap items-center gap-4 border-t border-white/10 px-5 py-4">
         {hasSlides && (
           <div className="flex items-center gap-2">
-            <Button variant="outline-inverse" size="icon-sm" onClick={() => goTo(slide - 1)} disabled={slide === 0} aria-label="Diapositiva anterior">
+            <Button
+              variant="outline-inverse"
+              size="icon"
+              onClick={() => step(-1)}
+              aria-disabled={!navigable || slide === 0}
+              aria-label="Diapositiva anterior"
+              className={LOOKS_DISABLED}
+            >
               <ChevronLeft />
             </Button>
-            <span className="w-16 text-center text-sm tabular-nums text-white/70">{slide + 1} / {slides.length}</span>
-            <Button variant="outline-inverse" size="icon-sm" onClick={() => goTo(slide + 1)} disabled={slide === slides.length - 1} aria-label="Diapositiva siguiente">
+            <span className="w-16 text-center text-sm tabular-nums text-white/70" aria-live="polite" aria-atomic>
+              <span aria-hidden>{slide + 1} / {slideCount}</span>
+              <span className="sr-only">Diapositiva {slide + 1} de {slideCount}</span>
+            </span>
+            <Button
+              variant="outline-inverse"
+              size="icon"
+              onClick={() => step(1)}
+              aria-disabled={!navigable || slide === slideCount - 1}
+              aria-label="Diapositiva siguiente"
+              className={LOOKS_DISABLED}
+            >
               <ChevronRight />
             </Button>
           </div>
@@ -145,7 +217,7 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish, locked = 
         {/* Wraps on phones: "Usar esta grabación" must not be cut off at 375 px. */}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {(status === "ready" || status === "idle") && !recording && (
-            <Button variant="accent" onClick={start} disabled={status !== "ready"}>
+            <Button ref={recordButton} variant="accent" onClick={start} disabled={status !== "ready"}>
               <Circle className="fill-current" /> Grabar
             </Button>
           )}
@@ -170,7 +242,8 @@ export function RecordingStudio({ slides, maxSeconds = 1800, onFinish, locked = 
         <Progress value={(elapsed / maxSeconds) * 100} className="h-1 rounded-none bg-white/10" />
       )}
       {hasSlides && !live && status !== "stopped" && (
-        <p className="border-t border-white/10 px-5 py-3 text-xs text-white/50">
+        // Only where there is a keyboard: not on touch screens.
+        <p className="border-t border-white/10 px-5 py-3 text-xs text-white/50 [@media(pointer:coarse)]:hidden">
           Consejo: usa las flechas ← → del teclado para cambiar de diapositiva mientras hablas.
         </p>
       )}
