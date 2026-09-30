@@ -12,8 +12,12 @@ const DialogClose = DialogPrimitive.Close;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }
->(({ className, children, hideClose = false, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    hideClose?: boolean;
+    /** Shows the X disabled, while the dialog refuses to close (e.g. during a save). */
+    closeDisabled?: boolean;
+  }
+>(({ className, children, hideClose = false, closeDisabled = false, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
   const focus = useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus });
   return (
     <DialogPrimitive.Portal>
@@ -29,7 +33,10 @@ const DialogContent = React.forwardRef<
       >
         {children}
         {!hideClose && (
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-mist hover:text-ink-800">
+          <DialogPrimitive.Close
+            disabled={closeDisabled}
+            className="absolute right-4 top-4 rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-mist hover:text-ink-800 disabled:pointer-events-none disabled:opacity-40"
+          >
             <X className="h-4 w-4" />
             <span className="sr-only">Cerrar</span>
           </DialogPrimitive.Close>

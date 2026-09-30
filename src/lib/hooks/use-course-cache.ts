@@ -1,14 +1,23 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { courseKeys } from "@/lib/api/courses";
+import { dashboardKeys } from "@/lib/api/dashboard";
+import { userKeys } from "@/lib/api/users";
 import type { CourseDetail, Participant } from "@/lib/api/types";
 
 /**
- * The cache updates that follow each kind of course mutation, so components don't repeat query keys.
+ * The cache updates that follow each kind of course or team mutation, so components don't repeat query keys.
  * React Query matches keys by prefix: refreshing `["courses", id]` also refreshes that course's
  * participants, results and preview.
  */
 export function useCourseCache() {
   const queryClient = useQueryClient();
+
+  /** People or their enrollments changed: refetch the team (lists, each person's courses) and the panel's counts. */
+  const refreshPeople = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: userKeys.all }),
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all }),
+    ]);
 
   return {
     /** Something under a course changed (modules, participants): refetch it and everything below it. */
@@ -23,6 +32,7 @@ export function useCourseCache() {
     /** People were assigned: show the returned list at once, then refetch the course counts. */
     storeParticipants: (courseId: number, participants: Participant[]) => {
       queryClient.setQueryData(courseKeys.participants(courseId), participants);
+      void refreshPeople(); // each person's courses and completions
       // Only the course itself (its counts): the list just stored is already fresh.
       return queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId), exact: true });
     },
@@ -39,5 +49,7 @@ export function useCourseCache() {
 
     /** A course was deleted: refetch every course query. */
     refreshLibrary: () => queryClient.invalidateQueries({ queryKey: courseKeys.all }),
+
+    refreshPeople,
   };
 }

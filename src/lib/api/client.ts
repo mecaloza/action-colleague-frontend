@@ -8,7 +8,7 @@ const DEFAULT_API =
     ? "https://colleague-backend-production.up.railway.app/api/v1"
     : "http://localhost:8001/api/v1";
 
-export const API_BASE = (process.env.NEXT_PUBLIC_API_URL || DEFAULT_API).replace(/\/$/, "");
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || DEFAULT_API).replace(/\/$/, "");
 
 const ACCESS_KEY = "ac_token";
 const REFRESH_KEY = "ac_refresh_token";
@@ -153,7 +153,7 @@ async function requestNewTokens(staleAccess: string | null): Promise<string> {
 let refreshInFlight: Promise<string> | null = null;
 
 /** One refresh at a time per tab, and across tabs when the browser supports Web Locks. */
-export function refreshAccessToken(staleAccess: string | null): Promise<string> {
+function refreshAccessToken(staleAccess: string | null): Promise<string> {
   if (!refreshInFlight) {
     const run = () => requestNewTokens(staleAccess);
     const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;

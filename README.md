@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Action Colleague — Estudio de cursos (frontend)
 
-## Getting Started
+Aplicación web para crear cursos de formación **con IA** (a partir de tus documentos) o **con tu propio material** (videos, grabaciones con diapositivas, documentos y lecturas), asignarlos a tu equipo y seguir su avance. Next.js 14 (App Router) + React 18 + Tailwind, desplegada en Vercel; habla con el API de `action-colleague-backend`.
 
-First, run the development server:
+## Desarrollo
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local        # NEXT_PUBLIC_API_URL apunta al backend local
+npm run dev                       # http://localhost:3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+El backend local se levanta como indica su README (SQLite, `USE_FAKE_PROVIDERS=true` para usar el estudio IA sin llaves).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Descripción |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | URL del API (`…/api/v1`). En desarrollo, `http://localhost:8001/api/v1`. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Estructura
 
-## Learn More
+```
+src/
+  app/                 rutas (App Router)
+    login/             inicio de sesión
+    (app)/admin/       panel, cursos (biblioteca, editor, estudio IA, vista previa) y equipo
+    (app)/learn/       mis cursos y reproductor del colaborador
+    (app)/profile/     perfil
+  components/
+    ui/                primitivas (Radix + Tailwind): botón, diálogo, panel, pestañas…
+    layout/            shell, héroes, estados vacíos y de error, confirmación
+    courses/           biblioteca y editor de cursos
+    studio/            estudio de creación con IA
+    media/, recording/ subidas directas y estudio de grabación
+    learn/             experiencia del colaborador
+    team/              equipo
+  contexts/            sesión (auth)
+  lib/api/             cliente tipado del API (JSON, refresh de tokens, errores en español)
+  lib/hooks/           subidas (PUT/TUS), trabajos en segundo plano, URLs firmadas estables…
+e2e/                   pruebas Playwright
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Decisiones
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Un solo cliente del API** (`src/lib/api`): renueva la sesión sola (refresh token con bloqueo entre pestañas) y traduce los errores a mensajes en español.
+- **React Query** para datos del servidor: los trabajos largos (IA, video, procesamiento) se siguen por polling mientras están activos.
+- **Subidas directas** del navegador a Storage (PUT firmado o TUS reanudable); el API nunca recibe el archivo.
+- **Diseño editorial**: blanco con bandas negras, acento naranja `#ff4c01`, tipografía display grotesca (Inter Tight) y texto en Red Hat Display, etiquetas en mayúsculas y rombos de marca. Todo funciona en celular.
+- **Accesibilidad**: navegación con teclado (también reordenar y el quiz), foco que vuelve al cerrar diálogos, textos para lectores de pantalla y contraste AA.
+- Interfaz solo en español; los cursos pueden estar en español, inglés o portugués.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Pruebas
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Ver [TESTING.md](TESTING.md): `npm run lint`, `npx tsc --noEmit`, `npm run build` y la suite Playwright contra un backend local.

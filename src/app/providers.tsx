@@ -7,7 +7,6 @@ import { Toaster } from "sonner";
 import { ConfirmProvider } from "@/components/layout/confirm-dialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/auth-context";
-import { LanguageProvider } from "@/contexts/language-context";
 import { ApiError } from "@/lib/api/client";
 
 const TOAST_OPTIONS = {
@@ -36,18 +35,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(makeQueryClient);
   return (
     <QueryClientProvider client={queryClient}>
-      <LanguageProvider>
-        <AuthProvider>
-          <MotionConfig reducedMotion="user">
-            <TooltipProvider delayDuration={200}>
-              <ConfirmProvider>
-                {children}
-                <Toaster position="bottom-right" toastOptions={TOAST_OPTIONS} />
-              </ConfirmProvider>
-            </TooltipProvider>
-          </MotionConfig>
-        </AuthProvider>
-      </LanguageProvider>
+      <AuthProvider>
+        <MotionConfig reducedMotion="user">
+          <TooltipProvider delayDuration={200}>
+            <ConfirmProvider>
+              {children}
+              <Toaster position="bottom-right" toastOptions={TOAST_OPTIONS} />
+            </ConfirmProvider>
+          </TooltipProvider>
+        </MotionConfig>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

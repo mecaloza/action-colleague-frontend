@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { homeFor, useAuth } from "@/contexts/auth-context";
 import type { CurrentUser } from "@/lib/api/auth";
+import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -39,15 +40,6 @@ const LEARNER_NAV: NavItem[] = [
 
 function isActive(pathname: string, { href, exact }: NavItem): boolean {
   return pathname === href || (!exact && pathname.startsWith(`${href}/`));
-}
-
-function initials(name: string): string {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 }
 
 function UserMenu({ user, onLogout }: { user: CurrentUser; onLogout: () => void }) {

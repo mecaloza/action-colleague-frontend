@@ -6,6 +6,7 @@ const admin = { email: process.env.E2E_ADMIN_EMAIL ?? "", password: process.env.
 const learner = { email: process.env.E2E_LEARNER_EMAIL ?? "", password: process.env.E2E_LEARNER_PASSWORD ?? "" };
 
 test.use({ storageState: { cookies: [], origins: [] } }); // signed in as the learner, not the admin
+test.skip(!learner.email || !learner.password, "Define E2E_LEARNER_EMAIL y E2E_LEARNER_PASSWORD para probar al colaborador.");
 test.setTimeout(120_000);
 
 async function adminApi(request: APIRequestContext) {

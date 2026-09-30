@@ -1,4 +1,4 @@
-/** Spanish formatting helpers for dates, durations and counts. */
+/** Spanish formatting helpers for dates, durations, counts and names. */
 
 const dateFormat = new Intl.DateTimeFormat("es", { day: "numeric", month: "short", year: "numeric" });
 const dateTimeFormat = new Intl.DateTimeFormat("es", {
@@ -72,4 +72,14 @@ export function formatLength(totalSeconds: number | null | undefined): string {
 
 export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
+/** "Ana María Pérez" -> "AM": up to two initials, for avatars. */
+export function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
 }

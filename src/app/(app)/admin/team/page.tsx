@@ -1,431 +1,323 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import Link from "next/link";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { KeyRound, MoreHorizontal, Pencil, Search, UserCheck, UserPlus, UserX, Users } from "lucide-react";
+import { useConfirm } from "@/components/layout/confirm-dialog";
+import { EmptyState } from "@/components/layout/empty-state";
+import { PageHero } from "@/components/layout/page-hero";
+import { QueryError } from "@/components/layout/query-state";
+import { PersonDialog, type PersonDialogMode } from "@/components/team/person-dialog";
+import { PersonSheet } from "@/components/team/person-sheet";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { api } from "@/lib/api";
-import { User, Role, CreateUserRequest, UpdateUserRequest } from "@/lib/types";
-import {
-  Search,
-  Plus,
-  Pencil,
-  UserX,
-  UserCheck,
-  Loader2,
-} from "lucide-react";
-import { useTranslations } from "next-intl";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAuth } from "@/contexts/auth-context";
+import type { Role, UserRow } from "@/lib/api/types";
+import { type UserListParams, userKeys, usersApi } from "@/lib/api/users";
+import { initials, plural } from "@/lib/format";
+import { useCourseCache } from "@/lib/hooks/use-course-cache";
+import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
+import { toastError } from "@/lib/notify";
+import { cn } from "@/lib/utils";
 
-type FormMode = "create" | "edit";
+type RoleFilterValue = Role | "all";
 
-interface UserForm {
-  name: string;
-  email: string;
-  password: string;
-  role: Role;
-  department: string;
-  position: string;
+const ROLE_FILTERS: { value: RoleFilterValue; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "collaborator", label: "Colaboradores" },
+  { value: "admin", label: "Administradores" },
+];
+
+const ACTIVE_USERS: UserListParams = { include_inactive: false };
+
+/** "12 personas activas · 2 administradores" */
+function teamSummary(activeUsers: UserRow[]): string {
+  const admins = activeUsers.filter((person) => person.role === "admin").length;
+  const people = plural(activeUsers.length, "persona activa", "personas activas");
+  return `${people} · ${plural(admins, "administrador", "administradores")}`;
 }
 
-const emptyForm: UserForm = {
-  name: "",
-  email: "",
-  password: "",
-  role: "collaborator",
-  department: "",
-  position: "",
-};
-
-function AdminEmployeesPage() {
-  const t = useTranslations("adminEmployees");
-  const [users, setUsers] = useState<User[]>([]);
-  const [search, setSearch] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<FormMode>("create");
-  const [form, setForm] = useState<UserForm>(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState("");
-
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const loadUsers = async () => {
-    try {
-      const data = await api.getUsers();
-      setUsers(data);
-    } catch {
-      setUsers([]);
-    }
-  };
-
-  // Guard: Ensure users is always array before filtering
-  const safeUsers = Array.isArray(users) ? users : [];
-  
-  const filtered = safeUsers.filter(
-    (u) =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      (u.email && u.email.toLowerCase().includes(search.toLowerCase())) ||
-      (u.department &&
-        u.department.toLowerCase().includes(search.toLowerCase())) ||
-      (u.position && u.position.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const openCreate = () => {
-    setForm(emptyForm);
-    setFormMode("create");
-    setEditingId(null);
-    setFormError("");
-    setFormOpen(true);
-  };
-
-  const openEdit = (user: User) => {
-    setForm({
-      name: user.name,
-      email: user.email,
-      password: "",
-      role: user.role,
-      department: user.department || "",
-      position: user.position || "",
-    });
-    setFormMode("edit");
-    setEditingId(user.id);
-    setFormError("");
-    setFormOpen(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError("");
-    setSaving(true);
-
-    try {
-      if (formMode === "create") {
-        const data: CreateUserRequest = {
-          name: form.name,
-          email: form.email,
-          password: form.password,
-          role: form.role,
-          department: form.department || undefined,
-          position: form.position || undefined,
-        };
-        await api.createUser(data);
-      } else if (editingId) {
-        const data: UpdateUserRequest = {
-          name: form.name,
-          email: form.email,
-          role: form.role,
-          department: form.department || undefined,
-          position: form.position || undefined,
-        };
-        await api.updateUser(editingId, data);
-      }
-      setFormOpen(false);
-      await loadUsers();
-    } catch (err) {
-      setFormError(
-        err instanceof Error ? err.message : t("errors.failedSave")
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleActive = async (user: User) => {
-    try {
-      await api.updateUser(user.id, { is_active: !user.is_active });
-      await loadUsers();
-    } catch {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === user.id ? { ...u, is_active: !u.is_active } : u
-        )
-      );
-    }
-  };
-
+function RoleFilter({ value, onChange }: { value: RoleFilterValue; onChange: (value: RoleFilterValue) => void }) {
   return (
-    <div className="space-y-6 animate-slide-up">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">{t("title")}</h1>
-          <p className="text-muted-foreground">
-            {t("subtitle")}
-          </p>
+    <div role="group" aria-label="Filtrar por rol" className="flex flex-wrap gap-2">
+      {ROLE_FILTERS.map((filter) => (
+        <button
+          key={filter.value}
+          type="button"
+          aria-pressed={value === filter.value}
+          onClick={() => onChange(filter.value)}
+          className={cn(
+            "h-9 border px-3.5 text-[12px] font-semibold transition-colors",
+            value === filter.value ? "border-ink-800 bg-ink-800 text-white" : "border-input bg-white hover:border-ink-800",
+          )}
+        >
+          {filter.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+interface RowActions {
+  onOpen: (person: UserRow) => void;
+  onEdit: (person: UserRow) => void;
+  onNewPassword: (person: UserRow) => void;
+  onToggleActive: (person: UserRow) => void;
+}
+
+/** Role, plus "Inactivo" for a deactivated account. */
+function PersonBadges({ person }: { person: UserRow }) {
+  return (
+    <>
+      {person.role === "admin" ? <Badge>Administrador</Badge> : <Badge variant="secondary">Colaborador</Badge>}
+      {!person.is_active && <Badge variant="outline">Inactivo</Badge>}
+    </>
+  );
+}
+
+function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActive }: RowActions & { person: UserRow; isSelf: boolean }) {
+  const ToggleIcon = person.is_active ? UserX : UserCheck;
+  return (
+    <TableRow className={cn("cursor-pointer", !person.is_active && "opacity-60")} onClick={() => onOpen(person)}>
+      <TableCell>
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-ink-800 text-[11px] font-bold text-white">{initials(person.name)}</span>
+          <div className="min-w-0">
+            <button
+              type="button"
+              className="block max-w-[40vw] truncate text-left font-semibold hover:text-accent sm:max-w-[220px]"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpen(person);
+              }}
+            >
+              {person.name}
+              {isSelf && <span className="ml-2 text-xs font-normal text-muted-foreground">(tú)</span>}
+            </button>
+            <p className="max-w-[40vw] truncate text-xs text-muted-foreground sm:max-w-[240px]">{person.email}</p>
+            {/* Small screens hide the role column: its badges go here. */}
+            <div className="mt-1 flex flex-wrap gap-1.5 sm:hidden">
+              <PersonBadges person={person} />
+            </div>
+          </div>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t("createUser")}
-        </Button>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder={t("searchPlaceholder")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("table.name")}</TableHead>
-              <TableHead className="hidden sm:table-cell">{t("table.email")}</TableHead>
-              <TableHead className="hidden md:table-cell">{t("table.position")}</TableHead>
-              <TableHead className="hidden lg:table-cell">
-                {t("table.department")}
-              </TableHead>
-              <TableHead>{t("table.role")}</TableHead>
-              <TableHead>{t("table.status")}</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((user) => (
-              <TableRow
-                key={user.id}
-                className={user.is_active === false ? "opacity-40" : ""}
-              >
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xs font-semibold">
-                      {user.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-medium">{user.name}</p>
-                      <p className="text-xs text-muted-foreground sm:hidden">
-                        {user.email}
-                      </p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="hidden sm:table-cell text-muted-foreground">
-                  {user.email}
-                </TableCell>
-                <TableCell className="hidden md:table-cell text-muted-foreground">
-                  {user.position}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell text-muted-foreground">
-                  {user.department}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={user.role === "admin" ? "default" : "secondary"}
-                  >
-                    {user.role}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {user.is_active === false ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-400">
-                      <span className="h-2 w-2 rounded-full bg-red-500/50" />
-                      {t("status.inactive")}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />
-                      {t("status.active")}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEdit(user)}
-                      title={t("actions.editUser")}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => toggleActive(user)}
-                      title={
-                        user.is_active === false
-                          ? t("actions.reactivateUser")
-                          : t("actions.deactivateUser")
-                      }
-                    >
-                      {user.is_active === false ? (
-                        <UserCheck className="h-4 w-4 text-emerald-400" />
-                      ) : (
-                        <UserX className="h-4 w-4 text-red-400" />
-                      )}
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {filtered.length === 0 && (
-              <TableRow>
-                <TableCell
-                  colSpan={7}
-                  className="text-center text-muted-foreground py-8"
-                >
-                  {t("empty")}
-                </TableCell>
-              </TableRow>
+      </TableCell>
+      <TableCell className="hidden md:table-cell">
+        <p className="text-sm">{person.position || "—"}</p>
+        <p className="text-xs text-muted-foreground">{person.department}</p>
+      </TableCell>
+      <TableCell className="hidden sm:table-cell">
+        <div className="flex flex-wrap gap-2">
+          <PersonBadges person={person} />
+        </div>
+      </TableCell>
+      <TableCell className="hidden text-sm lg:table-cell">
+        {person.enrolled_count ? `${person.completed_count} de ${plural(person.enrolled_count, "curso")}` : "Sin cursos"}
+      </TableCell>
+      <TableCell onClick={(event) => event.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label={`Acciones para ${person.name}`}>
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onSelect={() => onEdit(person)}>
+              <Pencil /> Editar datos
+            </DropdownMenuItem>
+            {/* Your own password is changed in your profile, with the current one. */}
+            {isSelf ? (
+              <DropdownMenuItem asChild>
+                <Link href="/profile">
+                  <KeyRound /> Cambiar mi contraseña
+                </Link>
+              </DropdownMenuItem>
+            ) : (
+              <>
+                <DropdownMenuItem onSelect={() => onNewPassword(person)}>
+                  <KeyRound /> Nueva contraseña
+                </DropdownMenuItem>
+                <DropdownMenuItem destructive={person.is_active} onSelect={() => onToggleActive(person)}>
+                  <ToggleIcon /> {person.is_active ? "Desactivar" : "Reactivar"}
+                </DropdownMenuItem>
+              </>
             )}
-          </TableBody>
-        </Table>
-      </Card>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+}
 
-      {/* Create / Edit User Dialog */}
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {formMode === "create" ? t("modal.createTitle") : t("modal.editTitle")}
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-            {formError && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-                {formError}
-              </div>
-            )}
+interface PeopleTableProps extends RowActions {
+  people: UserRow[];
+  selfId: number | undefined;
+}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="form-name">{t("form.fullName")}</Label>
-                <Input
-                  id="form-name"
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, name: e.target.value }))
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="form-email">{t("form.email")}</Label>
-                <Input
-                  id="form-email"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, email: e.target.value }))
-                  }
-                  required
-                />
-              </div>
-            </div>
-
-            {formMode === "create" && (
-              <div className="space-y-2">
-                <Label htmlFor="form-password">{t("form.password")}</Label>
-                <Input
-                  id="form-password"
-                  type="password"
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, password: e.target.value }))
-                  }
-                  required={formMode === "create"}
-                  minLength={6}
-                />
-              </div>
-            )}
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="form-position">{t("form.position")}</Label>
-                <Input
-                  id="form-position"
-                  value={form.position}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, position: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="form-department">{t("form.department")}</Label>
-                <Input
-                  id="form-department"
-                  value={form.department}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, department: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="form-role">{t("form.role")}</Label>
-                <Select
-                  id="form-role"
-                  value={form.role}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      role: e.target.value as Role,
-                    }))
-                  }
-                >
-                  <option value="collaborator">{t("role.collaborator")}</option>
-                  <option value="admin">{t("role.admin")}</option>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setFormOpen(false)}
-              >
-                {t("actions.cancel")}
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t("actions.saving")}
-                  </>
-                ) : formMode === "create" ? (
-                  t("createUser")
-                ) : (
-                  t("actions.saveChanges")
-                )}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+function PeopleTable({ people, selfId, ...actions }: PeopleTableProps) {
+  return (
+    <div className="border border-border bg-white">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Persona</TableHead>
+            <TableHead className="hidden md:table-cell">Cargo y área</TableHead>
+            <TableHead className="hidden sm:table-cell">Rol</TableHead>
+            <TableHead className="hidden lg:table-cell">Cursos terminados</TableHead>
+            <TableHead className="w-12">
+              <span className="sr-only">Acciones</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {people.map((person) => (
+            <PersonRow key={person.id} person={person} isSelf={person.id === selfId} {...actions} />
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
-/** Previous-version screen: keeps the page padding the old layout used to add. */
-export default function Page() {
+/**
+ * Open state for a dialog or panel that keeps its last value until the next opening, so it doesn't
+ * empty while animating closed. `key` changes on each opening: keyed content starts afresh.
+ */
+function useOpening<T>(initial: T) {
+  const [state, setState] = useState({ open: false, value: initial, key: 0 });
+  return {
+    ...state,
+    show: (value: T) => setState((current) => ({ open: true, value, key: current.key + 1 })),
+    hide: () => setState((current) => ({ ...current, open: false })),
+  };
+}
+
+export default function TeamPage() {
+  const { user } = useAuth();
+  const confirm = useConfirm();
+  const { refreshPeople } = useCourseCache();
+  const [search, setSearch] = useState("");
+  const [role, setRole] = useState<RoleFilterValue>("all");
+  const [showInactive, setShowInactive] = useState(false);
+  const dialog = useOpening<{ person: UserRow | null; mode: PersonDialogMode }>({ person: null, mode: "details" });
+  const sheet = useOpening<UserRow | null>(null);
+  const searchTerm = useDebouncedValue(search.trim());
+  const params: UserListParams = {
+    q: searchTerm || undefined,
+    role: role === "all" ? undefined : role,
+    include_inactive: showInactive,
+  };
+  const isFiltered = Boolean(searchTerm) || role !== "all";
+  const people = useQuery({ queryKey: userKeys.list(params), queryFn: () => usersApi.list(params), placeholderData: keepPreviousData });
+  const activeUsers = useQuery({ queryKey: userKeys.list(ACTIVE_USERS), queryFn: () => usersApi.list(ACTIVE_USERS) });
+
+  const toggleActive = useMutation({
+    mutationFn: (person: UserRow) => usersApi.update(person.id, { is_active: !person.is_active }),
+    onSuccess: (updated) => {
+      void refreshPeople();
+      toast.success(updated.is_active ? `${updated.name} puede volver a ingresar` : `${updated.name} ya no puede ingresar`);
+    },
+    onError: toastError,
+  });
+
+  /** Reactivating is immediate; deactivating asks first. */
+  const confirmToggle = async (person: UserRow) => {
+    if (person.is_active) {
+      const confirmed = await confirm({
+        title: `¿Desactivar a ${person.name}?`,
+        description: "No podrá ingresar y se cerrarán sus sesiones. Su avance en los cursos se conserva.",
+        confirmLabel: "Desactivar",
+        destructive: true,
+      });
+      if (!confirmed) return;
+    }
+    toggleActive.mutate(person);
+  };
+
+  const addButton = (
+    <Button variant="accent" size="lg" onClick={() => dialog.show({ person: null, mode: "details" })}>
+      <UserPlus /> Agregar persona
+    </Button>
+  );
+
   return (
-    <div className="container py-8">
-      <AdminEmployeesPage />
-    </div>
+    <>
+      <PageHero
+        eyebrow="Equipo"
+        title="Tu equipo"
+        description={activeUsers.data ? teamSummary(activeUsers.data) : undefined}
+        actions={addButton}
+      />
+
+      <section className="container py-10">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <RoleFilter value={role} onChange={setRole} />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={showInactive} onCheckedChange={setShowInactive} aria-label="Mostrar inactivos" />
+              Mostrar inactivos
+            </label>
+            <div className="relative w-full sm:w-72">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Nombre, correo o área"
+                aria-label="Buscar personas"
+                maxLength={200}
+                className="pl-10"
+              />
+            </div>
+          </div>
+        </div>
+
+        {people.isPending ? (
+          <Skeleton className="h-72" />
+        ) : !people.data ? (
+          <QueryError query={people} />
+        ) : people.data.length ? (
+          <PeopleTable
+            people={people.data}
+            selfId={user?.id}
+            onOpen={sheet.show}
+            onEdit={(person) => dialog.show({ person, mode: "details" })}
+            onNewPassword={(person) => dialog.show({ person, mode: "password" })}
+            onToggleActive={confirmToggle}
+          />
+        ) : (
+          <EmptyState
+            icon={<Users />}
+            title={isFiltered ? "Nadie coincide con la búsqueda" : "Aún no hay nadie en el equipo"}
+            description={
+              isFiltered
+                ? "Prueba con otro nombre, correo o filtro."
+                : "Agrega a las personas que tomarán los cursos."
+            }
+            action={isFiltered ? undefined : addButton}
+          />
+        )}
+      </section>
+
+      <PersonDialog
+        key={dialog.key}
+        open={dialog.open}
+        onClose={dialog.hide}
+        person={dialog.value.person}
+        mode={dialog.value.mode}
+      />
+      <PersonSheet open={sheet.open} person={sheet.value} onClose={sheet.hide} />
+    </>
   );
 }

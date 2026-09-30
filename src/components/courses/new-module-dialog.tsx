@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { FileText, Film, Video, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ export function NewModuleDialog({
   const { refreshCourse } = useCourseCache();
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<ModuleSource>("text");
+  const titleField = useRef<HTMLInputElement>(null);
 
   const create = useMutation({
     mutationFn: () => coursesApi.createModule(courseId, { title: title.trim(), source: kind }),
@@ -47,7 +48,12 @@ export function NewModuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          event.preventDefault(); // start on the title; not autoFocus, see useReturnFocus
+          titleField.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Nuevo módulo</DialogTitle>
           <DialogDescription>Elige cómo vas a crear su contenido.</DialogDescription>
@@ -61,7 +67,7 @@ export function NewModuleDialog({
         >
           <div>
             <Label htmlFor="new-module-title">Título</Label>
-            <Input id="new-module-title" value={title} onChange={(event) => setTitle(event.target.value)} autoFocus required maxLength={300} />
+            <Input ref={titleField} id="new-module-title" value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={300} />
           </div>
           <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Tipo de contenido">
             {CONTENT_KINDS.map((item) => (

@@ -18,7 +18,7 @@ function publishProblemsOf(error: unknown): PublishProblem[] {
 export function useCourseActions(courseId: number) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { storeCourse } = useCourseCache();
+  const { storeCourse, refreshPeople } = useCourseCache();
   const [publishProblems, setPublishProblems] = useState<PublishProblem[] | null>(null);
 
   const publish = useMutation({
@@ -59,6 +59,7 @@ export function useCourseActions(courseId: number) {
       router.replace("/admin/courses");
       queryClient.removeQueries({ queryKey: courseKeys.detail(courseId) }); // detail, participants, results...
       queryClient.invalidateQueries({ queryKey: ["courses", "list"] });
+      refreshPeople(); // its enrollments are gone from each person's courses and the panel
     },
     onError: toastError,
   });
