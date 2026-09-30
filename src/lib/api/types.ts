@@ -18,12 +18,17 @@ export interface MediaRef {
 export interface CourseSettings {
   tone: string;
   audience: string;
+  /** What the admin asked the AI studio for (kept to resume and to regenerate). */
+  brief: string;
+  minutes: number;
+  /** Modules the admin asked for; null lets the AI choose. */
+  modules?: number | null;
   voice_id: string;
   voice_name: string;
   avatar_id: string;
   avatar_name: string;
   presenter: boolean;
-  theme: "dark" | "light";
+  theme: SlideTheme;
 }
 
 export interface CourseSummary {
@@ -66,6 +71,8 @@ export interface ModuleAdmin {
   document: MediaRef | null;
   duration_seconds: number | null;
   scene_count: number;
+  /** Something the AI video came out without, and why (e.g. its presenter). */
+  video_warning: string | null;
   evaluation: EvaluationSummary | null;
   updated_at: string | null;
 }
@@ -339,4 +346,106 @@ export interface Job {
   result: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+// AI studio
+export type SlideLayout = "cover" | "bullets" | "statement" | "stat" | "steps" | "comparison" | "closing";
+export type SlideTheme = "dark" | "light";
+
+export interface ComparisonColumn {
+  heading: string;
+  points: string[];
+}
+
+export interface Slide {
+  layout: SlideLayout;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  points: string[];
+  stat_value: string;
+  stat_label: string;
+  quote_author: string;
+  left: ComparisonColumn;
+  right: ComparisonColumn;
+}
+
+export interface SlideContext {
+  course_title: string;
+  module_label: string;
+  index: number;
+  total: number;
+  theme: SlideTheme;
+  presenter: boolean;
+}
+
+export interface StoryboardScene {
+  id: string;
+  slide: Slide;
+  narration: string;
+}
+
+export interface Storyboard {
+  scenes: StoryboardScene[];
+}
+
+export interface OutlineModule {
+  title: string;
+  summary: string;
+  objectives: string[];
+  key_points: string[];
+  estimated_minutes: number;
+  include_quiz: boolean;
+}
+
+export interface CourseOutline {
+  title: string;
+  description: string;
+  audience: string;
+  objectives: string[];
+  modules: OutlineModule[];
+}
+
+export interface OutlineRequest {
+  brief: string;
+  audience: string;
+  tone: string;
+  minutes: number;
+  modules?: number | null;
+  feedback?: string;
+}
+
+export interface StudioCapabilities {
+  ai: boolean;
+  voice: boolean;
+  avatar: boolean;
+  storage: boolean;
+}
+
+export interface Voice {
+  id: string;
+  name: string;
+  gender: string;
+  accent: string;
+  language: string;
+  preview_url: string;
+  category: string;
+}
+
+export interface Avatar {
+  id: string;
+  name: string;
+  preview_image_url: string;
+  preview_video_url: string;
+  gender: string;
+}
+
+export interface RenderRequest {
+  module_ids?: number[];
+  voice_id?: string;
+  voice_name?: string;
+  avatar_id?: string;
+  avatar_name?: string;
+  presenter?: boolean;
+  theme?: SlideTheme;
 }

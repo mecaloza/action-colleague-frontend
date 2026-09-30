@@ -8,7 +8,7 @@ import { PageHero } from "@/components/layout/page-hero";
 const OPTIONS = [
   {
     number: "01",
-    href: "/admin/courses/create",
+    href: "/admin/courses/new/ai",
     icon: Sparkles,
     title: "Crear con IA",
     description:

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, Eye, MoreHorizontal, Rocket, Trash2, Undo2 } from "lucide-react";
+import { Archive, Eye, MoreHorizontal, Rocket, Sparkles, Trash2, Undo2 } from "lucide-react";
 import { DiamondMotif } from "@/components/brand/motif";
 import { BackLink } from "@/components/layout/back-link";
 import { useConfirm } from "@/components/layout/confirm-dialog";
+import { isBusy } from "@/components/studio/steps";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -34,6 +35,23 @@ function PublishProblemsDialog({ problems, onClose }: { problems: PublishProblem
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Made in the AI studio: an AI course that is empty, has scripts, is generating, or has modules still waiting for
+ * their first script. AI courses brought from the previous app (videos without a script) are edited here instead.
+ */
+function madeInStudio(course: CourseDetail): boolean {
+  if (course.source !== "ai") return false;
+  return (
+    !course.modules.length ||
+    course.modules.some(
+      (module) =>
+        module.scene_count > 0 ||
+        isBusy(module) ||
+        (module.source === "ai" && !module.video && !module.content_text.trim()),
+    )
   );
 }
 
@@ -85,6 +103,13 @@ export function CourseHeader({ course }: { course: CourseDetail }) {
               {course.description && <p className="mt-3 max-w-2xl text-white/70">{course.description}</p>}
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              {madeInStudio(course) && (
+                <Button variant="outline-inverse" asChild>
+                  <Link href={`/admin/courses/${course.id}/studio`}>
+                    <Sparkles /> Estudio IA
+                  </Link>
+                </Button>
+              )}
               <Button variant="outline-inverse" asChild>
                 <Link href={`/admin/courses/${course.id}/preview`}>
                   <Eye /> Vista previa

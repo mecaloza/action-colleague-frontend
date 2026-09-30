@@ -13,6 +13,8 @@ interface DropzoneProps {
   /** Replaces the rule's own hint under the label. */
   hint?: string;
   onFile: (file: File) => void;
+  /** While something else is in progress: the area can't take files. */
+  disabled?: boolean;
   className?: string;
 }
 
@@ -36,21 +38,24 @@ function rejectionOf(file: File, rule: UploadRule): string | null {
 }
 
 /** Drag-and-drop area that also opens the file picker; a file that breaks the rule is rejected with a toast. */
-export function Dropzone({ rule, label, hint = rule.hint, onFile, className }: DropzoneProps) {
+export function Dropzone({ rule, label, hint = rule.hint, onFile, disabled = false, className }: DropzoneProps) {
   const [dragging, setDragging] = useState(false);
 
   const handleFile = (file: File | undefined) => {
-    if (!file) return;
+    if (!file || disabled) return;
     const rejection = rejectionOf(file, rule);
     if (rejection) toast.error(rejection);
     else onFile(file);
   };
 
   return (
+    // Disabled, it still takes the drag events: a file dropped on it must be ignored, not opened by the browser.
     <label
+      aria-disabled={disabled || undefined}
       onDragOver={(event) => {
         event.preventDefault();
-        setDragging(true);
+        if (disabled) event.dataTransfer.dropEffect = "none";
+        else setDragging(true);
       }}
       onDragLeave={(event) => {
         // Moving over the icon or the text also fires dragleave: only leaving the area counts.
@@ -59,13 +64,15 @@ export function Dropzone({ rule, label, hint = rule.hint, onFile, className }: D
       onDrop={(event) => {
         event.preventDefault();
         setDragging(false);
-        handleFile(event.dataTransfer.files[0]);
+        handleFile(event.dataTransfer.files[0]); // ignored while disabled
       }}
       className={cn(
-        "flex cursor-pointer flex-col items-center justify-center gap-3 border border-dashed px-6 py-10 text-center transition-colors",
+        "flex flex-col items-center justify-center gap-3 border border-dashed px-6 py-10 text-center transition-colors",
         // The input is visually hidden: the area shows its keyboard focus.
         "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
-        dragging ? "border-accent bg-accent-soft" : "border-input bg-mist/50 hover:border-ink-800",
+        dragging ? "border-accent bg-accent-soft" : "border-input bg-mist/50",
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+        !disabled && !dragging && "hover:border-ink-800",
         className,
       )}
     >
@@ -76,6 +83,7 @@ export function Dropzone({ rule, label, hint = rule.hint, onFile, className }: D
         type="file"
         accept={rule.accept}
         className="sr-only"
+        disabled={disabled}
         onChange={(event) => {
           handleFile(event.target.files?.[0]);
           event.target.value = ""; // choosing the same file again must trigger onChange
