@@ -16,6 +16,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<CurrentUser>;
   logout: () => void;
   retry: () => void;
+  /** The server returned the updated user (e.g. after editing the profile). */
+  setCurrentUser: (user: CurrentUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -105,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       logout,
       retry: () => void loadUser(),
+      setCurrentUser: setUser,
     }),
     [user, status, login, logout, loadUser],
   );

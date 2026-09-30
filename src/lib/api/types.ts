@@ -275,6 +275,13 @@ export interface LearnerQuiz {
   attempts_used: number;
   passing_score: number;
   passed: boolean;
+  /** Sent back with the attempt: if the quiz changed meanwhile, the attempt is not graded (409). */
+  version: string;
+}
+
+export interface QuizAnswer {
+  question_id: string;
+  response: QuizResponse | null;
 }
 
 export type QuizResponse =
@@ -291,6 +298,7 @@ export interface AttemptResult {
   total: number;
   attempts_used: number;
   attempts_remaining: number;
+  /** `expected` (the solution, in option ids) only comes once the quiz is passed. */
   results: { question_id: string; correct: boolean; explanation: string; expected: unknown }[];
   module_completed: boolean;
   next_module_id: number | null;

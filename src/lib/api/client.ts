@@ -175,6 +175,8 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** "blob" for binary responses (images, audio); JSON otherwise. */
   as?: "json" | "blob";
+  /** Let the request finish after the page closes (e.g. saving where a video was left). */
+  keepalive?: boolean;
 }
 
 function buildUrl(path: string, query?: Query): string {
@@ -186,7 +188,7 @@ function buildUrl(path: string, query?: Query): string {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, query, auth = true, signal, as = "json" } = options;
+  const { method = "GET", body, query, auth = true, signal, as = "json", keepalive } = options;
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   const url = buildUrl(path, query);
 
@@ -195,6 +197,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       return await fetch(url, {
         method,
         signal,
+        keepalive,
         headers: {
           ...(body !== undefined && !isForm ? { "Content-Type": "application/json" } : {}),
           ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),

@@ -51,6 +51,10 @@ export const authApi = {
 
   me: () => http.get<CurrentUser>("/auth/me"),
 
+  /** Own name, or password (the current one is required). A new password ends every session. */
+  updateMe: (changes: { name?: string; current_password?: string; new_password?: string }) =>
+    http.patch<CurrentUser>("/auth/me", changes),
+
   async logout(): Promise<void> {
     const refresh = tokenStore.refresh();
     tokenStore.clear();

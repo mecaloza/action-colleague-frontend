@@ -8,6 +8,7 @@ import { ModuleVideo } from "@/components/courses/module-video";
 import { BackLink } from "@/components/layout/back-link";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageError, PageLoading } from "@/components/layout/query-state";
+import { Reading } from "@/components/learn/reading";
 import { Button } from "@/components/ui/button";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { LearnerModule } from "@/lib/api/types";
@@ -31,11 +32,7 @@ function ModuleContent({ module }: { module: LearnerModule }) {
           </a>
         </Button>
       )}
-      {module.content_text && (
-        <div className="max-w-none whitespace-pre-wrap border-l-2 border-accent bg-mist/60 p-6 leading-relaxed">
-          {module.content_text}
-        </div>
-      )}
+      {module.content_text && <Reading text={module.content_text} />}
       {!module.video && !module.document && !module.content_text && (
         <EmptyState icon={<FileText />} title="Este módulo aún no tiene contenido" />
       )}

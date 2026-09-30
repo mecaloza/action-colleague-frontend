@@ -1,195 +1,164 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Eye, EyeOff, KeyRound, UserRound } from "lucide-react";
+import { PageHero } from "@/components/layout/page-hero";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/auth-context";
-import { api } from "@/lib/api";
-import { Enrollment } from "@/lib/types";
-import {
-  Mail,
-  Building,
-  Briefcase,
-  Shield,
-  BookOpen,
-  CheckCircle2,
-  Clock,
-} from "lucide-react";
-import { Progress } from "@/components/ui/progress";
-import { useTranslations } from "next-intl";
+import { authApi, type CurrentUser } from "@/lib/api/auth";
+import { toastError } from "@/lib/notify";
 
-function ProfilePage() {
-  const t = useTranslations("profile");
-  const { user } = useAuth();
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+const MIN_PASSWORD = 8;
 
-  useEffect(() => {
-    if (user) {
-      api
-        .getEnrollments(String(user.id))
-        .then(setEnrollments)
-        .catch(() => setEnrollments([]));
-    }
-  }, [user]);
-
-  if (!user) return null;
-
-  const completedCourses = enrollments.filter(
-    (e) => e.status === "completed"
-  );
-  const inProgressCourses = enrollments.filter(
-    (e) => e.status === "in_progress" || e.status === "enrolled"
-  );
-
+function Section({ icon, title, hint, children }: { icon: React.ReactNode; title: string; hint: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-6">
+    <section className="grid gap-6 border-t border-border py-10 md:grid-cols-[280px_1fr]">
       <div>
-        <h1 className="text-3xl font-bold">{t("title")}</h1>
-        <p className="text-muted-foreground">{t("subtitle")}</p>
+        <p className="flex items-center gap-2 font-display text-xl font-medium tracking-tightest">
+          {icon} {title}
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{hint}</p>
       </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* User Info Card */}
-        <Card className="lg:col-span-1">
-          <CardContent className="flex flex-col items-center pt-6">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground text-2xl font-bold">
-              {user.name.charAt(0)}
-            </div>
-            <h2 className="mt-4 text-xl font-semibold">{user.name}</h2>
-            <p className="text-sm text-muted-foreground">{user.position}</p>
-            <Badge className="mt-2" variant="secondary">
-              {user.role}
-            </Badge>
-
-            <div className="mt-6 w-full space-y-3">
-              <div className="flex items-center gap-3 text-sm">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span>{user.email}</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Building className="h-4 w-4 text-muted-foreground" />
-                <span>{user.department || t("emptyValue")}</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Briefcase className="h-4 w-4 text-muted-foreground" />
-                <span>{user.position || t("emptyValue")}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Role & Permissions + Courses */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Role & Permissions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                {t("rolePermissions")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">{t("role")}</p>
-                  <p className="text-sm font-medium capitalize">{user.role}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Enrolled Courses */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BookOpen className="h-5 w-5" />
-                {t("enrolledCourses")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {enrollments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {t("noCourses")}
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="flex items-center gap-2 rounded-lg border p-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <div>
-                        <p className="text-lg font-semibold">
-                          {completedCourses.length}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {t("completed")}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-lg border p-3">
-                      <Clock className="h-5 w-5 text-blue-600" />
-                      <div>
-                        <p className="text-lg font-semibold">
-                          {inProgressCourses.length}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {t("inProgress")}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Course list */}
-                  {enrollments.map((enrollment) => (
-                    <div
-                      key={enrollment.id}
-                      className="flex items-center justify-between rounded-lg border p-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">
-                          {enrollment.course?.title ?? `Curso #${enrollment.course_id}`}
-                        </p>
-                        <div className="mt-1 flex items-center gap-2">
-                          <Progress
-                            value={enrollment.progress ?? 0}
-                            className="h-1.5 flex-1"
-                          />
-                          <span className="text-xs text-muted-foreground shrink-0">
-                            {enrollment.progress ?? 0}%
-                          </span>
-                        </div>
-                      </div>
-                      <Badge
-                        variant={
-                          enrollment.status === "completed"
-                            ? "default"
-                            : "secondary"
-                        }
-                        className="ml-3 shrink-0"
-                      >
-                        {enrollment.status === "completed"
-                          ? t("done")
-                          : enrollment.status === "in_progress"
-                          ? t("inProgress")
-                          : t("enrolled")}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
+      <div className="max-w-md">{children}</div>
+    </section>
   );
 }
 
-/** Previous-version screen: keeps the page padding the old layout used to add. */
-export default function Page() {
+function NameForm({ user }: { user: CurrentUser }) {
+  const { setCurrentUser } = useAuth();
+  const [name, setName] = useState(user.name);
+  const trimmed = name.trim();
+  const save = useMutation({
+    mutationFn: () => authApi.updateMe({ name: trimmed }),
+    onSuccess: (updated) => {
+      setCurrentUser(updated);
+      toast.success("Nombre actualizado");
+    },
+    onError: toastError,
+  });
   return (
-    <div className="container py-8">
-      <ProfilePage />
-    </div>
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate();
+      }}
+    >
+      <div>
+        <Label htmlFor="profile-name">Nombre</Label>
+        <Input id="profile-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} autoComplete="name" />
+      </div>
+      <Button type="submit" loading={save.isPending} disabled={!trimmed || trimmed === user.name}>
+        Guardar nombre
+      </Button>
+    </form>
+  );
+}
+
+function PasswordForm({ user }: { user: CurrentUser }) {
+  const { login, logout } = useAuth();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [visible, setVisible] = useState(false);
+  const mismatch = confirmation.length > 0 && confirmation !== next;
+  const tooShort = next.length > 0 && next.length < MIN_PASSWORD;
+
+  const change = useMutation({
+    mutationFn: () => authApi.updateMe({ current_password: current, new_password: next }),
+    onSuccess: async () => {
+      const password = next;
+      setCurrent("");
+      setNext("");
+      setConfirmation("");
+      // Changing it ends every session (a stolen one too): sign this one back in with the new password.
+      try {
+        await login(user.email, password);
+        toast.success("Contraseña actualizada. Tus otros dispositivos tendrán que volver a iniciar sesión.");
+      } catch {
+        // The change is done; only this session's renewal failed (network): sign in again by hand.
+        toast.success("Contraseña actualizada. Vuelve a iniciar sesión con la nueva.");
+        logout();
+      }
+    },
+    onError: toastError,
+  });
+
+  const type = visible ? "text" : "password";
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        change.mutate();
+      }}
+    >
+      <div>
+        <Label htmlFor="current-password">Contraseña actual</Label>
+        <Input id="current-password" type={type} value={current} onChange={(event) => setCurrent(event.target.value)} autoComplete="current-password" />
+      </div>
+      <div>
+        <Label htmlFor="new-password">Contraseña nueva</Label>
+        <Input
+          id="new-password"
+          type={type}
+          value={next}
+          onChange={(event) => setNext(event.target.value)}
+          autoComplete="new-password"
+          maxLength={128}
+          aria-invalid={tooShort || undefined}
+          aria-describedby="new-password-hint"
+        />
+        <p id="new-password-hint" className={tooShort ? "mt-1.5 text-xs text-destructive" : "mt-1.5 text-xs text-muted-foreground"}>
+          Al menos {MIN_PASSWORD} caracteres.
+        </p>
+      </div>
+      <div>
+        <Label htmlFor="confirm-password">Repite la contraseña nueva</Label>
+        <Input
+          id="confirm-password"
+          type={type}
+          value={confirmation}
+          onChange={(event) => setConfirmation(event.target.value)}
+          autoComplete="new-password"
+          aria-invalid={mismatch || undefined}
+        />
+        {mismatch && <p className="mt-1.5 text-xs text-destructive">Las contraseñas no coinciden.</p>}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" loading={change.isPending} disabled={!current || next.length < MIN_PASSWORD || next !== confirmation}>
+          Cambiar contraseña
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => setVisible((value) => !value)} aria-pressed={visible}>
+          {visible ? <EyeOff /> : <Eye />} {visible ? "Ocultar" : "Mostrar"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export default function ProfilePage() {
+  const { user } = useAuth();
+  if (!user) return null; // the app shell only renders pages for a signed-in user
+  return (
+    <>
+      <PageHero eyebrow="Mi perfil" title={user.name} description={user.email} />
+      <div className="container py-4">
+        <Section icon={<UserRound className="h-5 w-5 text-accent" />} title="Tus datos" hint="Así te ven los administradores en los reportes.">
+          <NameForm key={user.name} user={user} />
+        </Section>
+        <Section
+          icon={<KeyRound className="h-5 w-5 text-accent" />}
+          title="Contraseña"
+          hint="Cambiarla cierra tu sesión en los demás dispositivos."
+        >
+          <PasswordForm user={user} />
+        </Section>
+      </div>
+    </>
   );
 }
