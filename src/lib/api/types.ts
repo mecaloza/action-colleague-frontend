@@ -379,6 +379,10 @@ export interface Slide {
   title: string;
   subtitle: string;
   points: string[];
+  /** One per point, same order ("" or missing: the layout's plain marker). Names from `slide-icons`. */
+  icons?: string[];
+  /** The statement's or the figure's icon. */
+  icon?: string;
   stat_value: string;
   stat_label: string;
   quote_author: string;
