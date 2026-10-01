@@ -6,6 +6,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { Slide, SlideContext, SlideLayout, StoryboardScene } from "@/lib/api/types";
 import { twoDigits } from "@/lib/format";
+import { IconPicker } from "./icon-picker";
 import { ListEditor } from "./list-editor";
 import { RowActions } from "./row-actions";
 import { SlidePreview } from "./slide-preview";
@@ -19,6 +20,9 @@ const LAYOUTS: { value: SlideLayout; label: string }[] = [
   { value: "comparison", label: "Comparación" },
   { value: "closing", label: "Cierre" },
 ];
+
+/** The layouts whose points can carry an icon (the steps keep their numbers). */
+const ICON_LAYOUTS: SlideLayout[] = ["bullets", "closing"];
 
 /** The layouts whose slide lists short phrases, and what that list is called. */
 const POINTS_LABEL: Partial<Record<SlideLayout, string>> = {
@@ -65,6 +69,12 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
     </div>
   );
   const pointsLabel = POINTS_LABEL[slide.layout];
+  const iconField = (label: string) => (
+    <div className="flex items-center gap-3">
+      <IconPicker value={slide.icon ?? ""} onChange={(icon) => onChange({ icon })} label={label} />
+      <span className="text-sm text-muted-foreground">Ícono (opcional)</span>
+    </div>
+  );
 
   return (
     <>
@@ -73,6 +83,7 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
           {textField("stat_value", "Dato (número o cifra corta)", 40)}
           {textField("stat_label", "Qué significa")}
           {textField("subtitle", "Contexto (opcional)")}
+          {iconField("el dato")}
         </>
       ) : slide.layout === "statement" ? (
         <>
@@ -87,6 +98,7 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
             />
           </div>
           {textField("quote_author", "Autor o fuente (opcional)", 60)}
+          {iconField("la frase")}
         </>
       ) : (
         <>
@@ -98,10 +110,12 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
         <ListEditor
           label={pointsLabel}
           values={slide.points}
-          onChange={(points) => onChange({ points })}
+          onChange={(points, icons) => onChange(icons ? { points, icons } : { points })}
           placeholder="Frase corta"
           max={5}
           maxLength={160}
+          icons={ICON_LAYOUTS.includes(slide.layout) ? slide.icons ?? [] : undefined}
+          onIconsChange={ICON_LAYOUTS.includes(slide.layout) ? (icons) => onChange({ icons }) : undefined}
         />
       )}
       {slide.layout === "comparison" && (

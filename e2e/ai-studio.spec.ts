@@ -67,6 +67,18 @@ test("un admin crea un curso con IA de principio a fin", async ({ page }) => {
   const narration = page.getByLabel("Narración").first();
   await narration.fill("Bienvenidos. En este módulo veremos por qué el casco es obligatorio.");
   await expect(page.getByRole("img", { name: "Diapositiva de la escena 1" })).toBeVisible();
+  // The AI picked an icon for each point; the admin can change it from the picker.
+  const firstPointIcon = page.getByRole("button", { name: /^Ícono de Viñetas 1:/ }).first();
+  await expect(firstPointIcon).toHaveAccessibleName("Ícono de Viñetas 1: Idea");
+  await firstPointIcon.click();
+  await expect(page.getByRole("menuitemradio", { name: "Idea" })).toBeFocused(); // opens on the icon in use
+  await page.getByRole("menuitemradio", { name: "Casco" }).click();
+  await expect(firstPointIcon).toHaveAccessibleName("Ícono de Viñetas 1: Casco");
+  // Removing a point takes its icon with it: the next point moves up with its own.
+  await page.getByRole("button", { name: "Quitar: Primera idea clave" }).click();
+  await expect(page.getByRole("textbox", { name: "Viñetas 1", exact: true }).first()).toHaveValue("Segunda idea clave");
+  await expect(firstPointIcon).toHaveAccessibleName("Ícono de Viñetas 1: Objetivo");
+  await expect(page.getByRole("button", { name: /^Ícono de Viñetas 3:/ })).toHaveCount(0);
   const rewrite = page.getByLabel("¿Prefieres que la IA lo reescriba?");
   await rewrite.fill("Más ejemplos de la planta");
   await page.getByRole("button", { name: /Guardar guion/ }).click();

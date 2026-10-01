@@ -31,7 +31,7 @@ function duplicateScene(scenes: StoryboardScene[], index: number): StoryboardSce
 /** A new last scene that starts as a copy of the current last one, minus its title, points and narration. */
 function appendBlankScene(scenes: StoryboardScene[]): StoryboardScene[] {
   const last = scenes[scenes.length - 1];
-  return [...scenes, { ...last, id: newSceneId(), narration: "", slide: { ...last.slide, title: "", points: [] } }];
+  return [...scenes, { ...last, id: newSceneId(), narration: "", slide: { ...last.slide, title: "", points: [], icons: [] } }];
 }
 
 interface StoryboardEditorProps {
