@@ -7,6 +7,7 @@ import type {
   OutlineRequest,
   Question,
   RenderRequest,
+  SceneVisual,
   Slide,
   SlideContext,
   Storyboard,
@@ -44,9 +45,25 @@ export const studioApi = {
     http.post<Job>(`/modules/${moduleId}/storyboard/regenerate`, { feedback }),
   suggestQuiz: (moduleId: number, count = 5) => http.post<Job>(`/modules/${moduleId}/evaluation/generate`, { count }),
 
-  /** The PNG the video will use for this slide (same renderer as the video). */
-  slidePreview: (slide: Slide, context: SlideContext, signal?: AbortSignal) =>
-    apiRequest<Blob>("/slides/preview", { method: "POST", body: { slide, context }, as: "blob", signal }),
+  /**
+   * The PNG the video will use for this slide (same renderer as the video), over the scene's infographic or image
+   * when it is made; `pending` while it is still being made.
+   */
+  slidePreview: async (
+    slide: Slide,
+    context: SlideContext,
+    signal?: AbortSignal,
+    visual?: SceneVisual,
+    courseId?: number,
+  ): Promise<{ image: Blob; pending: boolean }> => {
+    const { blob, headers } = await apiRequest<{ blob: Blob; headers: Headers }>("/slides/preview", {
+      method: "POST",
+      body: { slide, context, visual, course_id: courseId },
+      as: "blobWithHeaders",
+      signal,
+    });
+    return { image: blob, pending: headers.get("X-Visual-Pending") === "1" };
+  },
 
   voices: () => http.get<Voice[]>("/studio/voices"),
   cloneVoice: (name: string, sample: File) => {

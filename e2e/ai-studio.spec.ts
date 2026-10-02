@@ -81,20 +81,74 @@ test("un admin crea un curso con IA de principio a fin", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Ícono de Viñetas 3:/ })).toHaveCount(0);
   // The AI chose what fills each scene's background; the admin can change it.
   // The scene's own item (the innermost one: the module's item holds it too).
-  const secondScene = page
-    .getByRole("listitem")
-    .filter({ has: page.getByRole("img", { name: "Diapositiva de la escena 2" }) })
-    .last();
+  const scene = (number: number) =>
+    page
+      .getByRole("listitem")
+      .filter({ has: page.getByLabel(`Diseño de la escena ${number}`, { exact: true }) })
+      .last();
+  const secondScene = scene(2);
   const secondVisual = secondScene.getByLabel("Visual de fondo");
-  await expect(secondVisual).toHaveValue("clip");
+  await expect(secondVisual).toHaveValue("none"); // teaching scenes carry no decorative background by default
   await secondVisual.selectOption("image");
   await secondScene.getByLabel("Qué debe mostrar (en inglés)").fill("");
   await expect(secondScene.getByText(/sin eso la escena sale sin visual/)).toBeVisible();
   await secondScene.getByLabel("Qué debe mostrar (en inglés)").fill("Cutaway of a truck tire showing its steel belts");
+  // An infographic scene: its picture is its content, described in Spanish, with a new version on request.
+  const infographic = scene(3);
+  await expect(infographic.getByLabel("Diseño de la escena 3")).toHaveValue("visual");
+  await expect(infographic.getByLabel("Qué explica la infografía")).toHaveValue(/Presión y desgaste/);
+  await expect(infographic.getByLabel("Visual de fondo")).toHaveCount(0);
+  await infographic.getByRole("button", { name: "Otra versión" }).click();
+  await expect(infographic.getByText("Versión 2")).toBeVisible();
+  // Switching its layout away and back keeps the description.
+  await infographic.getByLabel("Diseño de la escena 3").selectOption("bullets");
+  await expect(infographic.getByLabel("Qué explica la infografía")).toHaveCount(0);
+  await infographic.getByLabel("Diseño de la escena 3").selectOption("visual");
+  await expect(infographic.getByLabel("Qué explica la infografía")).toHaveValue(/Presión y desgaste/);
+  // A practical case in its four parts.
+  const practicalCase = scene(4);
+  await expect(practicalCase.getByLabel("Situación")).toHaveValue("Situación de la flota");
+  await expect(practicalCase.getByLabel("Resultado")).toHaveValue("Lo que mejoró");
+  // A comparison turned into a chart with exact figures.
+  const chart = scene(5);
+  await chart.getByLabel("Diseño de la escena 5").selectOption("chart");
+  await chart.getByRole("button", { name: "Agregar barra" }).click();
+  await chart.getByLabel("Barra 1: qué mide").fill("Presión correcta");
+  await chart.getByLabel("Barra 1: valor").fill("80000");
+  await chart.getByRole("button", { name: "Agregar barra" }).click();
+  await chart.getByLabel("Barra 2: qué mide").fill("20 % baja");
+  await chart.getByLabel("Barra 2: valor").fill("");
+  await expect(chart.getByLabel("Barra 2: valor")).toHaveAttribute("aria-invalid", "true"); // not a figure yet
+  await chart.getByLabel("Barra 2: valor").fill("1e13");
+  await expect(chart.getByLabel("Barra 2: valor")).toHaveAttribute("aria-invalid", "true"); // past the limit
+  await chart.getByLabel("Barra 1: valor").fill("80,000"); // Mexican thousands
+  await chart.getByLabel("Barra 2: valor").fill("60000,5");
+  await expect(chart.getByLabel("Barra 2: valor")).toHaveAttribute("aria-invalid", "false");
+  await chart.getByLabel("Unidad").fill("km");
   const rewrite = page.getByLabel("¿Prefieres que la IA lo reescriba?");
   await rewrite.fill("Más ejemplos de la planta");
-  await page.getByRole("button", { name: /Guardar guion/ }).click();
+  // After saving, the infographic's preview is asked again (the server is drawing the new version).
+  const infographicPreview = page.waitForRequest(
+    (request) => request.url().endsWith("/slides/preview") && request.postDataJSON()?.visual?.variant === 1,
+  );
+  const scenes = page.getByRole("list", { name: /^Escenas de/ });
+  await scenes.evaluate((list) => list.setAttribute("data-before-save", ""));
+  const [saved] = await Promise.all([
+    page.waitForRequest((request) => request.url().endsWith("/storyboard") && request.method() === "PUT"),
+    page.getByRole("button", { name: /Guardar guion/ }).click(),
+  ]);
+  const savedScenes = saved.postDataJSON().scenes;
+  expect(savedScenes[2].visual).toMatchObject({ kind: "infographic", variant: 1 });
+  expect(savedScenes[4].slide).toMatchObject({
+    layout: "chart",
+    chart_labels: ["Presión correcta", "20 % baja"],
+    chart_values: [80000, 60000.5],
+    chart_unit: "km",
+  });
   await expect(page.getByText("Guion guardado")).toBeVisible();
+  await scene(3).getByLabel("Qué explica la infografía").scrollIntoViewIfNeeded();
+  await infographicPreview;
+  await expect(scenes).toHaveAttribute("data-before-save", ""); // the same form: not remounted with the saved copy
   await expect(page.getByRole("button", { name: "Descartar cambios" })).toBeHidden(); // the form has the saved copy
   await expect(rewrite).toHaveValue("Más ejemplos de la planta"); // and it kept the instructions for a rewrite
   await page.getByRole("button", { name: /Elegir voz y estilo/ }).click();
@@ -111,11 +165,17 @@ test("un admin crea un curso con IA de principio a fin", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Producir 2 videos/ })).toBeDisabled(); // its voice is missing
   await second.getByRole("button", { name: /Voz de prueba/ }).click();
   // A presenter that only exists in Standard can't stay chosen in Premium.
-  await page.getByRole("button", { name: /Presentador básico/ }).first().click();
+  await page
+    .getByRole("button", { name: /Presentador básico/ })
+    .first()
+    .click();
   await page.getByRole("button", { name: /^Premium/ }).click();
   await expect(page.getByRole("button", { name: /Presentador básico/ }).first()).toBeDisabled();
   await expect(page.getByRole("button", { name: /Producir 2 videos/ })).toBeDisabled(); // the first presenter was cleared
-  await page.getByRole("button", { name: /Presentadora de prueba/ }).first().click();
+  await page
+    .getByRole("button", { name: /Presentadora de prueba/ })
+    .first()
+    .click();
   await page.getByRole("button", { name: /^Alta/ }).click();
   await page.getByRole("button", { name: "Claro" }).click();
   const [render] = await Promise.all([
@@ -132,7 +192,10 @@ test("un admin crea un curso con IA de principio a fin", async ({ page }) => {
 
   // 05 Production
   await expect(page.getByRole("heading", { name: "Tu curso está producido." })).toBeVisible({ timeout: 180_000 });
-  await page.getByRole("button", { name: /Ver el video de/ }).first().click();
+  await page
+    .getByRole("button", { name: /Ver el video de/ })
+    .first()
+    .click();
   await expect(page.getByRole("dialog").locator("video")).toBeVisible();
   await page.keyboard.press("Escape");
 
@@ -291,7 +354,10 @@ test("si la IA no puede proponer la estructura, el paso lo dice y deja volver al
 /** A course whose proposal is running when the studio opens (asked elsewhere); `finish` ends it. */
 async function courseWithRunningProposal(page: Page) {
   const api = await adminApi(page);
-  const course = await api.call<{ id: number }>("POST", "/courses", { title: `Propuesta en curso ${Date.now()}`, source: "ai" });
+  const course = await api.call<{ id: number }>("POST", "/courses", {
+    title: `Propuesta en curso ${Date.now()}`,
+    source: "ai",
+  });
   await api.call("PATCH", `/courses/${course.id}`, {
     settings: { brief: "Brief guardado: atender a un cliente molesto en la tienda, paso a paso.", modules: 3 },
   });
@@ -336,7 +402,14 @@ async function courseWithRunningProposal(page: Page) {
               audience: "A",
               objectives: ["O"],
               modules: [
-                { title: "M1", summary: "S", objectives: ["o"], key_points: ["k"], estimated_minutes: 5, include_quiz: true },
+                {
+                  title: "M1",
+                  summary: "S",
+                  objectives: ["o"],
+                  key_points: ["k"],
+                  estimated_minutes: 5,
+                  include_quiz: true,
+                },
               ],
             }),
           )
@@ -374,13 +447,20 @@ test("cuando termina una propuesta pedida en otra visita, el estudio sigue en pa
   const blanked = await watchStudio();
 
   finish("failed");
-  await page.getByRole("navigation", { name: "Pasos del estudio" }).getByRole("button", { name: /Estructura/ }).click();
+  await page
+    .getByRole("navigation", { name: "Pasos del estudio" })
+    .getByRole("button", { name: /Estructura/ })
+    .click();
   await page.getByRole("button", { name: "Descartar" }).click(); // leaving the brief with unsent text asks first
-  await expect(page.getByRole("heading", { name: "No se pudo proponer la estructura" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "No se pudo proponer la estructura" })).toBeVisible({
+    timeout: 15_000,
+  });
   expect(await blanked()).toBe(false);
 });
 
-test("cuando termina bien una propuesta pedida en otra visita, el foco llega a la estructura propuesta", async ({ page }) => {
+test("cuando termina bien una propuesta pedida en otra visita, el foco llega a la estructura propuesta", async ({
+  page,
+}) => {
   const { course, watchStudio, finish } = await courseWithRunningProposal(page);
   await page.goto(`/admin/courses/${course.id}/studio`);
   await expect(page.getByRole("heading", { name: "La IA está armando tu curso" })).toBeVisible();
