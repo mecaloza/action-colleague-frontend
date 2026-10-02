@@ -173,8 +173,8 @@ export interface RequestOptions {
   query?: Query;
   auth?: boolean;
   signal?: AbortSignal;
-  /** "blob" for binary responses (images, audio); JSON otherwise. */
-  as?: "json" | "blob";
+  /** "blob" for binary responses (images, audio), "blobWithHeaders" when its headers matter too; JSON otherwise. */
+  as?: "json" | "blob" | "blobWithHeaders";
   /** Let the request finish after the page closes (e.g. saving where a video was left). */
   keepalive?: boolean;
 }
@@ -216,6 +216,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (!response.ok) throw await toApiError(response);
   if (as === "blob") return (await response.blob()) as T;
+  if (as === "blobWithHeaders") return { blob: await response.blob(), headers: response.headers } as T;
   if (response.status === 204) return undefined as T;
   const text = await response.text();
   if (!text) return undefined as T;

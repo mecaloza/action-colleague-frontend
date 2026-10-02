@@ -377,7 +377,18 @@ export interface Job {
 }
 
 // AI studio
-export type SlideLayout = "cover" | "bullets" | "statement" | "stat" | "steps" | "comparison" | "closing";
+export type SlideLayout =
+  | "cover"
+  | "bullets"
+  | "statement"
+  | "stat"
+  | "steps"
+  | "comparison"
+  | "closing"
+  | "chart"
+  | "calculation"
+  | "case"
+  | "visual";
 export type SlideTheme = "dark" | "light";
 
 export interface ComparisonColumn {
@@ -400,6 +411,10 @@ export interface Slide {
   quote_author: string;
   left: ComparisonColumn;
   right: ComparisonColumn;
+  /** "chart": each bar's label and exact value, and their unit. */
+  chart_labels?: string[];
+  chart_values?: number[];
+  chart_unit?: string;
 }
 
 export interface SlideContext {
@@ -413,15 +428,17 @@ export interface SlideContext {
   backdrop?: boolean;
 }
 
-export type VisualKind = "none" | "stock" | "image" | "clip";
+export type VisualKind = "none" | "stock" | "image" | "clip" | "infographic";
 
 /** What fills the screen behind a scene's text, found or generated when the video is produced. */
 export interface SceneVisual {
   kind: VisualKind;
   /** English keywords to search stock video. */
   query: string;
-  /** English description to generate an image or an animated clip. */
+  /** What to generate: an image or a clip (in English), or an infographic (in the course's language). */
   prompt: string;
+  /** "Another version" of the same description. */
+  variant?: number;
 }
 
 export interface StoryboardScene {

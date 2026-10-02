@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus, RefreshCw, Save } from "lucide-react";
@@ -15,7 +15,7 @@ import { moveItem, removeAt, replaceAt } from "@/lib/array";
 import { formatDuration, plural } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { useStudioCapabilities } from "@/lib/hooks/use-studio-capabilities";
-import { NO_VISUAL, narrationSeconds, SceneEditor } from "./scene-editor";
+import { NO_VISUAL, narrationSeconds, SceneEditor, sceneVisual } from "./scene-editor";
 import { videoStyle } from "./steps";
 import { useProduceModule } from "./use-produce-module";
 import { useStudioCache } from "./use-studio-cache";
@@ -23,6 +23,14 @@ import { useStudioCache } from "./use-studio-cache";
 const MAX_SCENES = 40;
 
 const newSceneId = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+
+/** A clip the server will make (one without a description is left out, and doesn't count). */
+const isClip = (scene: StoryboardScene) => scene.visual?.kind === "clip" && !!scene.visual.prompt.trim();
+
+/** Clips in the scenes before `index`: past the module's cap, the server makes a clip an image. */
+function clipsBefore(scenes: StoryboardScene[], index: number): number {
+  return scenes.slice(0, index).filter(isClip).length;
+}
 
 /** A copy of the scene at `index`, right after it. */
 function duplicateScene(scenes: StoryboardScene[], index: number): StoryboardScene[] {
@@ -38,8 +46,8 @@ function appendBlankScene(scenes: StoryboardScene[]): StoryboardScene[] {
       ...last,
       id: newSceneId(),
       narration: "",
-      slide: { ...last.slide, title: "", points: [], icons: [] },
-      visual: NO_VISUAL,
+      slide: { ...last.slide, title: "", points: [], icons: [], chart_labels: [], chart_values: [] },
+      visual: sceneVisual(last.slide.layout, NO_VISUAL),
     },
   ];
 }
@@ -56,8 +64,10 @@ interface StoryboardEditorProps {
 
 /** The module's script scene by scene; saving applies to the next video production. */
 export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChange }: StoryboardEditorProps) {
-  // Out here: saving remounts the form with the saved copy, and the instructions must survive it.
+  // Out here: a new copy from elsewhere remounts the form, and the instructions must survive it.
   const [feedback, setFeedback] = useState("");
+  // The copy this form saved itself: the form already shows it, so it isn't remounted (nor the page scrolled up).
+  const ownSave = useRef<string | null>(null);
   const storyboard = useQuery({
     queryKey: studioKeys.storyboard(module.id),
     queryFn: () => studioApi.storyboard(module.id),
@@ -67,11 +77,15 @@ export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChan
     // Another tab may have changed it; a new copy restarts the form, so never over unsaved edits.
     refetchOnWindowFocus: !dirty,
   });
+  const copy = JSON.stringify(storyboard.data ?? null);
+  const [formKey, setFormKey] = useState(copy);
+  if (storyboard.data && copy !== formKey && copy !== ownSave.current) setFormKey(copy); // another tab, the AI
   if (storyboard.isPending) return <Skeleton className="h-96" />;
   if (!storyboard.data) return <QueryError query={storyboard} />;
   return (
     <StoryboardForm
-      key={JSON.stringify(storyboard.data)}
+      key={formKey}
+      onSaved={(stored) => (ownSave.current = JSON.stringify(stored))}
       course={course}
       module={module}
       rendering={rendering}
@@ -85,7 +99,9 @@ export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChan
 
 interface StoryboardFormProps extends Omit<StoryboardEditorProps, "dirty"> {
   saved: Storyboard;
-  /** Owned by the editor: this form is remounted whenever the saved script changes. */
+  /** Called with what the server stored, before the editor's copy becomes it. */
+  onSaved: (stored: Storyboard) => void;
+  /** Owned by the editor: this form is remounted when the saved script changes elsewhere. */
   feedback: string;
   onFeedbackChange: (feedback: string) => void;
 }
@@ -95,6 +111,7 @@ function StoryboardForm({
   module,
   rendering,
   saved,
+  onSaved,
   feedback,
   onFeedbackChange: setFeedback,
   onDirtyChange,
@@ -106,7 +123,7 @@ function StoryboardForm({
   const [scenes, setScenes] = useState(saved.scenes);
   const capabilities = useStudioCapabilities();
   // Animated clips are capped per module (the server makes the rest images): the picker shows how many are left.
-  const clips = scenes.filter((scene) => scene.visual?.kind === "clip").length;
+  const clips = scenes.filter(isClip).length;
   const dirty = JSON.stringify(scenes) !== JSON.stringify(saved.scenes);
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   // Closed (or replaced by the AI's rewrite): nothing is left unsaved.
@@ -124,7 +141,14 @@ function StoryboardForm({
   const save = useMutation({
     mutationFn: () => studioApi.saveStoryboard(module.id, { scenes }),
     onSuccess: (stored) => {
+      onSaved(stored);
       queryClient.setQueryData(studioKeys.storyboard(module.id), stored);
+      setScenes(stored.scenes); // as the server keeps them (it tidies some fields)
+      // Saving queues the scenes' infographics: the previews that show one ask again (and wait for it).
+      void queryClient.invalidateQueries({
+        queryKey: ["slides", "preview"],
+        predicate: (query) => String(query.queryKey[2]).includes('"visual":'),
+      });
       void refreshCourse(course.id);
       if (!module.video) {
         toast.success("Guion guardado");
@@ -180,7 +204,9 @@ function StoryboardForm({
           <SceneEditor
             key={scene.id}
             visuals={capabilities.visuals ?? []}
-            clipsLeft={(capabilities.max_clips ?? 0) - clips + (scene.visual?.kind === "clip" ? 1 : 0)}
+            clipsLeft={(capabilities.max_clips ?? 0) - clips + (isClip(scene) ? 1 : 0)}
+            clipFits={clipsBefore(scenes, index) < (capabilities.max_clips ?? 0)}
+            courseId={course.id}
             scene={scene}
             index={index}
             total={scenes.length}

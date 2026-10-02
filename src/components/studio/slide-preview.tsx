@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ImageOff, Loader2 } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { studioApi } from "@/lib/api/studio";
-import type { Slide, SlideContext } from "@/lib/api/types";
+import type { SceneVisual, Slide, SlideContext } from "@/lib/api/types";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { cn } from "@/lib/utils";
 
@@ -45,14 +45,18 @@ function releaseSlot() {
   waiting.shift()?.();
 }
 
-/** What the server needs to render one slide. */
-type PreviewRequest = { slide: Slide; context: SlideContext };
+/** What the server needs to render one slide (an infographic's picture is found by its scene's visual). */
+type PreviewRequest = { slide: Slide; context: SlideContext; visual?: SceneVisual; courseId?: number };
 
-async function renderPreview(request: string, signal: AbortSignal): Promise<Blob> {
+/** A prepared picture still being made is polled this often, for a few minutes at most. */
+const PENDING_POLL_MS = 8000;
+const MAX_PENDING_POLLS = 30;
+
+async function renderPreview(request: string, signal: AbortSignal): Promise<{ image: Blob; pending: boolean }> {
   await takeSlot(signal);
   try {
-    const { slide, context } = JSON.parse(request) as PreviewRequest;
-    return await studioApi.slidePreview(slide, context, signal);
+    const { slide, context, visual, courseId } = JSON.parse(request) as PreviewRequest;
+    return await studioApi.slidePreview(slide, context, signal, visual, courseId);
   } finally {
     releaseSlot();
   }
@@ -98,16 +102,26 @@ interface SlidePreviewProps extends PreviewRequest {
  * The slide exactly as the video will show it: rendered by the server with the same renderer.
  * While editing, the image follows the text after a short pause.
  */
-export function SlidePreview({ slide, context, className, alt = "Vista previa de la diapositiva" }: SlidePreviewProps) {
+export function SlidePreview({
+  slide,
+  context,
+  visual,
+  courseId,
+  className,
+  alt = "Vista previa de la diapositiva",
+}: SlidePreviewProps) {
   const { ref, seen } = useSeen<HTMLDivElement>();
   // The request travels as text: debounced, and also the query key, so each distinct slide is rendered once.
-  const request = useDebouncedValue(JSON.stringify({ slide, context }), 400);
+  const request = useDebouncedValue(JSON.stringify({ slide, context, visual, courseId }), 400);
   const image = useQuery({
     queryKey: ["slides", "preview", request],
     queryFn: ({ signal }) => renderPreview(request, signal),
     enabled: seen,
     staleTime: Infinity,
     gcTime: 5 * 60 * 1000,
+    // An infographic still being drawn: ask again until the server has it.
+    refetchInterval: (query) =>
+      query.state.data?.pending && query.state.dataUpdateCount < MAX_PENDING_POLLS ? PENDING_POLL_MS : false,
     placeholderData: keepPreviousData, // keep the last image on screen while the next one renders
     // 429: the server is busy with other previews (other tabs, other admins): wait a bit longer each time.
     retry: (failures, error) => error instanceof ApiError && error.status === 429 && failures < 4,
@@ -115,7 +129,8 @@ export function SlidePreview({ slide, context, className, alt = "Vista previa de
   });
   // The last image that rendered: it stays on screen while the next one renders, and if that one fails.
   const [shown, setShown] = useState<Blob | undefined>(undefined);
-  if (image.data && image.data !== shown) setShown(image.data);
+  if (image.data && image.data.image !== shown) setShown(image.data.image);
+  const pending = !image.isPlaceholderData && (image.data?.pending ?? false);
   const url = useObjectUrl(shown);
   const failed = image.isError && !image.isFetching;
   const retry = (
@@ -136,6 +151,16 @@ export function SlidePreview({ slide, context, className, alt = "Vista previa de
       {image.isFetching && (
         <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-white/70" aria-label="Actualizando vista previa" />
       )}
+      {/* Always mounted, so screen readers announce the text when it appears. */}
+      <p
+        role="status"
+        className={cn(
+          "absolute inset-x-0 bottom-0 bg-black/75 px-3 py-1.5 text-center text-[11px] text-white/80",
+          !(pending && !failed) && "sr-only",
+        )}
+      >
+        {pending && !failed ? "La imagen de la escena se está dibujando; aparece aquí al terminar." : ""}
+      </p>
       {failed &&
         (url ? (
           <div className="absolute inset-x-0 bottom-0 flex justify-center gap-2 bg-black/75 px-3 py-1.5 text-[11px]">
