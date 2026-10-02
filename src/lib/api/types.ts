@@ -27,9 +27,18 @@ export interface CourseSettings {
   voice_name: string;
   avatar_id: string;
   avatar_name: string;
+  /** A second presenter who takes turns with the first, with a voice of its own ("" = none). */
+  co_avatar_id?: string;
+  co_avatar_name?: string;
+  co_voice_id?: string;
+  co_voice_name?: string;
+  /** HeyGen engine: "" the server's default, "avatar_iv" more natural (about 4× the cost). */
+  avatar_engine?: AvatarEngine;
   presenter: boolean;
   theme: SlideTheme;
 }
+
+export type AvatarEngine = "" | "avatar_iii" | "avatar_iv";
 
 export interface CourseSummary {
   id: number;
@@ -458,6 +467,10 @@ export interface Avatar {
   preview_image_url: string;
   preview_video_url: string;
   gender: string;
+  /** The company's own avatar (made from a photo of one of its people): listed first. */
+  own?: boolean;
+  /** HeyGen engines it renders on (empty: any). */
+  engines?: string[];
 }
 
 export interface RenderRequest {
@@ -466,6 +479,11 @@ export interface RenderRequest {
   voice_name?: string;
   avatar_id?: string;
   avatar_name?: string;
+  co_avatar_id?: string;
+  co_avatar_name?: string;
+  co_voice_id?: string;
+  co_voice_name?: string;
+  avatar_engine?: AvatarEngine;
   presenter?: boolean;
   theme?: SlideTheme;
 }
