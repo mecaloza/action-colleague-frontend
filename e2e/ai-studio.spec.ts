@@ -79,6 +79,18 @@ test("un admin crea un curso con IA de principio a fin", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "Viñetas 1", exact: true }).first()).toHaveValue("Segunda idea clave");
   await expect(firstPointIcon).toHaveAccessibleName("Ícono de Viñetas 1: Objetivo");
   await expect(page.getByRole("button", { name: /^Ícono de Viñetas 3:/ })).toHaveCount(0);
+  // The AI chose what fills each scene's background; the admin can change it.
+  // The scene's own item (the innermost one: the module's item holds it too).
+  const secondScene = page
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("img", { name: "Diapositiva de la escena 2" }) })
+    .last();
+  const secondVisual = secondScene.getByLabel("Visual de fondo");
+  await expect(secondVisual).toHaveValue("clip");
+  await secondVisual.selectOption("image");
+  await secondScene.getByLabel("Qué debe mostrar (en inglés)").fill("");
+  await expect(secondScene.getByText(/sin eso la escena sale sin visual/)).toBeVisible();
+  await secondScene.getByLabel("Qué debe mostrar (en inglés)").fill("Cutaway of a truck tire showing its steel belts");
   const rewrite = page.getByLabel("¿Prefieres que la IA lo reescriba?");
   await rewrite.fill("Más ejemplos de la planta");
   await page.getByRole("button", { name: /Guardar guion/ }).click();
@@ -104,6 +116,7 @@ test("un admin crea un curso con IA de principio a fin", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Presentador básico/ }).first()).toBeDisabled();
   await expect(page.getByRole("button", { name: /Producir 2 videos/ })).toBeDisabled(); // the first presenter was cleared
   await page.getByRole("button", { name: /Presentadora de prueba/ }).first().click();
+  await page.getByRole("button", { name: /^Alta/ }).click();
   await page.getByRole("button", { name: "Claro" }).click();
   const [render] = await Promise.all([
     page.waitForRequest((request) => request.url().endsWith("/render") && request.method() === "POST"),
@@ -114,6 +127,7 @@ test("un admin crea un curso con IA de principio a fin", async ({ page }) => {
     co_avatar_id: "fake-avatar-2",
     co_voice_id: "fake-voice-es",
     avatar_engine: "avatar_iv",
+    animation: "high",
   });
 
   // 05 Production

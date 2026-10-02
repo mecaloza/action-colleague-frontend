@@ -9,7 +9,15 @@ import { useConfirm } from "@/components/layout/confirm-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { studioApi, studioKeys } from "@/lib/api/studio";
-import type { AvatarEngine, CourseDetail, Job, Slide, SlideTheme, StudioCapabilities } from "@/lib/api/types";
+import type {
+  Animation,
+  AvatarEngine,
+  CourseDetail,
+  Job,
+  Slide,
+  SlideTheme,
+  StudioCapabilities,
+} from "@/lib/api/types";
 import { plural } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { ChoiceButton } from "./choice-button";
@@ -25,6 +33,15 @@ const ENGINES: { value: AvatarEngine; label: string; hint: string }[] = [
     value: "avatar_iv",
     label: "Premium",
     hint: "Gestos y boca más naturales; ideal con fotos de tu equipo. Unas 4 veces el costo.",
+  },
+];
+
+const ANIMATIONS: { value: Animation; label: string; hint: string }[] = [
+  { value: "", label: "Estándar", hint: "Video real e imágenes, con algunos clips animados en los conceptos clave." },
+  {
+    value: "high",
+    label: "Alta",
+    hint: "Clips animados con IA en todas las escenas con visual. Más llamativo y más costoso.",
   },
 ];
 
@@ -92,6 +109,7 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
   const [coAvatar, setCoAvatar] = useState(savedPick(settings.co_avatar_id ?? "", settings.co_avatar_name ?? ""));
   const [coVoice, setCoVoice] = useState(savedPick(settings.co_voice_id ?? "", settings.co_voice_name ?? ""));
   const [engine, setEngine] = useState<AvatarEngine>(settings.avatar_engine ?? "");
+  const [animation, setAnimation] = useState<Animation>(settings.animation ?? "");
   // The same catalog the pickers load: a presenter picked in one quality may not exist in the other.
   const avatars = useQuery({ queryKey: studioKeys.avatars, queryFn: studioApi.avatars, enabled: capabilities.avatar });
   const fits = (picked: Picked | null, quality: AvatarEngine) => {
@@ -127,6 +145,7 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
         co_voice_id: !presenter ? undefined : second ? coVoice?.id : "",
         co_voice_name: !presenter ? undefined : second ? coVoice?.name : "",
         avatar_engine: presenter ? engine : undefined,
+        animation,
         theme,
       }),
     onSuccess: (queued) => {
@@ -266,6 +285,29 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
         <section>
           <SectionTitle
             number={presenter ? "05" : "03"}
+            title="Animación"
+            hint="Qué se ve detrás del texto de cada escena: video real, imágenes y clips animados."
+          />
+          <div role="group" aria-label="Animación" className="grid gap-3 sm:grid-cols-2">
+            {ANIMATIONS.map(({ value, label, hint }) => (
+              <ChoiceButton
+                key={value || "standard"}
+                selected={animation === value}
+                onClick={() => setAnimation(value)}
+                disabled={value === "high" && !capabilities.visuals?.includes("clip")}
+                aria-label={`${label}: ${hint}`}
+                className="h-auto flex-col items-start gap-1 p-4 text-left"
+              >
+                <span className="text-[12px] font-bold uppercase tracking-label">{label}</span>
+                <span className="text-xs font-normal normal-case tracking-normal text-muted-foreground">{hint}</span>
+              </ChoiceButton>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle
+            number={presenter ? "06" : "04"}
             title="Diseño"
             hint="Colores de las diapositivas, con tu marca."
           />
