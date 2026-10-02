@@ -90,8 +90,31 @@ test("un admin crea un curso con IA de principio a fin", async ({ page }) => {
   // 04 Style and voice
   await page.getByRole("button", { name: /Voz de prueba/ }).click();
   await page.getByRole("button", { name: /Presentadora de prueba/ }).click();
+  // A second presenter (the company's own avatar, listed apart) takes turns with its own voice.
+  await page.getByRole("switch", { name: "Agregar un segundo presentador" }).click();
+  const second = page.getByRole("region", { name: "Segundo presentador" });
+  await expect(second.getByRole("group", { name: "De tu empresa" })).toBeVisible();
+  await expect(second.getByRole("button", { name: /Presentadora de prueba/ })).toHaveCount(0); // already the first
+  await second.getByRole("button", { name: /Directivo de prueba/ }).click();
+  await expect(page.getByRole("button", { name: /Producir 2 videos/ })).toBeDisabled(); // its voice is missing
+  await second.getByRole("button", { name: /Voz de prueba/ }).click();
+  // A presenter that only exists in Standard can't stay chosen in Premium.
+  await page.getByRole("button", { name: /Presentador básico/ }).first().click();
+  await page.getByRole("button", { name: /^Premium/ }).click();
+  await expect(page.getByRole("button", { name: /Presentador básico/ }).first()).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Producir 2 videos/ })).toBeDisabled(); // the first presenter was cleared
+  await page.getByRole("button", { name: /Presentadora de prueba/ }).first().click();
   await page.getByRole("button", { name: "Claro" }).click();
-  await page.getByRole("button", { name: /Producir 2 videos/ }).click();
+  const [render] = await Promise.all([
+    page.waitForRequest((request) => request.url().endsWith("/render") && request.method() === "POST"),
+    page.getByRole("button", { name: /Producir 2 videos/ }).click(),
+  ]);
+  expect(render.postDataJSON()).toMatchObject({
+    avatar_id: "fake-avatar",
+    co_avatar_id: "fake-avatar-2",
+    co_voice_id: "fake-voice-es",
+    avatar_engine: "avatar_iv",
+  });
 
   // 05 Production
   await expect(page.getByRole("heading", { name: "Tu curso está producido." })).toBeVisible({ timeout: 180_000 });

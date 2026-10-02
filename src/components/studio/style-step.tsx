@@ -1,22 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useId, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Clapperboard, Mic } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { studioApi } from "@/lib/api/studio";
-import type { CourseDetail, Job, Slide, SlideTheme, StudioCapabilities } from "@/lib/api/types";
+import { studioApi, studioKeys } from "@/lib/api/studio";
+import type { AvatarEngine, CourseDetail, Job, Slide, SlideTheme, StudioCapabilities } from "@/lib/api/types";
 import { plural } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { ChoiceButton } from "./choice-button";
-import { PresenterPicker } from "./presenter-picker";
+import { PresenterPicker, rendersOn } from "./presenter-picker";
 import { SlidePreview } from "./slide-preview";
 import { aiModules, moduleActivity, videoStyle } from "./steps";
 import { useStudioCache } from "./use-studio-cache";
 import { VoicePicker } from "./voice-picker";
+
+const ENGINES: { value: AvatarEngine; label: string; hint: string }[] = [
+  { value: "", label: "Estándar", hint: "Buena calidad, el costo más bajo." },
+  {
+    value: "avatar_iv",
+    label: "Premium",
+    hint: "Gestos y boca más naturales; ideal con fotos de tu equipo. Unas 4 veces el costo.",
+  },
+];
 
 const THEMES: { value: SlideTheme; label: string }[] = [
   { value: "dark", label: "Oscuro" },
@@ -76,6 +86,24 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
   // Derived, not stored: the capabilities may arrive after this step first renders.
   const presenter = capabilities.avatar && wantsPresenter;
   const [avatar, setAvatar] = useState(savedPick(settings.avatar_id, settings.avatar_name));
+  // A second presenter takes every other scene, with a voice of its own.
+  const [wantsSecond, setWantsSecond] = useState(Boolean(settings.co_avatar_id));
+  const second = presenter && wantsSecond;
+  const [coAvatar, setCoAvatar] = useState(savedPick(settings.co_avatar_id ?? "", settings.co_avatar_name ?? ""));
+  const [coVoice, setCoVoice] = useState(savedPick(settings.co_voice_id ?? "", settings.co_voice_name ?? ""));
+  const [engine, setEngine] = useState<AvatarEngine>(settings.avatar_engine ?? "");
+  // The same catalog the pickers load: a presenter picked in one quality may not exist in the other.
+  const avatars = useQuery({ queryKey: studioKeys.avatars, queryFn: studioApi.avatars, enabled: capabilities.avatar });
+  const fits = (picked: Picked | null, quality: AvatarEngine) => {
+    const known = picked && avatars.data?.find((item) => item.id === picked.id);
+    return !known || rendersOn(known, quality);
+  };
+  const chooseEngine = (quality: AvatarEngine) => {
+    setEngine(quality);
+    if (!fits(avatar, quality)) setAvatar(null); // shown disabled in this quality: pick another
+    if (!fits(coAvatar, quality)) setCoAvatar(null);
+  };
+  const coVoiceId = useId();
   const [theme, setTheme] = useState(saved.theme);
   const modules = aiModules(course);
   // What gets produced: every AI module with a script (the API skips the others).
@@ -93,6 +121,12 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
         presenter,
         avatar_id: presenter ? avatar?.id : undefined,
         avatar_name: presenter ? avatar?.name : undefined,
+        // "" clears a second presenter the admin switched off; without any presenter it stays saved for later.
+        co_avatar_id: !presenter ? undefined : second ? coAvatar?.id : "",
+        co_avatar_name: !presenter ? undefined : second ? coAvatar?.name : "",
+        co_voice_id: !presenter ? undefined : second ? coVoice?.id : "",
+        co_voice_name: !presenter ? undefined : second ? coVoice?.name : "",
+        avatar_engine: presenter ? engine : undefined,
         theme,
       }),
     onSuccess: (queued) => {
@@ -135,7 +169,9 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
   const summary = [
     voice ? `Voz: ${voice.name}` : "Elige una voz",
     presenter ? (avatar ? `Presentador: ${avatar.name}` : "Elige un presentador") : "Sin presentador",
+    ...(second ? [coAvatar && coVoice ? `Con ${coAvatar.name}` : "Elige el segundo presentador y su voz"] : []),
   ].join(" · ");
+  const ready = Boolean(voice) && (!presenter || Boolean(avatar)) && (!second || Boolean(coAvatar && coVoice));
 
   return (
     <div className="grid gap-10 lg:grid-cols-[1fr_380px]">
@@ -159,12 +195,80 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
             presenter={presenter}
             onPresenterChange={setWantsPresenter}
             selectedId={avatar?.id}
-            onSelect={setAvatar}
+            onSelect={(picked) => {
+              setAvatar(picked);
+              if (coAvatar?.id === picked.id) setCoAvatar(null); // the same person can't take both turns
+            }}
+            engine={engine}
           />
         </section>
 
+        {presenter && (
+          <section aria-label="Segundo presentador">
+            <SectionTitle
+              number="03"
+              title="Segundo presentador"
+              hint="Dos personas que se turnan las escenas, cada una con su voz. Opcional."
+            />
+            <label className="mb-5 flex items-center gap-3 text-sm font-semibold">
+              <Switch
+                checked={wantsSecond}
+                onCheckedChange={setWantsSecond}
+                aria-label="Agregar un segundo presentador"
+              />
+              Turnar las escenas con un segundo presentador
+            </label>
+            {second && (
+              <div className="space-y-8">
+                <PresenterPicker
+                  available={capabilities.avatar}
+                  presenter
+                  selectedId={coAvatar?.id}
+                  onSelect={setCoAvatar}
+                  excludeId={avatar?.id}
+                  engine={engine}
+                />
+                <div role="group" aria-labelledby={coVoiceId}>
+                  <p id={coVoiceId} className="mb-3 text-[11px] font-bold uppercase tracking-label text-ink-700">
+                    Voz del segundo presentador
+                  </p>
+                  <VoicePicker language={course.language} selectedId={coVoice?.id} onSelect={setCoVoice} />
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {presenter && (
+          <section>
+            <SectionTitle
+              number="04"
+              title="Calidad del presentador"
+              hint="Cuánto se parece a una persona real hablando."
+            />
+            <div role="group" aria-label="Calidad del presentador" className="grid gap-3 sm:grid-cols-2">
+              {ENGINES.map(({ value, label, hint }) => (
+                <ChoiceButton
+                  key={value || "standard"}
+                  selected={engine === value}
+                  onClick={() => chooseEngine(value)}
+                  aria-label={`${label}: ${hint}`}
+                  className="h-auto flex-col items-start gap-1 p-4 text-left"
+                >
+                  <span className="text-[12px] font-bold uppercase tracking-label">{label}</span>
+                  <span className="text-xs font-normal normal-case tracking-normal text-muted-foreground">{hint}</span>
+                </ChoiceButton>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section>
-          <SectionTitle number="03" title="Diseño" hint="Colores de las diapositivas, con tu marca." />
+          <SectionTitle
+            number={presenter ? "05" : "03"}
+            title="Diseño"
+            hint="Colores de las diapositivas, con tu marca."
+          />
           <div className="flex gap-2">
             {THEMES.map(({ value, label }) => (
               <ChoiceButton
@@ -201,7 +305,7 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
             className="mt-5 w-full"
             onClick={start}
             loading={produce.isPending}
-            disabled={!voice || (presenter && !avatar) || drafting || rendering || !videoCount}
+            disabled={!ready || drafting || rendering || !videoCount}
           >
             <Clapperboard /> Producir {plural(videoCount, "video")}
           </Button>
@@ -210,9 +314,9 @@ export function StyleStep({ course, jobs, capabilities, onProducing }: StyleStep
               ? "La IA está escribiendo algún guion: podrás producir los videos cuando termine."
               : rendering
                 ? "Hay videos produciéndose: podrás producir de nuevo cuando terminen."
-              : videoCount
-                ? "Cada video tarda unos minutos. Puedes cerrar esta página."
-                : "Ningún módulo tiene guion todavía: escríbelos en el paso Contenido."}
+                : videoCount
+                  ? "Cada video tarda unos minutos. Puedes cerrar esta página."
+                  : "Ningún módulo tiene guion todavía: escríbelos en el paso Contenido."}
           </p>
         </div>
       </aside>
