@@ -34,11 +34,14 @@ export interface CourseSettings {
   co_voice_name?: string;
   /** HeyGen engine: "" the server's default, "avatar_iv" more natural (about 4× the cost). */
   avatar_engine?: AvatarEngine;
+  /** "high": every scene with a visual is an animated clip (costs more). */
+  animation?: Animation;
   presenter: boolean;
   theme: SlideTheme;
 }
 
 export type AvatarEngine = "" | "avatar_iii" | "avatar_iv";
+export type Animation = "" | "high";
 
 export interface CourseSummary {
   id: number;
@@ -406,12 +409,26 @@ export interface SlideContext {
   total: number;
   theme: SlideTheme;
   presenter: boolean;
+  /** The scene has a visual: the preview shows its text over a sample picture. */
+  backdrop?: boolean;
+}
+
+export type VisualKind = "none" | "stock" | "image" | "clip";
+
+/** What fills the screen behind a scene's text, found or generated when the video is produced. */
+export interface SceneVisual {
+  kind: VisualKind;
+  /** English keywords to search stock video. */
+  query: string;
+  /** English description to generate an image or an animated clip. */
+  prompt: string;
 }
 
 export interface StoryboardScene {
   id: string;
   slide: Slide;
   narration: string;
+  visual?: SceneVisual;
 }
 
 export interface Storyboard {
@@ -449,6 +466,10 @@ export interface StudioCapabilities {
   voice: boolean;
   avatar: boolean;
   storage: boolean;
+  /** The kinds of scene visual the server can find or generate. */
+  visuals?: Exclude<VisualKind, "none">[];
+  /** Animated clips per module with the standard animation. */
+  max_clips?: number;
 }
 
 export interface Voice {
@@ -484,6 +505,7 @@ export interface RenderRequest {
   co_voice_id?: string;
   co_voice_name?: string;
   avatar_engine?: AvatarEngine;
+  animation?: Animation;
   presenter?: boolean;
   theme?: SlideTheme;
 }

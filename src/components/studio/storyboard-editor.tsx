@@ -14,7 +14,8 @@ import type { CourseDetail, ModuleAdmin, SlideContext, Storyboard, StoryboardSce
 import { moveItem, removeAt, replaceAt } from "@/lib/array";
 import { formatDuration, plural } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
-import { narrationSeconds, SceneEditor } from "./scene-editor";
+import { useStudioCapabilities } from "@/lib/hooks/use-studio-capabilities";
+import { NO_VISUAL, narrationSeconds, SceneEditor } from "./scene-editor";
 import { videoStyle } from "./steps";
 import { useProduceModule } from "./use-produce-module";
 import { useStudioCache } from "./use-studio-cache";
@@ -31,7 +32,16 @@ function duplicateScene(scenes: StoryboardScene[], index: number): StoryboardSce
 /** A new last scene that starts as a copy of the current last one, minus its title, points and narration. */
 function appendBlankScene(scenes: StoryboardScene[]): StoryboardScene[] {
   const last = scenes[scenes.length - 1];
-  return [...scenes, { ...last, id: newSceneId(), narration: "", slide: { ...last.slide, title: "", points: [], icons: [] } }];
+  return [
+    ...scenes,
+    {
+      ...last,
+      id: newSceneId(),
+      narration: "",
+      slide: { ...last.slide, title: "", points: [], icons: [] },
+      visual: NO_VISUAL,
+    },
+  ];
 }
 
 interface StoryboardEditorProps {
@@ -94,6 +104,9 @@ function StoryboardForm({
   const { trackJobs, failed } = useStudioCache();
   const { produce } = useProduceModule(course);
   const [scenes, setScenes] = useState(saved.scenes);
+  const capabilities = useStudioCapabilities();
+  // Animated clips are capped per module (the server makes the rest images): the picker shows how many are left.
+  const clips = scenes.filter((scene) => scene.visual?.kind === "clip").length;
   const dirty = JSON.stringify(scenes) !== JSON.stringify(saved.scenes);
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   // Closed (or replaced by the AI's rewrite): nothing is left unsaved.
@@ -166,6 +179,8 @@ function StoryboardForm({
         {scenes.map((scene, index) => (
           <SceneEditor
             key={scene.id}
+            visuals={capabilities.visuals ?? []}
+            clipsLeft={(capabilities.max_clips ?? 0) - clips + (scene.visual?.kind === "clip" ? 1 : 0)}
             scene={scene}
             index={index}
             total={scenes.length}

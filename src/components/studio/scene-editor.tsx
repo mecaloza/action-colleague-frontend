@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { Slide, SlideContext, SlideLayout, StoryboardScene } from "@/lib/api/types";
+import type { SceneVisual, Slide, SlideContext, SlideLayout, StoryboardScene, VisualKind } from "@/lib/api/types";
 import { twoDigits } from "@/lib/format";
 import { IconPicker } from "./icon-picker";
 import { ListEditor } from "./list-editor";
@@ -36,6 +36,15 @@ const SIDES = [
   { side: "left", heading: "Encabezado izquierdo", placeholder: "Antes", column: "Columna izquierda" },
   { side: "right", heading: "Encabezado derecho", placeholder: "Después", column: "Columna derecha" },
 ] as const;
+
+const VISUAL_KINDS: { value: VisualKind; label: string }[] = [
+  { value: "none", label: "Solo diseño (sin imagen)" },
+  { value: "stock", label: "Video real de banco" },
+  { value: "image", label: "Imagen generada con IA" },
+  { value: "clip", label: "Clip animado con IA" },
+];
+
+export const NO_VISUAL: SceneVisual = { kind: "none", query: "", prompt: "" };
 
 /** The slide fields that hold a single line of text. */
 type SlideTextField = "title" | "subtitle" | "stat_value" | "stat_label" | "quote_author";
@@ -114,7 +123,7 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
           placeholder="Frase corta"
           max={5}
           maxLength={160}
-          icons={ICON_LAYOUTS.includes(slide.layout) ? slide.icons ?? [] : undefined}
+          icons={ICON_LAYOUTS.includes(slide.layout) ? (slide.icons ?? []) : undefined}
           onIconsChange={ICON_LAYOUTS.includes(slide.layout) ? (icons) => onChange({ icons }) : undefined}
         />
       )}
@@ -146,6 +155,10 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
 }
 
 interface SceneEditorProps {
+  /** The kinds of visual the server can find or generate. */
+  visuals: VisualKind[];
+  /** Animated clips this scene may still use (the module's cap minus the other scenes' clips). */
+  clipsLeft: number;
   scene: StoryboardScene;
   index: number;
   total: number;
@@ -157,10 +170,24 @@ interface SceneEditorProps {
 }
 
 /** One scene: its slide (with the video's own preview) and what the voice says over it. */
-export function SceneEditor({ scene, index, total, context, onChange, onMove, onDuplicate, onRemove }: SceneEditorProps) {
+export function SceneEditor({
+  visuals,
+  clipsLeft,
+  scene,
+  index,
+  total,
+  context,
+  onChange,
+  onMove,
+  onDuplicate,
+  onRemove,
+}: SceneEditorProps) {
   const id = `scene-${scene.id}`;
   const slide = scene.slide;
   const setSlide = (changes: Partial<Slide>) => onChange({ ...scene, slide: { ...slide, ...changes } });
+  const visual = scene.visual ?? NO_VISUAL;
+  const setVisual = (changes: Partial<SceneVisual>) => onChange({ ...scene, visual: { ...visual, ...changes } });
+  const missingText = visual.kind === "stock" ? !visual.query.trim() : visual.kind !== "none" && !visual.prompt.trim();
   const seconds = narrationSeconds(scene.narration);
 
   return (
@@ -193,12 +220,75 @@ export function SceneEditor({ scene, index, total, context, onChange, onMove, on
       <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <SlidePreview
           slide={slide}
-          context={context}
+          context={{ ...context, backdrop: visual.kind !== "none" }}
           alt={`Diapositiva de la escena ${index + 1}`}
           className="lg:sticky lg:top-24 lg:self-start"
         />
         <div className="space-y-4">
           <SlideFields id={id} slide={slide} onChange={setSlide} />
+          <div className="space-y-3 border-t border-border pt-4">
+            <div>
+              <Label htmlFor={`${id}-visual`}>Visual de fondo</Label>
+              <Select
+                id={`${id}-visual`}
+                value={visual.kind}
+                onChange={(event) => setVisual({ kind: event.target.value as VisualKind })}
+                aria-describedby={`${id}-visual-hint`}
+              >
+                {VISUAL_KINDS.map((kind) => {
+                  const unavailable = kind.value !== "none" && !visuals.includes(kind.value);
+                  const capped = kind.value === "clip" && clipsLeft <= 0 && visual.kind !== "clip";
+                  return (
+                    <option key={kind.value} value={kind.value} disabled={unavailable || capped}>
+                      {kind.label}
+                      {unavailable ? " (no configurado)" : capped ? " (ya usaste los clips del módulo)" : ""}
+                    </option>
+                  );
+                })}
+              </Select>
+            </div>
+            {visual.kind === "stock" && (
+              <div>
+                <Label htmlFor={`${id}-visual-query`}>Qué buscar (en inglés)</Label>
+                <Input
+                  id={`${id}-visual-query`}
+                  value={visual.query}
+                  onChange={(event) => setVisual({ query: event.target.value })}
+                  placeholder="truck tire workshop"
+                  maxLength={120}
+                  aria-invalid={missingText}
+                  aria-describedby={`${id}-visual-hint`}
+                />
+              </div>
+            )}
+            {(visual.kind === "image" || visual.kind === "clip") && (
+              <div>
+                <Label htmlFor={`${id}-visual-prompt`}>Qué debe mostrar (en inglés)</Label>
+                <Textarea
+                  id={`${id}-visual-prompt`}
+                  value={visual.prompt}
+                  onChange={(event) => setVisual({ prompt: event.target.value })}
+                  placeholder="Air slowly escaping from a truck tire valve, close-up"
+                  maxLength={600}
+                  className="min-h-[72px]"
+                  aria-invalid={missingText}
+                  aria-describedby={`${id}-visual-hint`}
+                />
+              </div>
+            )}
+            <p
+              id={`${id}-visual-hint`}
+              className={missingText ? "text-xs text-destructive" : "text-xs text-muted-foreground"}
+            >
+              {missingText
+                ? "Escribe qué buscar o qué mostrar: sin eso la escena sale sin visual."
+                : visual.kind === "none"
+                  ? "La escena se ve con el diseño de marca."
+                  : visual.kind === "clip"
+                    ? `Se genera al producir el video. Clips disponibles en el módulo: ${Math.max(clipsLeft, 0)}.`
+                    : "Se busca o se genera al producir el video; la vista previa usa un fondo de muestra."}
+            </p>
+          </div>
           <div>
             <Label htmlFor={`${id}-narration`}>Narración</Label>
             <Textarea
@@ -209,7 +299,9 @@ export function SceneEditor({ scene, index, total, context, onChange, onMove, on
               className="min-h-[140px]"
             />
             <p className="mt-1.5 text-xs text-muted-foreground">
-              {scene.narration.trim() ? `Unos ${seconds} s de voz` : "La voz lee este texto mientras se ve la diapositiva."}
+              {scene.narration.trim()
+                ? `Unos ${seconds} s de voz`
+                : "La voz lee este texto mientras se ve la diapositiva."}
             </p>
           </div>
         </div>
