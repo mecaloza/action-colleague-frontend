@@ -114,16 +114,39 @@ export const TEMPLATES: Record<ActivityType, { title: string; intro: string; spe
         { id: "v3", label: "Retirar" },
       ],
       items: [
-        { look: "even", answer: "v1", value: "12 mm", explanation: "Desgaste parejo y buena profundidad." },
-        { look: "shoulders", answer: "v2", value: "4 mm", explanation: "Hombros gastados: rodó con baja presión." },
-        { look: "bulge", answer: "v3", value: "9 mm", explanation: "Un chipote es una ruptura interna." },
-        { look: "even", answer: "v1", value: "11 mm", explanation: "Está bien: sigue rodando." },
-      ].map(({ value, ...item }, index) => ({
-        ...item,
-        id: `e${index + 1}`,
-        label: `Llanta ${index + 1}`,
-        facts: [{ label: "Profundidad", value }],
-      })) as InspectionItemSpec[],
+        {
+          id: "e1",
+          label: "Llanta 1",
+          facts: [{ label: "Profundidad", value: "12 mm" }],
+          look: "even",
+          answer: "v1",
+          explanation: "Desgaste parejo y buena profundidad.",
+        },
+        {
+          id: "e2",
+          label: "Llanta 2",
+          facts: [{ label: "Profundidad", value: "4 mm" }],
+          look: "shoulders",
+          answer: "v2",
+          explanation: "Hombros gastados: rodó con baja presión.",
+        },
+        {
+          id: "e3",
+          label: "Llanta 3",
+          facts: [{ label: "Profundidad", value: "9 mm" }],
+          look: "bulge",
+          answer: "v3",
+          explanation: "Un chipote es una ruptura interna.",
+        },
+        {
+          id: "e4",
+          label: "Llanta 4",
+          facts: [{ label: "Profundidad", value: "11 mm" }],
+          look: "even",
+          answer: "v1",
+          explanation: "Está bien: sigue rodando.",
+        },
+      ],
     },
   },
   simulator: {
@@ -350,7 +373,7 @@ function freeId(prefix: string, used: { id: string }[]): string {
 function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
   const setItem = (index: number, changes: Partial<InspectionItemSpec>) =>
     onChange({ ...spec, items: replaceAt(spec.items, index, { ...spec.items[index], ...changes }) });
-  const pairs = spec.scene !== "truck" || spec.items.length % 2 === 0;
+  const hasPairs = spec.scene !== "truck" || spec.items.length % 2 === 0;
   return (
     <div className="space-y-5">
       <div>
@@ -386,7 +409,7 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
           />
         </div>
       </div>
-      {!pairs && (
+      {!hasPairs && (
         <p className="text-sm text-destructive">En el camión las llantas van por pares: agrega o quita una.</p>
       )}
 

@@ -61,6 +61,7 @@ export function InspectionPlayer({
   const tiles = useRef<(HTMLButtonElement | null)[]>([]);
   const nextButton = useRef<HTMLButtonElement>(null);
   const over = view.done;
+  const truck = view.scene === "truck";
   const item = items[selected];
   const decided = items.filter((other) => other.chosen).length;
   const right = items.filter((other) => other.outcome?.correct).length;
@@ -135,11 +136,11 @@ export function InspectionPlayer({
         aria-label={`${other.label}: ${state}`}
         className={cn(
           "relative flex items-center justify-center border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-          view.scene === "truck" ? "h-24 w-16 rounded-md p-1" : "min-h-24 w-full gap-3 px-4 py-3 text-left",
+          truck ? "h-24 w-16 rounded-md p-1" : "min-h-24 w-full gap-3 px-4 py-3 text-left",
           active ? "border-accent bg-accent/15" : "border-white/15 hover:border-white/50",
         )}
       >
-        {view.scene === "truck" ? (
+        {truck ? (
           <TireTread look={other.look === "none" ? "even" : other.look} />
         ) : (
           <>
@@ -160,7 +161,7 @@ export function InspectionPlayer({
         >
           {!other.outcome ? "?" : other.outcome.correct ? "✓" : "✗"}
         </motion.span>
-        {view.scene === "truck" && (
+        {truck && (
           <span className="absolute -bottom-5 text-[11px] font-semibold text-white/60" aria-hidden>
             {index + 1}
           </span>
@@ -217,7 +218,7 @@ export function InspectionPlayer({
       )}
 
       <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        {view.scene === "truck" ? (
+        {truck ? (
           <div className="mx-auto w-full max-w-xs" role="group" aria-label="Llantas de la unidad">
             <div className="mx-auto h-16 w-3/5 rounded-t-[2rem] border border-white/20 bg-white/10 pt-3" aria-hidden>
               <div className="mx-auto h-5 w-4/5 rounded-t-xl bg-sky-300/30" />
