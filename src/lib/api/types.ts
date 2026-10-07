@@ -310,26 +310,43 @@ export interface DecisionView extends ActivityViewBase {
   node: DecisionNode | null;
 }
 
-export interface InspectionZone {
+/** How a tire is drawn: its wear pattern or damage ("none": not a tire). */
+export type TireLook = "none" | "even" | "center" | "shoulders" | "one_side" | "cupping" | "cuts" | "bulge";
+
+export interface InspectionVerdict {
   id: string;
   label: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  is_problem: boolean;
+}
+
+/** The right answer for an item: only once the learner decided on it (or the play is over). */
+export interface InspectionOutcome {
+  answer: string;
+  answer_label: string;
   explanation: string;
+  /** Narration key of the explanation. */
   line: string;
+  correct: boolean;
+}
+
+export interface InspectionItem {
+  id: string;
+  label: string;
+  facts: { label: string; value: string }[];
+  look: TireLook;
+  /** The verdict the learner chose (null: not decided yet). */
+  chosen: string | null;
+  outcome: InspectionOutcome | null;
 }
 
 export interface InspectionView extends ActivityViewBase {
   type: "inspection";
   prompt: string;
-  problems: number;
-  found: number;
-  misses: number;
-  max_misses: number;
-  revealed: InspectionZone[];
+  scene: "truck" | "cards";
+  lives: number;
+  max_lives: number;
+  streak: number;
+  verdicts: InspectionVerdict[];
+  items: InspectionItem[];
 }
 
 export interface SimulatorVariable {
@@ -398,7 +415,7 @@ export interface ActivityPlay {
   view: ActivityView;
   /** Narration key -> audio URL, for the lines this response reveals. */
   narration: Record<string, string>;
-  /** The picture an inspection is played on. */
+  /** A reference photo shown during the play, if the activity has one. */
   image_url: string | null;
 }
 

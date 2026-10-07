@@ -49,7 +49,6 @@ import type { ActivityAdmin, ActivityType, CourseDetail, ModuleAdmin } from "@/l
 import { twoDigits } from "@/lib/format";
 import { useUpload } from "@/lib/hooks/use-upload";
 import { toastError } from "@/lib/notify";
-import { cn } from "@/lib/utils";
 import { ActivityForm, TEMPLATES, type AnySpec } from "./activities/activity-form";
 
 const TYPES: ActivityType[] = ["decision", "inspection", "simulator", "quick"];
@@ -352,7 +351,12 @@ interface ActivityEditorProps {
 function ActivityEditor({ courseId, activity, onClose, onSaved }: ActivityEditorProps) {
   const [title, setTitle] = useState(activity.title);
   const [intro, setIntro] = useState(activity.intro);
-  const [spec, setSpec] = useState<AnySpec>(activity.spec as unknown as AnySpec);
+  // An inspection saved in the earlier format (zones on a picture) starts over from the template.
+  const [spec, setSpec] = useState<AnySpec>(() =>
+    activity.type === "inspection" && !("items" in activity.spec)
+      ? TEMPLATES.inspection.spec
+      : (activity.spec as unknown as AnySpec),
+  );
   const [imageUrl, setImageUrl] = useState(activity.image_url);
   const { upload, busy: uploading } = useUpload();
   const [waitingPicture, setWaitingPicture] = useState(false);
@@ -393,11 +397,7 @@ function ActivityEditor({ courseId, activity, onClose, onSaved }: ActivityEditor
           const updated = await activitiesApi.setImage(activity.id, asset.id);
           if (!alive.current) return;
           setImageUrl(updated.image_url);
-          // Only the zones' places start over on the new picture: the rest of the edits stay.
-          setSpec((local) =>
-            "zones" in local ? { ...local, zones: local.zones.map((zone) => ({ ...zone, placed: false })) } : local,
-          );
-          toast.success("Imagen lista: ubica las zonas sobre ella.");
+          toast.success("Foto de referencia lista.");
           return;
         } catch (error) {
           if (!(error instanceof ApiError && error.status === 422)) throw error;
@@ -458,13 +458,11 @@ function ActivityEditor({ courseId, activity, onClose, onSaved }: ActivityEditor
                 onClick={() => fileInput.current?.click()}
                 loading={uploading || waitingPicture}
               >
-                <ImageUp /> {imageUrl ? "Cambiar imagen" : "Subir imagen"}
+                <ImageUp /> {imageUrl ? "Cambiar foto de referencia" : "Foto de referencia (opcional)"}
               </Button>
             </div>
           )}
-          <div className={cn(activity.type === "inspection" && !imageUrl && "opacity-60")}>
-            <ActivityForm type={activity.type} spec={spec} imageUrl={imageUrl} onChange={setSpec} />
-          </div>
+          <ActivityForm type={activity.type} spec={spec} onChange={setSpec} />
         </SheetBody>
         <SheetFooter>
           <Button variant="ghost" onClick={() => void close()}>
