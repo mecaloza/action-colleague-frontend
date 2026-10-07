@@ -16,6 +16,7 @@ interface Feedback {
 
 const KEY_STEP = 0.02; // the keyboard's crosshair moves 2% of the picture (10% with Shift)
 const percent = (value: number) => `${Math.round(value * 100)} %`;
+const unit = (value: number) => Math.min(1, Math.max(0, value));
 
 /** Find the problems on a picture: the learner taps, the server says what is there. */
 export function InspectionPlayer({
@@ -71,7 +72,7 @@ export function InspectionPlayer({
     if (event.key in moves) {
       event.preventDefault();
       const [dx, dy] = moves[event.key];
-      setCursor((at) => ({ x: Math.min(1, Math.max(0, at.x + dx)), y: Math.min(1, Math.max(0, at.y + dy)) }));
+      setCursor((at) => ({ x: unit(at.x + dx), y: unit(at.y + dy) }));
     } else if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       void send(cursor.x, cursor.y);
@@ -81,9 +82,7 @@ export function InspectionPlayer({
   const tapAt = (event: React.MouseEvent<HTMLDivElement>) => {
     const box = picture.current?.getBoundingClientRect();
     if (!box) return;
-    const x = (event.clientX - box.left) / box.width;
-    const y = (event.clientY - box.top) / box.height;
-    void send(Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y)));
+    void send(unit((event.clientX - box.left) / box.width), unit((event.clientY - box.top) / box.height));
   };
 
   return (

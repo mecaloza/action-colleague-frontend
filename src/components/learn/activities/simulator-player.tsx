@@ -79,34 +79,40 @@ export function SimulatorPlayer({ view, move, narration }: PlayerProps<Simulator
       </p>
 
       <div className="grid gap-5">
-        {view.variables.map((variable) => (
-          <div key={variable.key}>
-            <div className="mb-2 flex items-baseline justify-between gap-3">
-              <label htmlFor={`sim-${variable.key}`} className="text-sm font-semibold text-white">
-                {variable.label}
-              </label>
-              <span className="font-display text-lg tabular-nums text-white">
-                {format(values[variable.key], stepDecimals(variable.step))} {variable.unit}
-              </span>
+        {view.variables.map((variable) => {
+          const places = stepDecimals(variable.step);
+          const shown = format(values[variable.key], places);
+          return (
+            <div key={variable.key}>
+              <div className="mb-2 flex items-baseline justify-between gap-3">
+                <label htmlFor={`sim-${variable.key}`} className="text-sm font-semibold text-white">
+                  {variable.label}
+                </label>
+                <span className="font-display text-lg tabular-nums text-white">
+                  {shown} {variable.unit}
+                </span>
+              </div>
+              <input
+                id={`sim-${variable.key}`}
+                type="range"
+                min={variable.min}
+                max={variable.max}
+                step={variable.step}
+                value={values[variable.key]}
+                aria-valuetext={`${shown} ${variable.unit}`.trim()}
+                disabled={over || sending}
+                onChange={(event) =>
+                  setValues((current) => ({ ...current, [variable.key]: Number(event.target.value) }))
+                }
+                className="w-full accent-[#E9501E]"
+              />
+              <div className="flex justify-between text-xs text-white/40">
+                <span>{format(variable.min, places)}</span>
+                <span>{format(variable.max, places)}</span>
+              </div>
             </div>
-            <input
-              id={`sim-${variable.key}`}
-              type="range"
-              min={variable.min}
-              max={variable.max}
-              step={variable.step}
-              value={values[variable.key]}
-              aria-valuetext={`${format(values[variable.key], stepDecimals(variable.step))} ${variable.unit}`.trim()}
-              disabled={over || sending}
-              onChange={(event) => setValues((current) => ({ ...current, [variable.key]: Number(event.target.value) }))}
-              className="w-full accent-[#E9501E]"
-            />
-            <div className="flex justify-between text-xs text-white/40">
-              <span>{format(variable.min, stepDecimals(variable.step))}</span>
-              <span>{format(variable.max, stepDecimals(variable.step))}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div
@@ -128,7 +134,7 @@ export function SimulatorPlayer({ view, move, narration }: PlayerProps<Simulator
         </Button>
       )}
 
-      {last && last.text && (
+      {last?.text && (
         <motion.div
           key={tries}
           initial={reduce ? false : { opacity: 0, y: 8 }}
