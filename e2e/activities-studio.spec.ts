@@ -8,7 +8,7 @@ test("un admin genera, edita, publica y prueba las actividades de un módulo", a
   await page.goto("/admin/courses/new/manual");
   await page.getByLabel("Título del curso").fill(title);
   await page.getByRole("button", { name: /Crear y agregar contenido/ }).click();
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({ timeout: 20_000 }); // a cold route
 
   await page.getByRole("button", { name: "Agregar módulo" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Nuevo módulo" });

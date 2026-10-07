@@ -49,7 +49,7 @@ async function signIn(page: import("@playwright/test").Page) {
   await page.getByLabel("Correo electrónico").fill(learner.email);
   await page.getByLabel("Contraseña", { exact: true }).fill(learner.password);
   await page.getByRole("button", { name: /Ingresar/ }).click();
-  await expect(page).toHaveURL(/\/learn$/);
+  await expect(page).toHaveURL(/\/learn$/, { timeout: 20_000 }); // a cold route
 }
 
 test("un colaborador juega la conversación con el cliente y completa el módulo", async ({ page, request }) => {
@@ -187,7 +187,10 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
   await expect(game.getByRole("timer")).toHaveCount(0);
   await game.getByRole("button", { name: "Leer el DOT" }).click(); // not the first step
   await expect(game.getByText("Racha 0")).toBeVisible();
-  for (const step of QUICK_ORDER.items) await game.getByRole("button", { name: step }).click();
+  for (const step of QUICK_ORDER.items) {
+    await game.getByRole("button", { name: step }).click();
+    await expect(game.getByRole("button", { name: step })).toBeDisabled(); // placed before the next tap
+  }
   await expect(game.getByText("Racha 4")).toBeVisible();
   await game.getByRole("button", { name: /Ver resultado/ }).click();
   await expect(game.getByText("Completaste el módulo.")).toBeVisible();
