@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { CheckCircle2, CircleX, Crosshair, Search } from "lucide-react";
+import { CheckCircle2, CircleX, Search } from "lucide-react";
 import type { InspectionView, InspectionZone } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import type { PlayerProps } from "./activity-player";
@@ -14,9 +14,9 @@ interface Feedback {
   zone: InspectionZone | null;
 }
 
-const GRID = [0, 1, 2].flatMap((row) => [0, 1, 2].map((column) => ({ row, column })));
-const CELL_NAMES = ["arriba", "al centro", "abajo"];
-const COLUMN_NAMES = ["a la izquierda", "en medio", "a la derecha"];
+const KEY_STEP = 0.02; // the keyboard's crosshair moves 2% of the picture (10% with Shift)
+const percent = (value: number) => `${Math.round(value * 100)} %`;
+const unit = (value: number) => Math.min(1, Math.max(0, value));
 
 /** Find the problems on a picture: the learner taps, the server says what is there. */
 export function InspectionPlayer({
@@ -34,6 +34,9 @@ export function InspectionPlayer({
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [tap, setTap] = useState<{ x: number; y: number; key: number } | null>(null);
   const [sending, setSending] = useState(false);
+  // Where the keyboard's crosshair is (shown while the picture has the focus).
+  const [cursor, setCursor] = useState({ x: 0.5, y: 0.5 });
+  const [focused, setFocused] = useState(false);
   const over = view.done;
 
   const send = async (x: number, y: number) => {
@@ -58,12 +61,28 @@ export function InspectionPlayer({
     if (result.missed) setMissed(result.missed);
   };
 
+  const onKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? KEY_STEP * 5 : KEY_STEP;
+    const moves: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    };
+    if (event.key in moves) {
+      event.preventDefault();
+      const [dx, dy] = moves[event.key];
+      setCursor((at) => ({ x: unit(at.x + dx), y: unit(at.y + dy) }));
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void send(cursor.x, cursor.y);
+    }
+  };
+
   const tapAt = (event: React.MouseEvent<HTMLDivElement>) => {
     const box = picture.current?.getBoundingClientRect();
     if (!box) return;
-    const x = (event.clientX - box.left) / box.width;
-    const y = (event.clientY - box.top) / box.height;
-    void send(Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y)));
+    void send(unit((event.clientX - box.left) / box.width), unit((event.clientY - box.top) / box.height));
   };
 
   return (
@@ -81,12 +100,16 @@ export function InspectionPlayer({
       <div
         ref={picture}
         onClick={tapAt}
+        onKeyDown={over ? undefined : onKey}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        tabIndex={over ? -1 : 0}
         className={cn(
-          "relative w-full select-none overflow-hidden border border-white/15",
+          "relative w-full select-none overflow-hidden border border-white/15 outline-none focus-visible:ring-2 focus-visible:ring-accent",
           !over && "cursor-crosshair",
         )}
-        role="img"
-        aria-label={`Imagen para inspeccionar: ${view.prompt}`}
+        role="application"
+        aria-label={`Imagen para inspeccionar: ${view.prompt}. Toca donde veas un problema, o usa las flechas para mover la mira (Mayús para pasos grandes) y Enter para revisar ese punto.`}
       >
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- a signed storage URL, not an optimizable asset
@@ -128,27 +151,17 @@ export function InspectionPlayer({
             />
           )}
         </AnimatePresence>
+        {focused && !over && (
+          <span
+            className="pointer-events-none absolute h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-accent"
+            style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%` }}
+            aria-hidden
+          />
+        )}
       </div>
-
-      {/* Without a precise tap: each ninth of the picture as a button. */}
-      {!over && (
-        <details className="text-sm text-white/70">
-          <summary className="cursor-pointer">Revisar por zonas (sin tocar la imagen)</summary>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {GRID.map(({ row, column }) => (
-              <button
-                key={`${row}-${column}`}
-                type="button"
-                onClick={() => send((column + 0.5) / 3, (row + 0.5) / 3)}
-                disabled={sending}
-                className="flex items-center justify-center gap-1 border border-white/20 px-2 py-2 hover:border-accent disabled:opacity-50"
-              >
-                <Crosshair className="h-3.5 w-3.5" /> {CELL_NAMES[row]} {COLUMN_NAMES[column]}
-              </button>
-            ))}
-          </div>
-        </details>
-      )}
+      <p className="sr-only" aria-live="polite">
+        {focused && !over ? `Mira a ${percent(cursor.x)} desde la izquierda y ${percent(cursor.y)} desde arriba.` : ""}
+      </p>
 
       <AnimatePresence mode="wait">
         {feedback && (

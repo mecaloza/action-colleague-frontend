@@ -9,6 +9,7 @@ import type { PlayerProps } from "./activity-player";
 
 interface QuickResult {
   correct: boolean;
+  repeated?: boolean;
   streak: number;
   bonus?: number;
   time_bonus?: number;
@@ -25,7 +26,8 @@ export function QuickPlayer({ view, move, onTimeUp }: PlayerProps<QuickView> & {
   const [wrong, setWrong] = useState<string | null>(null);
   const [streak, setStreak] = useState(view.streak);
   const [bonus, setBonus] = useState<string | null>(null);
-  const [left, setLeft] = useState(view.remaining);
+  // Whole seconds, rounded up: the clock never shows zero (nor ends) before the server's does.
+  const [left, setLeft] = useState(view.remaining === null ? null : Math.ceil(view.remaining));
   const [sending, setSending] = useState(false);
   const over = view.done || left === 0;
 
@@ -33,7 +35,7 @@ export function QuickPlayer({ view, move, onTimeUp }: PlayerProps<QuickView> & {
     if (left === null || view.done) return;
     const ends = Date.now() + left * 1000;
     const timer = window.setInterval(() => {
-      const remaining = Math.max(0, Math.round((ends - Date.now()) / 1000));
+      const remaining = Math.max(0, Math.ceil((ends - Date.now()) / 1000));
       setLeft(remaining);
       if (remaining === 0) {
         window.clearInterval(timer);
@@ -58,7 +60,7 @@ export function QuickPlayer({ view, move, onTimeUp }: PlayerProps<QuickView> & {
     if (!outcome) return;
     const result = outcome.result as unknown as QuickResult;
     setStreak(result.streak ?? 0);
-    if (result.correct) {
+    if (result.correct && !result.repeated) {
       solve(card, "cards");
       if (answer) solve(answer, "answers");
       else setPlaced((steps) => [...steps, cards.find((item) => item.token === card)?.text ?? ""]);
@@ -112,7 +114,7 @@ export function QuickPlayer({ view, move, onTimeUp }: PlayerProps<QuickView> & {
           {bonus}
         </p>
       )}
-      {left === 0 && !view.done && <p className="font-semibold text-destructive">Se acabó el tiempo.</p>}
+      {left === 0 && <p className="font-semibold text-destructive">Se acabó el tiempo.</p>}
 
       {view.mode === "match" ? (
         <div className="grid grid-cols-2 gap-3">
@@ -132,7 +134,7 @@ export function QuickPlayer({ view, move, onTimeUp }: PlayerProps<QuickView> & {
           <ol className="flex flex-col gap-2">
             <p className="eyebrow text-white/50">Tu orden</p>
             {placed.map((step, index) => (
-              <li key={step} className="border-l-2 border-success bg-success/10 px-4 py-2 text-white">
+              <li key={index} className="border-l-2 border-success bg-success/10 px-4 py-2 text-white">
                 {index + 1}. {step}
               </li>
             ))}

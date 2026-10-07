@@ -3,6 +3,7 @@
 import { notFound, useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { CourseHeader } from "@/components/courses/course-header";
+import { ActivitiesTab } from "@/components/courses/activities-tab";
 import { EvaluationsTab } from "@/components/courses/evaluations-tab";
 import { ModulesTab } from "@/components/courses/modules-tab";
 import { ParticipantsTab } from "@/components/courses/participants-tab";
@@ -49,6 +50,7 @@ export default function CourseEditorPage() {
             <TabsList>
               <TabsTrigger value="modules">Contenido</TabsTrigger>
               <TabsTrigger value="evaluations">Evaluaciones</TabsTrigger>
+              <TabsTrigger value="activities">Actividades</TabsTrigger>
               <TabsTrigger value="participants">Participantes</TabsTrigger>
               <TabsTrigger value="results">Resultados</TabsTrigger>
               <TabsTrigger value="settings">Ajustes</TabsTrigger>
@@ -61,6 +63,9 @@ export default function CourseEditorPage() {
           </TabsContent>
           <TabsContent value="evaluations" forceMount className="data-[state=inactive]:hidden">
             <EvaluationsTab course={course} />
+          </TabsContent>
+          <TabsContent value="activities">
+            <ActivitiesTab course={course} />
           </TabsContent>
           <TabsContent value="participants">
             <ParticipantsTab course={course} />

@@ -23,11 +23,12 @@ type Node =
 type Token = { kind: "num" | "name" | "op"; value: string };
 
 // Global (ES5 has no sticky flag): every position matches (spaces, then a number, a name or any symbol).
-const TOKEN = /\s*(?:(\d+(?:\.\d+)?|\.\d+)|([A-Za-z_][A-Za-z0-9_]*)|(.))/g;
+// Spaces are only " \t\r\n" and digits only 0-9, on both sides: no Unicode lookalike passes in one and not the other.
+const TOKEN = /[ \t\r\n]*(?:([0-9]+(?:\.[0-9]+)?|\.[0-9]+)|([A-Za-z_][A-Za-z0-9_]*)|(.))/g;
 
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
-  const source = text.trimEnd();
+  const source = text.replace(/[ \t\r\n]+$/, "");
   TOKEN.lastIndex = 0;
   while (TOKEN.lastIndex < source.length) {
     const start = TOKEN.lastIndex;
@@ -43,7 +44,8 @@ function tokenize(text: string): Token[] {
 }
 
 export function parseFormula(text: string, variables: string[]): Node {
-  if (!text.trim()) throw new FormulaError("Escribe la fórmula del simulador.");
+  text = text.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, ""); // the server strips it before checking its length
+  if (!text) throw new FormulaError("Escribe la fórmula del simulador.");
   if (text.length > MAX_FORMULA_CHARS) throw new FormulaError("La fórmula es demasiado larga.");
   const tokens = tokenize(text);
   const known = new Set(variables);

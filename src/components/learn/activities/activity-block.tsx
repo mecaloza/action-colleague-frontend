@@ -22,6 +22,8 @@ const ICONS: Record<ActivityType, typeof Play> = {
   quick: Timer,
 };
 
+const playLabel = (activity: LearnerActivitySummary) => (activity.finished ? "Jugar de nuevo" : "Jugar");
+
 interface ActivityBlockProps {
   activities: LearnerActivitySummary[];
   onPlay: (activity: LearnerActivitySummary) => void;
@@ -80,9 +82,9 @@ export function ActivityBlock({ activities, onPlay }: ActivityBlockProps) {
                   variant={activity.finished ? "outline" : "accent"}
                   size="sm"
                   onClick={() => onPlay(activity)}
-                  aria-label={`${activity.finished ? "Jugar de nuevo" : "Jugar"}: ${activity.title}`}
+                  aria-label={`${playLabel(activity)}: ${activity.title}`}
                 >
-                  {activity.finished ? <RotateCcw /> : <Play />} {activity.finished ? "Jugar de nuevo" : "Jugar"}
+                  {activity.finished ? <RotateCcw /> : <Play />} {playLabel(activity)}
                 </Button>
               </div>
             </li>

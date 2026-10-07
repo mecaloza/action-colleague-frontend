@@ -4,13 +4,25 @@ import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { CheckCircle2, CircleX, FlaskConical, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { SimulatorTarget, SimulatorTry, SimulatorView } from "@/lib/api/types";
+import type { SimulatorTarget, SimulatorTry, SimulatorVariable, SimulatorView } from "@/lib/api/types";
 import { computeFormula } from "@/lib/formula";
 import { cn } from "@/lib/utils";
 import type { PlayerProps } from "./activity-player";
 
 function format(value: number, decimals: number): string {
   return value.toLocaleString("es-MX", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+/** Decimals a control's values need (a step of 0.5 shows one). */
+function stepDecimals(step: number): number {
+  const text = String(step);
+  return text.includes(".") ? Math.min(4, text.split(".")[1].length) : 0;
+}
+
+/** The value as the server will read it: on the control's steps, counted from its minimum (same float math). */
+function onStep(variable: SimulatorVariable, raw: number): number {
+  const steps = Math.round((Math.min(Math.max(raw, variable.min), variable.max) - variable.min) / variable.step);
+  return Math.min(variable.max, variable.min + steps * variable.step);
 }
 
 function targetText(target: SimulatorTarget, decimals: number, unit: string): string {
@@ -37,7 +49,10 @@ export function SimulatorPlayer({ view, move, narration }: PlayerProps<Simulator
   const [tries, setTries] = useState(view.tries);
   const [last, setLast] = useState<(SimulatorTry & { text?: string }) | null>(view.last);
   const [sending, setSending] = useState(false);
-  const live = computeFormula(view.formula, values);
+  const live = computeFormula(
+    view.formula,
+    Object.fromEntries(view.variables.map((variable) => [variable.key, onStep(variable, values[variable.key])])),
+  );
   const { decimals, unit, label } = view.output;
   const over = view.done;
 
@@ -64,33 +79,40 @@ export function SimulatorPlayer({ view, move, narration }: PlayerProps<Simulator
       </p>
 
       <div className="grid gap-5">
-        {view.variables.map((variable) => (
-          <div key={variable.key}>
-            <div className="mb-2 flex items-baseline justify-between gap-3">
-              <label htmlFor={`sim-${variable.key}`} className="text-sm font-semibold text-white">
-                {variable.label}
-              </label>
-              <span className="font-display text-lg tabular-nums text-white">
-                {format(values[variable.key], 0)} {variable.unit}
-              </span>
+        {view.variables.map((variable) => {
+          const places = stepDecimals(variable.step);
+          const shown = format(values[variable.key], places);
+          return (
+            <div key={variable.key}>
+              <div className="mb-2 flex items-baseline justify-between gap-3">
+                <label htmlFor={`sim-${variable.key}`} className="text-sm font-semibold text-white">
+                  {variable.label}
+                </label>
+                <span className="font-display text-lg tabular-nums text-white">
+                  {shown} {variable.unit}
+                </span>
+              </div>
+              <input
+                id={`sim-${variable.key}`}
+                type="range"
+                min={variable.min}
+                max={variable.max}
+                step={variable.step}
+                value={values[variable.key]}
+                aria-valuetext={`${shown} ${variable.unit}`.trim()}
+                disabled={over || sending}
+                onChange={(event) =>
+                  setValues((current) => ({ ...current, [variable.key]: Number(event.target.value) }))
+                }
+                className="w-full accent-[#E9501E]"
+              />
+              <div className="flex justify-between text-xs text-white/40">
+                <span>{format(variable.min, places)}</span>
+                <span>{format(variable.max, places)}</span>
+              </div>
             </div>
-            <input
-              id={`sim-${variable.key}`}
-              type="range"
-              min={variable.min}
-              max={variable.max}
-              step={variable.step}
-              value={values[variable.key]}
-              disabled={over || sending}
-              onChange={(event) => setValues((current) => ({ ...current, [variable.key]: Number(event.target.value) }))}
-              className="w-full accent-[#E9501E]"
-            />
-            <div className="flex justify-between text-xs text-white/40">
-              <span>{format(variable.min, 0)}</span>
-              <span>{format(variable.max, 0)}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div
@@ -112,7 +134,7 @@ export function SimulatorPlayer({ view, move, narration }: PlayerProps<Simulator
         </Button>
       )}
 
-      {last && last.text && (
+      {last?.text && (
         <motion.div
           key={tries}
           initial={reduce ? false : { opacity: 0, y: 8 }}

@@ -49,7 +49,7 @@ async function signIn(page: import("@playwright/test").Page) {
   await page.getByLabel("Correo electrónico").fill(learner.email);
   await page.getByLabel("Contraseña", { exact: true }).fill(learner.password);
   await page.getByRole("button", { name: /Ingresar/ }).click();
-  await expect(page).toHaveURL(/\/learn$/);
+  await expect(page).toHaveURL(/\/learn$/, { timeout: 20_000 }); // a cold route
 }
 
 test("un colaborador juega la conversación con el cliente y completa el módulo", async ({ page, request }) => {
@@ -153,7 +153,7 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
   // Inspection: taps on the picture, checked by the server.
   await page.getByRole("button", { name: "Jugar: Encuentra el desgaste" }).click();
   await game.getByRole("button", { name: /Empezar/ }).click();
-  const picture = game.getByRole("img", { name: /Imagen para inspeccionar/ });
+  const picture = game.getByRole("application", { name: /Imagen para inspeccionar/ });
   await expect(picture).toBeVisible();
   const box = (await picture.boundingBox())!;
   const tapAt = (x: number, y: number) => page.mouse.click(box.x + box.width * x, box.y + box.height * y);
@@ -161,7 +161,10 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
   await expect(game.getByText("Desgaste parejo: aquí no hay problema")).toBeVisible();
   await tapAt(0.15, 0.25);
   await expect(game.getByText("¡Encontraste un problema: Hombros gastados!")).toBeVisible();
-  await tapAt(0.5, 0.25);
+  // The last one with the keyboard: the crosshair starts at the middle; up ten times (2 % each) reaches the center zone.
+  await picture.focus();
+  for (let i = 0; i < 10; i += 1) await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
   await expect(game.getByText("Desgaste en el centro: exceso de presión.")).toBeVisible();
   await game.getByRole("button", { name: /Ver resultado/ }).click();
   await expect(game.getByRole("status").filter({ hasText: "/ 20" })).toContainText("17"); // 20 - 3 for the sound zone
@@ -187,7 +190,10 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
   await expect(game.getByRole("timer")).toHaveCount(0);
   await game.getByRole("button", { name: "Leer el DOT" }).click(); // not the first step
   await expect(game.getByText("Racha 0")).toBeVisible();
-  for (const step of QUICK_ORDER.items) await game.getByRole("button", { name: step }).click();
+  for (const step of QUICK_ORDER.items) {
+    await game.getByRole("button", { name: step }).click();
+    await expect(game.getByRole("button", { name: step })).toBeDisabled(); // placed before the next tap
+  }
   await expect(game.getByText("Racha 4")).toBeVisible();
   await game.getByRole("button", { name: /Ver resultado/ }).click();
   await expect(game.getByText("Completaste el módulo.")).toBeVisible();

@@ -17,6 +17,8 @@ export function DecisionPlayer({ view, move, narration }: PlayerProps<DecisionVi
 
   useEffect(() => {
     latest.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
+    // The chosen button is gone: the focus goes to what comes next (the new situation, or the end).
+    latest.current?.focus({ preventScroll: true });
   }, [steps.length, node, reduce]);
 
   const choose = async (token: string) => {
@@ -41,7 +43,7 @@ export function DecisionPlayer({ view, move, narration }: PlayerProps<DecisionVi
   };
 
   return (
-    <div className="flex flex-col gap-6" aria-live="polite">
+    <div className="flex flex-col gap-6">
       {steps.map((step, index) => (
         <div key={index} className="flex flex-col gap-3">
           <Bubble speaker="Cliente" text={step.situation} />
@@ -73,9 +75,11 @@ export function DecisionPlayer({ view, move, narration }: PlayerProps<DecisionVi
         <motion.div
           key={node.line}
           ref={latest}
+          tabIndex={-1}
+          aria-live="polite"
           initial={reduce ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-4 outline-none"
         >
           <Bubble speaker={node.speaker} text={node.situation} />
           <p className="eyebrow text-white/50">¿Qué haces?</p>
@@ -98,7 +102,7 @@ export function DecisionPlayer({ view, move, narration }: PlayerProps<DecisionVi
           </div>
         </motion.div>
       )}
-      {!node && <div ref={latest} />}
+      {!node && <div ref={latest} tabIndex={-1} className="outline-none" />}
     </div>
   );
 }
