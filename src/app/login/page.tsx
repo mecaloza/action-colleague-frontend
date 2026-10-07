@@ -147,7 +147,7 @@ function LoginScreen() {
             ))}
           </ul>
         </div>
-        <p className="relative z-10 text-xs text-white/40">© {new Date().getFullYear()} Action Colleague</p>
+        <p className="relative z-10 text-xs text-white/40">© {new Date().getFullYear()} Rubinstein Colleague</p>
       </section>
 
       <section className="flex flex-col justify-center px-6 py-12 sm:px-12">

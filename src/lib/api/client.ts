@@ -1,5 +1,5 @@
 /**
- * HTTP client for the Action Colleague API: JSON in/out, bearer auth with transparent
+ * HTTP client for the Rubinstein Colleague API: JSON in/out, bearer auth with transparent
  * refresh-token rotation, and errors translated into readable Spanish messages.
  */
 

@@ -232,7 +232,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <footer className="border-t border-border">
         <div className="container flex h-14 items-center justify-between text-xs text-muted-foreground">
-          <span>© {new Date().getFullYear()} Action Colleague</span>
+          <span>© {new Date().getFullYear()} Rubinstein Colleague</span>
           <span className="hidden sm:inline">Estudio de cursos</span>
         </div>
       </footer>

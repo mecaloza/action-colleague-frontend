@@ -16,7 +16,7 @@
     --secondary-foreground: 0 0% 11%;
     --muted: 0 0% 96%;
     --muted-foreground: 0 0% 38%;
-    --accent: 18 100% 50%;
+    --accent: 15 82% 52%; /* #E9501E, Rubinstein Consulting's orange */
     --accent-foreground: 0 0% 100%;
     --destructive: 0 72% 46%;
     --destructive-foreground: 0 0% 100%;
@@ -78,7 +78,7 @@
   .band-dark {
     @apply relative overflow-hidden bg-ink-950 text-white;
     background-image:
-      radial-gradient(1200px 500px at 85% -10%, rgba(255, 76, 1, 0.12), transparent 60%),
+      radial-gradient(1200px 500px at 85% -10%, rgba(233, 80, 30, 0.12), transparent 60%),
       radial-gradient(900px 400px at -10% 120%, rgba(255, 255, 255, 0.05), transparent 60%);
   }
   .band-dark::after {
