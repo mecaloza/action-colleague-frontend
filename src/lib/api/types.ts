@@ -260,6 +260,160 @@ export interface LearnerModule {
   content_text: string | null;
   last_position_seconds: number;
   quiz: QuizSummary | null;
+  /** Published interactive activities, played after the video (only for unlocked modules). */
+  activities: LearnerActivitySummary[];
+}
+
+// Interactive activities
+
+export type ActivityType = "decision" | "inspection" | "simulator" | "quick";
+
+export interface LearnerActivitySummary {
+  id: number;
+  type: ActivityType;
+  title: string;
+  intro: string;
+  finished: boolean;
+  best_score: number | null;
+  max_score: number;
+}
+
+interface ActivityViewBase {
+  type: ActivityType;
+  title: string;
+  intro: string;
+  score: number;
+  max_score: number;
+  done: boolean;
+}
+
+export interface DecisionNode {
+  /** Narration key of the situation. */
+  line: string;
+  speaker: string;
+  situation: string;
+  choices: { token: string; text: string }[];
+}
+
+export interface DecisionStep {
+  situation: string;
+  choice: string;
+  feedback: string;
+  points: number;
+  line: string;
+}
+
+export interface DecisionView extends ActivityViewBase {
+  type: "decision";
+  step: number;
+  path: DecisionStep[];
+  node: DecisionNode | null;
+}
+
+export interface InspectionZone {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  is_problem: boolean;
+  explanation: string;
+  line: string;
+}
+
+export interface InspectionView extends ActivityViewBase {
+  type: "inspection";
+  prompt: string;
+  problems: number;
+  found: number;
+  misses: number;
+  max_misses: number;
+  revealed: InspectionZone[];
+}
+
+export interface SimulatorVariable {
+  key: string;
+  label: string;
+  unit: string;
+  min: number;
+  max: number;
+  step: number;
+  default: number;
+}
+
+export interface SimulatorTarget {
+  op: "lte" | "gte" | "between";
+  value: number;
+  value2: number;
+}
+
+export interface SimulatorTry {
+  values: Record<string, number>;
+  result: number;
+  met: boolean;
+}
+
+export interface SimulatorView extends ActivityViewBase {
+  type: "simulator";
+  prompt: string;
+  hint: string;
+  formula: string;
+  variables: SimulatorVariable[];
+  output: { label: string; unit: string; decimals: number };
+  target: SimulatorTarget;
+  tries: number;
+  max_tries: number;
+  met: boolean;
+  last: SimulatorTry | null;
+}
+
+export interface QuickCard {
+  token: string;
+  text: string;
+  solved: boolean;
+}
+
+export interface QuickView extends ActivityViewBase {
+  type: "quick";
+  mode: "match" | "order";
+  prompt: string;
+  seconds: number;
+  /** Seconds left; null without a clock. */
+  remaining: number | null;
+  cards: QuickCard[];
+  answers: QuickCard[];
+  solved: number;
+  total: number;
+  streak: number;
+  mistakes: number;
+  placed: string[];
+}
+
+export type ActivityView = DecisionView | InspectionView | SimulatorView | QuickView;
+
+export interface ActivityPlay {
+  attempt_id: number;
+  activity_id: number;
+  view: ActivityView;
+  /** Narration key -> audio URL, for the lines this response reveals. */
+  narration: Record<string, string>;
+  /** The picture an inspection is played on. */
+  image_url: string | null;
+}
+
+export interface ActivityMoveResult {
+  result: Record<string, unknown> & { score: number; done: boolean };
+  done: boolean;
+  narration: Record<string, string>;
+}
+
+export interface ActivityFinish {
+  score: number;
+  max_score: number;
+  module_completed: boolean;
+  next_module_id: number | null;
+  course_completed: boolean;
 }
 
 export interface LearnerCourseDetail {

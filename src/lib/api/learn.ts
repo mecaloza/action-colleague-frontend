@@ -1,5 +1,15 @@
 import { apiRequest, http } from "./client";
-import type { AttemptResult, CompletionResult, LearnerCourse, LearnerCourseDetail, LearnerQuiz, QuizAnswer } from "./types";
+import type {
+  ActivityFinish,
+  ActivityMoveResult,
+  ActivityPlay,
+  AttemptResult,
+  CompletionResult,
+  LearnerCourse,
+  LearnerCourseDetail,
+  LearnerQuiz,
+  QuizAnswer,
+} from "./types";
 
 export const learnApi = {
   courses: () => http.get<LearnerCourse[]>("/learn/courses"),
@@ -10,6 +20,12 @@ export const learnApi = {
   complete: (moduleId: number) => http.post<CompletionResult>(`/learn/modules/${moduleId}/complete`),
   savePosition: (moduleId: number, seconds: number, keepalive = false) =>
     apiRequest<void>(`/learn/modules/${moduleId}/position`, { method: "PUT", body: { seconds }, keepalive }),
+  /** Start a play of an activity, or resume the one left open. */
+  startActivity: (activityId: number, untimed = false) =>
+    http.post<ActivityPlay>(`/learn/activities/${activityId}/attempts`, { untimed }),
+  move: (attemptId: number, move: Record<string, unknown>) =>
+    http.post<ActivityMoveResult>(`/learn/activity-attempts/${attemptId}/moves`, { move }),
+  finishActivity: (attemptId: number) => http.post<ActivityFinish>(`/learn/activity-attempts/${attemptId}/finish`),
 };
 
 export const learnKeys = {

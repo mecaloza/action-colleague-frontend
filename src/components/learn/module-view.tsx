@@ -2,9 +2,10 @@
 
 import { ArrowRight, CheckCircle2, FileText, HelpCircle, Lock, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { LearnerModule, QuizSummary } from "@/lib/api/types";
+import type { LearnerActivitySummary, LearnerModule, QuizSummary } from "@/lib/api/types";
 import { formatDuration, formatPercent, plural, twoDigits } from "@/lib/format";
 import { safeHttpUrl } from "@/lib/safe-url";
+import { ActivityBlock } from "./activities/activity-block";
 import { LearnerVideo } from "./learner-video";
 import { Reading } from "./reading";
 
@@ -19,6 +20,7 @@ interface ModuleViewProps {
   onComplete: () => void;
   onOpenQuiz: () => void;
   onNext: () => void;
+  onPlayActivity: (activity: LearnerActivitySummary) => void;
 }
 
 /** The line under the quiz title: the module is done, or what is left to try. */
@@ -31,9 +33,13 @@ function quizStatus(quiz: QuizSummary, attemptsLeft: number): string {
   return "Usaste todos los intentos. Habla con tu administrador si necesitas otro.";
 }
 
-type QuizCardProps = Pick<ModuleViewProps, "nextModule" | "onOpenQuiz" | "onNext"> & { quiz: QuizSummary };
+type QuizCardProps = Pick<ModuleViewProps, "nextModule" | "onOpenQuiz" | "onNext"> & {
+  quiz: QuizSummary;
+  /** Activities still to play: a passed quiz alone doesn't complete the module. */
+  activitiesPending: number;
+};
 
-function QuizCard({ quiz, nextModule, onOpenQuiz, onNext }: QuizCardProps) {
+function QuizCard({ quiz, activitiesPending, nextModule, onOpenQuiz, onNext }: QuizCardProps) {
   const attemptsLeft = quiz.max_attempts - quiz.attempts_used;
   return (
     <div className="band-dark p-6 sm:p-8">
@@ -49,10 +55,15 @@ function QuizCard({ quiz, nextModule, onOpenQuiz, onNext }: QuizCardProps) {
               {plural(quiz.question_count, "pregunta")} · se aprueba con {quiz.passing_score}%
             </p>
           )}
-          <p className="mt-1 text-sm text-white/60">{quizStatus(quiz, attemptsLeft)}</p>
+          <p className="mt-1 text-sm text-white/60">
+            {quiz.passed && activitiesPending
+              ? `Juega ${activitiesPending === 1 ? "la actividad que falta" : "las actividades que faltan"} para completar el módulo.`
+              : quizStatus(quiz, attemptsLeft)}
+          </p>
         </div>
         {quiz.passed ? (
-          nextModule && (
+          nextModule &&
+          !activitiesPending && (
             <Button variant="accent" onClick={onNext}>
               Siguiente módulo <ArrowRight />
             </Button>
@@ -79,6 +90,7 @@ export function ModuleView({
   onComplete,
   onOpenQuiz,
   onNext,
+  onPlayActivity,
 }: ModuleViewProps) {
   if (!module.unlocked) {
     return (
@@ -91,6 +103,7 @@ export function ModuleView({
   }
   const documentUrl = safeHttpUrl(module.document?.url);
   const empty = !module.video && !documentUrl && !module.content_text;
+  const activitiesPending = module.activities.filter((activity) => !activity.finished).length;
   return (
     <article className="space-y-8">
       <header>
@@ -114,9 +127,16 @@ export function ModuleView({
       )}
       {module.content_text && <Reading text={module.content_text} />}
       {empty && <p className="text-muted-foreground">Este módulo aún no tiene contenido.</p>}
+      <ActivityBlock activities={module.activities} onPlay={onPlayActivity} />
 
       {module.quiz ? (
-        <QuizCard quiz={module.quiz} nextModule={nextModule} onOpenQuiz={onOpenQuiz} onNext={onNext} />
+        <QuizCard
+          quiz={module.quiz}
+          activitiesPending={activitiesPending}
+          nextModule={nextModule}
+          onOpenQuiz={onOpenQuiz}
+          onNext={onNext}
+        />
       ) : module.completed ? (
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
           <p className="flex items-center gap-2 font-semibold text-success">
@@ -128,6 +148,10 @@ export function ModuleView({
             </Button>
           )}
         </div>
+      ) : module.activities.length ? (
+        <p className="border-t border-border pt-6 text-sm text-muted-foreground">
+          El módulo se completa al terminar sus actividades.
+        </p>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
           <p className="text-sm text-muted-foreground">¿Terminaste? Márcalo para seguir con el siguiente módulo.</p>
