@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { DECISION, INSPECTION, PIXEL_PNG, QUICK_ORDER, SIMULATOR } from "./fixtures/activities";
+import { DECISION, INSPECTION, QUICK_ORDER, SIMULATOR } from "./fixtures/activities";
 
 // Interactive activities after a module's video, played by a learner.
 const API = process.env.E2E_API_URL ?? "http://localhost:8001/api/v1";
@@ -90,27 +90,6 @@ test("un colaborador juega la conversación con el cliente y completa el módulo
   await expect(page.getByText("10 de 10 puntos")).toBeVisible();
 });
 
-async function uploadPicture(call: Awaited<ReturnType<typeof adminApi>>, request: APIRequestContext, courseId: number) {
-  const created = await call("post", "/media/uploads", {
-    filename: "desgaste.png",
-    mime_type: "image/png",
-    size_bytes: PIXEL_PNG.length,
-    kind: "image",
-    course_id: courseId,
-  });
-  const put = await request.fetch(created.upload.url, {
-    method: created.upload.method,
-    headers: created.upload.headers,
-    data: PIXEL_PNG,
-  });
-  expect(put.ok()).toBeTruthy();
-  await call("post", `/media/${created.asset.id}/complete`, { purpose: "course_cover" });
-  await expect
-    .poll(async () => (await call("get", `/media/${created.asset.id}`)).status, { timeout: 30_000 })
-    .toBe("ready");
-  return created.asset.id as string;
-}
-
 test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page, request }) => {
   const title = `Llantas: juegos ${Date.now()}`;
   const call = await adminApi(request);
@@ -119,13 +98,12 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
     title: "Práctica",
     content_text: "Diagnóstico y costo.",
   });
-  const inspection = await call("post", `/modules/${module.id}/activities`, {
+  await call("post", `/modules/${module.id}/activities`, {
     type: "inspection",
-    title: "Encuentra el desgaste",
+    title: "Revisa la unidad",
     spec: INSPECTION,
+    status: "ready",
   });
-  await call("put", `/activities/${inspection.id}/image`, { asset_id: await uploadPicture(call, request, course.id) });
-  await call("put", `/activities/${inspection.id}`, { spec: INSPECTION, status: "ready" }); // zones placed again
   await call("post", `/modules/${module.id}/activities`, {
     type: "simulator",
     title: "Baja el costo por km",
@@ -150,24 +128,28 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
   await expect(page.getByText("Te faltan 3 actividades")).toBeVisible();
   const game = page.getByRole("dialog");
 
-  // Inspection: taps on the picture, checked by the server.
-  await page.getByRole("button", { name: "Jugar: Encuentra el desgaste" }).click();
+  // Inspection: each tire's facts, a decision per tire (keyboard or mouse), graded by the server.
+  await page.getByRole("button", { name: "Jugar: Revisa la unidad" }).click();
   await game.getByRole("button", { name: /Empezar/ }).click();
-  const picture = game.getByRole("application", { name: /Imagen para inspeccionar/ });
-  await expect(picture).toBeVisible();
-  const box = (await picture.boundingBox())!;
-  const tapAt = (x: number, y: number) => page.mouse.click(box.x + box.width * x, box.y + box.height * y);
-  await tapAt(0.8, 0.25);
-  await expect(game.getByText("Desgaste parejo: aquí no hay problema")).toBeVisible();
-  await tapAt(0.15, 0.25);
-  await expect(game.getByText("¡Encontraste un problema: Hombros gastados!")).toBeVisible();
-  // The last one with the keyboard: the crosshair starts at the middle; up ten times (2 % each) reaches the center zone.
-  await picture.focus();
-  for (let i = 0; i < 10; i += 1) await page.keyboard.press("ArrowUp");
-  await page.keyboard.press("Enter");
-  await expect(game.getByText("Desgaste en el centro: exceso de presión.")).toBeVisible();
+  await expect(game.getByRole("heading", { name: "Llanta 1 · direccional izquierda" })).toBeVisible();
+  await expect(game.getByText("110 psi")).toBeVisible();
+  await expect(game.getByText("Desgaste parejo y buena profundidad")).toHaveCount(0); // the answer only after deciding
+  await page.keyboard.press("1"); // "Sigue rodando"
+  await expect(game.getByText("¡Bien! Sigue rodando")).toBeVisible();
+  await page.keyboard.press("Enter"); // "Siguiente" has the focus
+  await expect(game.getByRole("heading", { name: "Llanta 2 · direccional derecha" })).toBeVisible();
+  await game.getByRole("button", { name: "Sigue rodando" }).click();
+  await expect(game.getByText("No: lo correcto era Reencauchar")).toBeVisible();
+  await expect(game.getByRole("img", { name: "2 de 3 vidas" })).toBeVisible();
+  await game.getByRole("button", { name: "Llanta 3 · tracción izquierda: pendiente" }).click();
+  await page.keyboard.press("3"); // "Retirar"
+  await expect(game.getByText("Un chipote es una ruptura interna")).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(game.getByRole("heading", { name: "Llanta 4 · tracción derecha" })).toBeVisible();
+  await page.keyboard.press("1");
+  await expect(game.getByText(/Acertaste 3 de 4/)).toBeVisible();
   await game.getByRole("button", { name: /Ver resultado/ }).click();
-  await expect(game.getByRole("status").filter({ hasText: "/ 20" })).toContainText("17"); // 20 - 3 for the sound zone
+  await expect(game.getByRole("status").filter({ hasText: "/ 52" })).toContainText("32"); // 10 + 10 + 12 (a streak of 2)
   await game.getByRole("button", { name: "Continuar" }).click();
 
   // Simulator: the live result follows the slider; the server confirms the target.

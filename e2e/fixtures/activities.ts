@@ -47,40 +47,51 @@ export const DECISION = {
 };
 
 export const INSPECTION = {
-  prompt: "Encuentra los dos problemas de desgaste.",
-  zones: [
+  prompt: "Revisa las 4 llantas antes de que salga la unidad.",
+  scene: "truck",
+  verdicts: [
+    { id: "rodar", label: "Sigue rodando" },
+    { id: "reencauchar", label: "Reencauchar" },
+    { id: "retirar", label: "Retirar" },
+  ],
+  items: [
     {
-      id: "hombros",
-      label: "Hombros gastados",
-      x: 0.05,
-      y: 0.1,
-      w: 0.2,
-      h: 0.3,
-      is_problem: true,
-      explanation: "Desgaste en ambos hombros: baja presión o sobrecarga.",
-      placed: true,
+      id: "l1",
+      label: "Llanta 1 · direccional izquierda",
+      look: "even",
+      answer: "rodar",
+      facts: [
+        { label: "Profundidad", value: "12 mm" },
+        { label: "Presión", value: "110 psi" },
+      ],
+      explanation: "Desgaste parejo y buena profundidad: sigue rodando.",
     },
     {
-      id: "centro",
-      label: "Centro gastado",
-      x: 0.4,
-      y: 0.1,
-      w: 0.2,
-      h: 0.3,
-      is_problem: true,
-      explanation: "Desgaste en el centro: exceso de presión.",
-      placed: true,
+      id: "l2",
+      label: "Llanta 2 · direccional derecha",
+      look: "shoulders",
+      answer: "reencauchar",
+      facts: [
+        { label: "Profundidad", value: "4 mm" },
+        { label: "Presión", value: "80 psi" },
+      ],
+      explanation: "Hombros gastados: rodó con baja presión. El casco sirve para reencauchar.",
     },
     {
-      id: "parejo",
-      label: "Desgaste parejo",
-      x: 0.7,
-      y: 0.1,
-      w: 0.2,
-      h: 0.3,
-      is_problem: false,
-      explanation: "Esta llanta está bien: desgaste uniforme.",
-      placed: true,
+      id: "l3",
+      label: "Llanta 3 · tracción izquierda",
+      look: "bulge",
+      answer: "retirar",
+      facts: [{ label: "Profundidad", value: "9 mm" }],
+      explanation: "Un chipote es una ruptura interna: se retira de inmediato.",
+    },
+    {
+      id: "l4",
+      label: "Llanta 4 · tracción derecha",
+      look: "even",
+      answer: "rodar",
+      facts: [{ label: "Profundidad", value: "11 mm" }],
+      explanation: "Está bien: desgaste uniforme.",
     },
   ],
 };
@@ -105,9 +116,3 @@ export const QUICK_ORDER = {
   seconds: 40,
   items: ["Medir presión en frío", "Revisar desgaste", "Leer el DOT", "Registrar y recomendar"],
 };
-
-// A 1x1 PNG: the picture an inspection is played on (its zones are fractions of whatever size it shows at).
-export const PIXEL_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "base64",
-);

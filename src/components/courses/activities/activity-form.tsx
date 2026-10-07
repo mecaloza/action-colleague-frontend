@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { ActivityType } from "@/lib/api/types";
+import { LOOK_LABELS, TireTread } from "@/components/learn/activities/tire-tread";
+import type { ActivityType, InspectionVerdict, TireLook } from "@/lib/api/types";
 import { removeAt, replaceAt } from "@/lib/array";
 import { computeFormula, FormulaError, parseFormula } from "@/lib/formula";
-import { ZoneEditor, type ZoneSpec } from "./zone-editor";
 
 export interface ChoiceSpec {
   id: string;
@@ -27,10 +27,20 @@ export interface NodeSpec {
 export interface DecisionSpec {
   nodes: NodeSpec[];
 }
+export interface InspectionItemSpec {
+  id: string;
+  label: string;
+  facts: { label: string; value: string }[];
+  look: TireLook;
+  answer: string;
+  explanation: string;
+}
 export interface InspectionSpec {
   prompt: string;
-  zones: ZoneSpec[];
-  max_misses: number;
+  scene: "truck" | "cards";
+  verdicts: InspectionVerdict[];
+  items: InspectionItemSpec[];
+  lives: number;
 }
 export interface VariableSpec {
   key: string;
@@ -92,46 +102,28 @@ export const TEMPLATES: Record<ActivityType, { title: string; intro: string; spe
     },
   },
   inspection: {
-    title: "Encuentra los problemas",
-    intro: "Revisa la imagen.",
+    title: "Revisa la unidad",
+    intro: "Revisa cada llanta y decide qué hacer con ella.",
     spec: {
-      prompt: "Encuentra los 2 problemas.",
-      max_misses: 5,
-      zones: [
-        {
-          id: "z1",
-          label: "Problema 1",
-          x: 0.05,
-          y: 0.1,
-          w: 0.25,
-          h: 0.3,
-          is_problem: true,
-          explanation: "Por qué es un problema.",
-          placed: false,
-        },
-        {
-          id: "z2",
-          label: "Problema 2",
-          x: 0.37,
-          y: 0.1,
-          w: 0.25,
-          h: 0.3,
-          is_problem: true,
-          explanation: "Por qué es un problema.",
-          placed: false,
-        },
-        {
-          id: "z3",
-          label: "Está bien",
-          x: 0.7,
-          y: 0.1,
-          w: 0.25,
-          h: 0.3,
-          is_problem: false,
-          explanation: "Por qué está bien.",
-          placed: false,
-        },
+      prompt: "Revisa las 4 llantas antes de que salga la unidad.",
+      scene: "truck",
+      lives: 3,
+      verdicts: [
+        { id: "v1", label: "Sigue rodando" },
+        { id: "v2", label: "Reencauchar" },
+        { id: "v3", label: "Retirar" },
       ],
+      items: [
+        { look: "even", answer: "v1", value: "12 mm", explanation: "Desgaste parejo y buena profundidad." },
+        { look: "shoulders", answer: "v2", value: "4 mm", explanation: "Hombros gastados: rodó con baja presión." },
+        { look: "bulge", answer: "v3", value: "9 mm", explanation: "Un chipote es una ruptura interna." },
+        { look: "even", answer: "v1", value: "11 mm", explanation: "Está bien: sigue rodando." },
+      ].map(({ value, ...item }, index) => ({
+        ...item,
+        id: `e${index + 1}`,
+        label: `Llanta ${index + 1}`,
+        facts: [{ label: "Profundidad", value }],
+      })) as InspectionItemSpec[],
     },
   },
   simulator: {
@@ -347,11 +339,22 @@ function DecisionForm({ spec, onChange }: FormProps<DecisionSpec>) {
   );
 }
 
-function InspectionForm({ spec, onChange, imageUrl }: FormProps<InspectionSpec> & { imageUrl: string | null }) {
+/** An id the list doesn't use yet: `${prefix}1`, `${prefix}2`... */
+function freeId(prefix: string, used: { id: string }[]): string {
+  const ids = new Set(used.map((entry) => entry.id));
+  let number = used.length + 1;
+  while (ids.has(`${prefix}${number}`)) number += 1;
+  return `${prefix}${number}`;
+}
+
+function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
+  const setItem = (index: number, changes: Partial<InspectionItemSpec>) =>
+    onChange({ ...spec, items: replaceAt(spec.items, index, { ...spec.items[index], ...changes }) });
+  const pairs = spec.scene !== "truck" || spec.items.length % 2 === 0;
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
-        <Label htmlFor="inspection-prompt">Qué buscar</Label>
+        <Label htmlFor="inspection-prompt">Misión</Label>
         <Input
           id="inspection-prompt"
           value={spec.prompt}
@@ -359,15 +362,207 @@ function InspectionForm({ spec, onChange, imageUrl }: FormProps<InspectionSpec> 
           onChange={(event) => onChange({ ...spec, prompt: event.target.value })}
         />
       </div>
-      <ZoneEditor imageUrl={imageUrl} zones={spec.zones} onChange={(zones) => onChange({ ...spec, zones })} />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => onChange({ ...spec, zones: spec.zones.map((zone) => ({ ...zone, placed: true })) })}
-      >
-        Confirmar que todas las zonas están bien ubicadas
-      </Button>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="inspection-scene">Escena</Label>
+          <Select
+            id="inspection-scene"
+            value={spec.scene}
+            onChange={(event) => onChange({ ...spec, scene: event.target.value as InspectionSpec["scene"] })}
+          >
+            <option value="truck">Camión (llantas por eje)</option>
+            <option value="cards">Tarjetas (casos)</option>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="inspection-lives">Vidas</Label>
+          <Input
+            id="inspection-lives"
+            type="number"
+            min={1}
+            max={5}
+            value={spec.lives}
+            onChange={(event) => onChange({ ...spec, lives: num(event.target.value) })}
+          />
+        </div>
+      </div>
+      {!pairs && (
+        <p className="text-sm text-destructive">En el camión las llantas van por pares: agrega o quita una.</p>
+      )}
+
+      <fieldset className="space-y-2 border border-border p-4">
+        <legend className="px-1 text-sm font-semibold">Decisiones (teclas 1 a {spec.verdicts.length})</legend>
+        {spec.verdicts.map((verdict, index) => (
+          <div key={verdict.id} className="flex gap-2">
+            <Input
+              aria-label={`Decisión ${index + 1}`}
+              value={verdict.label}
+              maxLength={40}
+              onChange={(event) =>
+                onChange({ ...spec, verdicts: replaceAt(spec.verdicts, index, { ...verdict, label: event.target.value }) })
+              }
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Quitar decisión ${index + 1}`}
+              disabled={spec.verdicts.length <= 2 || spec.items.some((item) => item.answer === verdict.id)}
+              title="Solo se quita una decisión que no es la respuesta de ningún elemento"
+              onClick={() => onChange({ ...spec, verdicts: removeAt(spec.verdicts, index) })}
+            >
+              <Trash2 />
+            </Button>
+          </div>
+        ))}
+        {spec.verdicts.length < 4 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              onChange({ ...spec, verdicts: [...spec.verdicts, { id: freeId("v", spec.verdicts), label: "Otra" }] })
+            }
+          >
+            <Plus /> Decisión
+          </Button>
+        )}
+      </fieldset>
+
+      {spec.items.map((item, index) => (
+        <fieldset key={item.id} className="space-y-3 border border-border p-4">
+          <legend className="px-1 text-sm font-semibold">
+            {spec.scene === "truck" ? `Llanta ${index + 1}` : `Caso ${index + 1}`}
+          </legend>
+          <div className="flex gap-4">
+            {item.look !== "none" && <TireTread look={item.look} className="h-24 shrink-0" />}
+            <div className="grid flex-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor={`item-label-${item.id}`}>Nombre</Label>
+                <Input
+                  id={`item-label-${item.id}`}
+                  value={item.label}
+                  maxLength={80}
+                  onChange={(event) => setItem(index, { label: event.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor={`item-look-${item.id}`}>Cómo se ve</Label>
+                <Select
+                  id={`item-look-${item.id}`}
+                  value={item.look}
+                  onChange={(event) => setItem(index, { look: event.target.value as TireLook })}
+                >
+                  {(Object.keys(LOOK_LABELS) as TireLook[]).map((look) => (
+                    <option key={look} value={look}>
+                      {LOOK_LABELS[look]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor={`item-answer-${item.id}`}>Respuesta correcta</Label>
+                <Select
+                  id={`item-answer-${item.id}`}
+                  value={item.answer}
+                  onChange={(event) => setItem(index, { answer: event.target.value })}
+                >
+                  {spec.verdicts.map((verdict) => (
+                    <option key={verdict.id} value={verdict.id}>
+                      {verdict.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Datos que ve el colaborador (nunca la respuesta)</p>
+            {item.facts.map((fact, at) => (
+              <div key={at} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                <Input
+                  aria-label={`Dato ${at + 1} de ${item.label}`}
+                  value={fact.label}
+                  maxLength={80}
+                  onChange={(event) =>
+                    setItem(index, { facts: replaceAt(item.facts, at, { ...fact, label: event.target.value }) })
+                  }
+                />
+                <Input
+                  aria-label={`Valor del dato ${at + 1} de ${item.label}`}
+                  value={fact.value}
+                  maxLength={60}
+                  onChange={(event) =>
+                    setItem(index, { facts: replaceAt(item.facts, at, { ...fact, value: event.target.value }) })
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Quitar dato ${at + 1} de ${item.label}`}
+                  disabled={item.facts.length <= 1}
+                  onClick={() => setItem(index, { facts: removeAt(item.facts, at) })}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
+            ))}
+            {item.facts.length < 5 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setItem(index, { facts: [...item.facts, { label: "Dato", value: "Valor" }] })}
+              >
+                <Plus /> Dato
+              </Button>
+            )}
+          </div>
+          <div>
+            <Label htmlFor={`item-explanation-${item.id}`}>Explicación (se dice con voz)</Label>
+            <Textarea
+              id={`item-explanation-${item.id}`}
+              value={item.explanation}
+              maxLength={600}
+              onChange={(event) => setItem(index, { explanation: event.target.value })}
+            />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={spec.items.length <= 3}
+            onClick={() => onChange({ ...spec, items: removeAt(spec.items, index) })}
+          >
+            <Trash2 /> Quitar
+          </Button>
+        </fieldset>
+      ))}
+      {spec.items.length < 10 && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() =>
+            onChange({
+              ...spec,
+              items: [
+                ...spec.items,
+                {
+                  id: freeId("e", spec.items),
+                  label: spec.scene === "truck" ? `Llanta ${spec.items.length + 1}` : `Caso ${spec.items.length + 1}`,
+                  facts: [{ label: "Profundidad", value: "10 mm" }],
+                  look: spec.scene === "truck" ? "even" : "none",
+                  answer: spec.verdicts[0]?.id ?? "",
+                  explanation: "Por qué esa es la decisión correcta.",
+                },
+              ],
+            })
+          }
+        >
+          <Plus /> {spec.scene === "truck" ? "Llanta" : "Caso"}
+        </Button>
+      )}
     </div>
   );
 }
@@ -690,15 +885,13 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
 interface ActivityFormProps {
   type: ActivityType;
   spec: AnySpec;
-  imageUrl: string | null;
   onChange: (spec: AnySpec) => void;
 }
 
 /** The form of each type of activity (the server validates the whole spec when it's saved). */
-export function ActivityForm({ type, spec, imageUrl, onChange }: ActivityFormProps) {
+export function ActivityForm({ type, spec, onChange }: ActivityFormProps) {
   if (type === "decision") return <DecisionForm spec={spec as DecisionSpec} onChange={onChange} />;
-  if (type === "inspection")
-    return <InspectionForm spec={spec as InspectionSpec} onChange={onChange} imageUrl={imageUrl} />;
+  if (type === "inspection") return <InspectionForm spec={spec as InspectionSpec} onChange={onChange} />;
   if (type === "simulator") return <SimulatorForm spec={spec as SimulatorSpec} onChange={onChange} />;
   return <QuickForm spec={spec as QuickSpec} onChange={onChange} />;
 }
