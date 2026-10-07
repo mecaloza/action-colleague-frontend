@@ -24,13 +24,19 @@ export function useNarration() {
   const [muted, setMuted] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const mutedRef = useRef(false);
+  const alive = useRef(true);
+  // Each say() starts a new generation: a play() of an earlier one that fails late never skips the new lines.
+  const generation = useRef(0);
 
   useEffect(() => {
+    alive.current = true; // StrictMode mounts twice
     mutedRef.current = readMuted();
     setMuted(mutedRef.current);
     return () => {
+      alive.current = false;
       queue.current = [];
       audio.current?.pause();
+      audio.current?.removeAttribute("src");
     };
   }, []);
 
@@ -46,12 +52,19 @@ export function useNarration() {
     element.onerror = next;
     element.src = url;
     setSpeaking(true);
-    element.play().catch(next); // blocked or failed: on to the next line (the text is on screen)
+    const mine = generation.current;
+    element.play().catch((error: unknown) => {
+      // Blocked or failed: on to the next line (the text is on screen). An abort means a newer line took over.
+      const aborted = error instanceof DOMException && error.name === "AbortError";
+      if (!aborted && mine === generation.current) next();
+    });
   }, []);
 
   /** Say these clips in order, after cutting whatever is being said. */
   const say = useCallback(
     (urls: (string | undefined)[]) => {
+      if (!alive.current) return;
+      generation.current += 1;
       queue.current = urls.filter((url): url is string => Boolean(url));
       audio.current?.pause();
       next();

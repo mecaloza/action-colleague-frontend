@@ -163,6 +163,24 @@ export const TEMPLATES: Record<ActivityType, { title: string; intro: string; spe
 
 const num = (raw: string) => (raw.trim() === "" ? 0 : Number(raw));
 
+/** A control's key as the formula (and the server) accept it: lowercase letters and "_", up to 20. */
+const cleanKey = (raw: string) =>
+  raw
+    .toLowerCase()
+    .replace(/[^a-z_]/g, "")
+    .slice(0, 20);
+
+/** A key no other control uses ("control_a", "control_b"...). */
+function freeKey(variables: VariableSpec[]): string {
+  const used = new Set(variables.map((variable) => variable.key));
+  return (
+    "abcdefghijklmnopqrstuvwxyz"
+      .split("")
+      .map((letter) => `control_${letter}`)
+      .find((key) => !used.has(key)) ?? "control_z"
+  );
+}
+
 interface FormProps<S> {
   spec: S;
   onChange: (spec: S) => void;
@@ -263,7 +281,7 @@ function DecisionForm({ spec, onChange }: FormProps<DecisionSpec>) {
                     choices: [
                       ...node.choices,
                       {
-                        id: "abc"[node.choices.length],
+                        id: ["a", "b", "c"].find((letter) => !node.choices.some((other) => other.id === letter)) ?? "c",
                         text: "Otra opción",
                         points: 0,
                         feedback: "Su consecuencia.",
@@ -386,7 +404,7 @@ function SimulatorForm({ spec, onChange }: FormProps<SimulatorSpec>) {
             aria-label="Clave (en la fórmula)"
             value={variable.key}
             maxLength={20}
-            onChange={(event) => setVariable(index, { key: event.target.value.toLowerCase() })}
+            onChange={(event) => setVariable(index, { key: cleanKey(event.target.value) })}
           />
           <Input
             aria-label="Nombre"
@@ -447,7 +465,7 @@ function SimulatorForm({ spec, onChange }: FormProps<SimulatorSpec>) {
               variables: [
                 ...spec.variables,
                 {
-                  key: `v${spec.variables.length + 1}`,
+                  key: freeKey(spec.variables),
                   label: "Otro control",
                   unit: "",
                   min: 0,
@@ -559,7 +577,16 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
         <Select
           aria-label="Modo"
           value={spec.mode}
-          onChange={(event) => onChange({ ...spec, mode: event.target.value as QuickSpec["mode"] })}
+          onChange={(event) => {
+            const mode = event.target.value as QuickSpec["mode"];
+            // Each mode needs 4 entries of its own to be saved: start the new one with some.
+            const pairs =
+              spec.pairs.length >= 4
+                ? spec.pairs
+                : [1, 2, 3, 4].map((n) => ({ left: `Concepto ${n}`, right: `Su pareja ${n}` }));
+            const items = spec.items.length >= 4 ? spec.items : [1, 2, 3, 4].map((n) => `Paso ${n}`);
+            onChange({ ...spec, mode, pairs, items });
+          }}
         >
           <option value="order">Ordenar pasos</option>
           <option value="match">Emparejar</option>

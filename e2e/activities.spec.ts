@@ -153,7 +153,7 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
   // Inspection: taps on the picture, checked by the server.
   await page.getByRole("button", { name: "Jugar: Encuentra el desgaste" }).click();
   await game.getByRole("button", { name: /Empezar/ }).click();
-  const picture = game.getByRole("img", { name: /Imagen para inspeccionar/ });
+  const picture = game.getByRole("application", { name: /Imagen para inspeccionar/ });
   await expect(picture).toBeVisible();
   const box = (await picture.boundingBox())!;
   const tapAt = (x: number, y: number) => page.mouse.click(box.x + box.width * x, box.y + box.height * y);
@@ -161,7 +161,10 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
   await expect(game.getByText("Desgaste parejo: aquí no hay problema")).toBeVisible();
   await tapAt(0.15, 0.25);
   await expect(game.getByText("¡Encontraste un problema: Hombros gastados!")).toBeVisible();
-  await tapAt(0.5, 0.25);
+  // The last one with the keyboard: the crosshair starts at the middle; up ten times (2 % each) reaches the center zone.
+  await picture.focus();
+  for (let i = 0; i < 10; i += 1) await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
   await expect(game.getByText("Desgaste en el centro: exceso de presión.")).toBeVisible();
   await game.getByRole("button", { name: /Ver resultado/ }).click();
   await expect(game.getByRole("status").filter({ hasText: "/ 20" })).toContainText("17"); // 20 - 3 for the sound zone

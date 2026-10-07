@@ -43,6 +43,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { activitiesApi, activityKeys } from "@/lib/api/activities";
+import { ApiError } from "@/lib/api/client";
 import { studioApi } from "@/lib/api/studio";
 import type { ActivityAdmin, ActivityType, CourseDetail, ModuleAdmin } from "@/lib/api/types";
 import { twoDigits } from "@/lib/format";
@@ -95,7 +96,10 @@ function ModuleActivities({ courseId, module }: { courseId: number; module: Modu
     queryFn: () => studioApi.job(jobId as string),
     enabled: Boolean(jobId),
     refetchInterval: (query) =>
-      query.state.data && ["succeeded", "failed", "canceled"].includes(query.state.data.status) ? false : JOB_POLL_MS,
+      query.state.status === "error" ||
+      (query.state.data && ["succeeded", "failed", "canceled"].includes(query.state.data.status))
+        ? false
+        : JOB_POLL_MS,
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: key });
 
@@ -109,6 +113,12 @@ function ModuleActivities({ courseId, module }: { courseId: number; module: Modu
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per finished job
   }, [job.data?.status]);
+
+  useEffect(() => {
+    if (!job.isError) return;
+    toastError(job.error);
+    setJobId(null); // the job can't be followed: stop waiting on it
+  }, [job.isError, job.error]);
 
   const generate = useMutation({
     mutationFn: () => activitiesApi.generate(module.id),
@@ -169,7 +179,23 @@ function ModuleActivities({ courseId, module }: { courseId: number; module: Modu
           {module.title}
         </h3>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => generate.mutate()} loading={generating}>
+          <Button
+            variant="outline"
+            size="sm"
+            loading={generating}
+            onClick={async () => {
+              const drafts = activities.filter((activity) => activity.status === "draft").length;
+              const ok =
+                !drafts ||
+                (await confirm({
+                  title: "¿Regenerar con IA?",
+                  description:
+                    "Las propuestas de la IA que nadie editó se reemplazan; lo publicado y lo que editaste se queda.",
+                  confirmLabel: "Regenerar",
+                }));
+              if (ok) generate.mutate();
+            }}
+          >
             <Sparkles />{" "}
             {generating
               ? job.data?.step || "La IA está diseñando…"
@@ -212,6 +238,15 @@ function ModuleActivities({ courseId, module }: { courseId: number; module: Modu
                     <>
                       {" · "}
                       <Volume2 className="inline h-3 w-3" /> {VOICE[activity.voice_status]}
+                      {activity.voice_status === "failed" && (
+                        <button
+                          type="button"
+                          className="ml-1 underline"
+                          onClick={() => void activitiesApi.voice(activity.id).then(refresh, toastError)}
+                        >
+                          Reintentar
+                        </button>
+                      )}
                     </>
                   )}
                 </p>
@@ -227,7 +262,7 @@ function ModuleActivities({ courseId, module }: { courseId: number; module: Modu
                   variant="ghost"
                   size="icon-sm"
                   aria-label={`Subir ${activity.title}`}
-                  disabled={index === 0}
+                  disabled={index === 0 || order.isPending}
                   onClick={() => move(index, index - 1)}
                 >
                   <ArrowUp />
@@ -236,7 +271,7 @@ function ModuleActivities({ courseId, module }: { courseId: number; module: Modu
                   variant="ghost"
                   size="icon-sm"
                   aria-label={`Bajar ${activity.title}`}
-                  disabled={index === activities.length - 1}
+                  disabled={index === activities.length - 1 || order.isPending}
                   onClick={() => move(index, index + 1)}
                 >
                   <ArrowDown />
@@ -299,6 +334,7 @@ function ModuleActivities({ courseId, module }: { courseId: number; module: Modu
           activity={trying.activity}
           open
           onOpenChange={(open) => !open && setTrying(null)}
+          allowUntimed={false}
           api={{ start: () => activitiesApi.preview(trying.activity.id), move: activitiesApi.previewMove }}
         />
       )}
@@ -319,7 +355,23 @@ function ActivityEditor({ courseId, activity, onClose, onSaved }: ActivityEditor
   const [spec, setSpec] = useState<AnySpec>(activity.spec as unknown as AnySpec);
   const [imageUrl, setImageUrl] = useState(activity.image_url);
   const { upload, busy: uploading } = useUpload();
+  const [waitingPicture, setWaitingPicture] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const confirm = useConfirm();
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
+  const dirty =
+    title !== activity.title || intro !== activity.intro || JSON.stringify(spec) !== JSON.stringify(activity.spec);
+  const close = async () => {
+    if (dirty && !(await confirm({ title: "¿Descartar los cambios?", confirmLabel: "Descartar", destructive: true })))
+      return;
+    onClose();
+  };
   const save = useMutation({
     mutationFn: () =>
       activitiesApi.update(activity.id, { title, intro, spec: spec as unknown as Record<string, unknown> }),
@@ -331,29 +383,37 @@ function ActivityEditor({ courseId, activity, onClose, onSaved }: ActivityEditor
   });
 
   const choosePicture = async (file: File) => {
+    setWaitingPicture(true);
     try {
       const asset = await upload(file, { kind: "image", courseId, purpose: "course_material" });
       if (!asset) return;
-      // The picture is checked after the upload: wait until it's ready (a few seconds at most).
-      for (let attempt = 0; attempt < 15; attempt += 1) {
+      // The picture is checked after the upload: wait (a few seconds at most) while the server says it isn't ready.
+      for (let attempt = 0; attempt < 15 && alive.current; attempt += 1) {
         try {
           const updated = await activitiesApi.setImage(activity.id, asset.id);
+          if (!alive.current) return;
           setImageUrl(updated.image_url);
-          setSpec(updated.spec as unknown as AnySpec); // zones must be placed again on the new picture
+          // Only the zones' places start over on the new picture: the rest of the edits stay.
+          setSpec((local) =>
+            "zones" in local ? { ...local, zones: local.zones.map((zone) => ({ ...zone, placed: false })) } : local,
+          );
           toast.success("Imagen lista: ubica las zonas sobre ella.");
           return;
-        } catch {
+        } catch (error) {
+          if (!(error instanceof ApiError && error.status === 422)) throw error;
           await new Promise((resolve) => window.setTimeout(resolve, 2000));
         }
       }
-      toast.error("La imagen no quedó lista. Intenta de nuevo.");
+      if (alive.current) toast.error("La imagen no quedó lista. Intenta de nuevo.");
     } catch (error) {
-      toastError(error);
+      if (alive.current) toastError(error);
+    } finally {
+      if (alive.current) setWaitingPicture(false);
     }
   };
 
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
+    <Sheet open onOpenChange={(open) => !open && void close()}>
       <SheetContent className="w-full sm:max-w-3xl">
         <SheetHeader>
           <SheetTitle>{ACTIVITY_LABELS[activity.type]}</SheetTitle>
@@ -396,7 +456,7 @@ function ActivityEditor({ courseId, activity, onClose, onSaved }: ActivityEditor
                 variant="outline"
                 size="sm"
                 onClick={() => fileInput.current?.click()}
-                loading={uploading}
+                loading={uploading || waitingPicture}
               >
                 <ImageUp /> {imageUrl ? "Cambiar imagen" : "Subir imagen"}
               </Button>
@@ -407,7 +467,7 @@ function ActivityEditor({ courseId, activity, onClose, onSaved }: ActivityEditor
           </div>
         </SheetBody>
         <SheetFooter>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={() => void close()}>
             Cancelar
           </Button>
           <Button onClick={() => save.mutate()} loading={save.isPending}>

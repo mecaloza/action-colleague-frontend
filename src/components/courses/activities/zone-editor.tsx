@@ -24,6 +24,18 @@ const MIN_SIZE = 0.03;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const round = (value: number) => Math.round(value * 1000) / 1000;
 
+/** A rectangle the server accepts: rounded, at least MIN_SIZE wide and tall, wholly inside the picture. */
+function fitted({ x, y, w, h }: Pick<ZoneSpec, "x" | "y" | "w" | "h">) {
+  const width = round(clamp(w, MIN_SIZE, 1));
+  const height = round(clamp(h, MIN_SIZE, 1));
+  return {
+    w: width,
+    h: height,
+    x: Math.min(round(clamp(x, 0, 1)), round(1 - width)),
+    y: Math.min(round(clamp(y, 0, 1)), round(1 - height)),
+  };
+}
+
 type Drag = { index: number; mode: "move" | "resize"; startX: number; startY: number; zone: ZoneSpec };
 
 interface ZoneEditorProps {
@@ -59,19 +71,14 @@ export function ZoneEditor({ imageUrl, zones, onChange }: ZoneEditorProps) {
     const dx = (event.clientX - drag.startX) / rect.width;
     const dy = (event.clientY - drag.startY) / rect.height;
     const { zone } = drag;
-    if (drag.mode === "move") {
-      update(drag.index, {
-        x: round(clamp(zone.x + dx, 0, 1 - zone.w)),
-        y: round(clamp(zone.y + dy, 0, 1 - zone.h)),
-        placed: true,
-      });
-    } else {
-      update(drag.index, {
-        w: round(clamp(zone.w + dx, MIN_SIZE, 1 - zone.x)),
-        h: round(clamp(zone.h + dy, MIN_SIZE, 1 - zone.y)),
-        placed: true,
-      });
-    }
+    update(drag.index, {
+      ...fitted(
+        drag.mode === "move"
+          ? { ...zone, x: zone.x + dx, y: zone.y + dy }
+          : { ...zone, w: zone.w + dx, h: zone.h + dy },
+      ),
+      placed: true,
+    });
   };
 
   const add = () => {
@@ -102,6 +109,8 @@ export function ZoneEditor({ imageUrl, zones, onChange }: ZoneEditorProps) {
         ref={box}
         onPointerMove={moveTo}
         onPointerUp={() => setDrag(null)}
+        onPointerCancel={() => setDrag(null)}
+        onLostPointerCapture={() => setDrag(null)}
         className="relative w-full touch-none select-none overflow-hidden border border-border bg-ink-900"
       >
         {imageUrl ? (
@@ -138,7 +147,7 @@ export function ZoneEditor({ imageUrl, zones, onChange }: ZoneEditorProps) {
             </span>
             <span
               onPointerDown={(event) => start(event, index, "resize")}
-              className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize bg-accent"
+              className="absolute -bottom-3 -right-3 h-6 w-6 cursor-nwse-resize rounded-full border-2 border-white bg-accent"
               aria-hidden
             />
           </div>
@@ -188,6 +197,28 @@ export function ZoneEditor({ imageUrl, zones, onChange }: ZoneEditorProps) {
             />
             Aquí hay un problema (si no, es un distractor)
           </label>
+          <div className="grid grid-cols-4 gap-2">
+            {(["x", "y", "w", "h"] as const).map((field) => (
+              <div key={field}>
+                <Label htmlFor={`zone-${field}`}>
+                  {{ x: "Izquierda %", y: "Arriba %", w: "Ancho %", h: "Alto %" }[field]}
+                </Label>
+                <Input
+                  id={`zone-${field}`}
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={Math.round(zone[field] * 100)}
+                  onChange={(event) =>
+                    update(selected, {
+                      ...fitted({ ...zone, [field]: Number(event.target.value) / 100 }),
+                      placed: true,
+                    })
+                  }
+                />
+              </div>
+            ))}
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

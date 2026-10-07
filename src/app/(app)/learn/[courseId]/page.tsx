@@ -31,8 +31,11 @@ function CoursePlayer() {
   // The quiz belongs to the module it was opened from, even when passing it moves `current` along.
   const [quizModuleId, setQuizModuleId] = useState<number | null>(null);
   const [celebrating, setCelebrating] = useState(false);
-  const [playing, setPlaying] = useState<LearnerActivitySummary | null>(null);
-  const [playSession, setPlaySession] = useState(0);
+  // The activity being played, and whether its module was already completed when it opened (playing again for
+  // a better score must not move the learner on, nor celebrate the course again).
+  const [playing, setPlaying] = useState<{ activity: LearnerActivitySummary; session: number; wasCompleted: boolean } | null>(
+    null,
+  );
   // The last play's result: when it completed the module, closing the activity moves on.
   const finishedPlay = useRef<ActivityFinish | null>(null);
 
@@ -129,8 +132,8 @@ function CoursePlayer() {
                 }}
                 onNext={() => nextModule && show(nextModule.id)}
                 onPlayActivity={(activity) => {
-                  setPlaying(activity);
-                  setPlaySession((session) => session + 1);
+                  finishedPlay.current = null;
+                  setPlaying((last) => ({ activity, session: (last?.session ?? 0) + 1, wasCompleted: current.completed }));
                 }}
               />
             </motion.div>
@@ -140,16 +143,16 @@ function CoursePlayer() {
 
       {playing && (
         <ActivityPlayer
-          key={`${playing.id}:${playSession}`}
-          activity={playing}
+          key={playing.session}
+          activity={playing.activity}
           open
           api={{
-            start: (untimed) => learnApi.startActivity(playing.id, untimed),
+            start: (untimed) => learnApi.startActivity(playing.activity.id, untimed),
             move: learnApi.move,
             finish: learnApi.finishActivity,
           }}
           onFinished={(result) => {
-            finishedPlay.current = result;
+            if (!playing.wasCompleted) finishedPlay.current = result; // this play completed the module
             void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
           }}
           onOpenChange={(open) => {

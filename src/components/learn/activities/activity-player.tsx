@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { animate, AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Play, RotateCcw, Trophy, Volume2, VolumeX, X } from "lucide-react";
@@ -64,11 +64,31 @@ interface ActivityPlayerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onFinished?: (result: ActivityFinish) => void;
+  /** Offer playing a quick challenge without its clock (the admin's preview always plays it timed). */
+  allowUntimed?: boolean;
 }
 
+const QUICK_FINISH_RETRY_MS = 1500; // the server's clock may run out a moment after the learner's
+
 /** A play of one activity, full screen: an intro, the game itself, and its result. */
-export function ActivityPlayer({ activity, api, open, onOpenChange, onFinished }: ActivityPlayerProps) {
+export function ActivityPlayer({
+  activity,
+  api,
+  open,
+  onOpenChange,
+  onFinished,
+  allowUntimed = true,
+}: ActivityPlayerProps) {
   const narration = useNarration();
+  // Answers that arrive after the player closed change nothing (and say nothing).
+  const alive = useRef(true);
+  useEffect(() => {
+    // Set on mount too: StrictMode mounts, unmounts and mounts again.
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const [play, setPlay] = useState<ActivityPlay | null>(null);
   const [view, setView] = useState<ActivityView | null>(null);
   const [clips, setClips] = useState<Record<string, string>>({});
@@ -81,6 +101,7 @@ export function ActivityPlayer({ activity, api, open, onOpenChange, onFinished }
     setStarting(true);
     try {
       const started = await api.start(untimed);
+      if (!alive.current) return;
       setPlay(started);
       setView(started.view);
       setClips(started.narration);
@@ -99,6 +120,7 @@ export function ActivityPlayer({ activity, api, open, onOpenChange, onFinished }
     if (!play || !view) return null;
     try {
       const outcome = await api.move(play.attempt_id, body);
+      if (!alive.current) return null;
       setClips((known) => ({ ...known, ...outcome.narration }));
       setView((current) =>
         current ? ({ ...current, score: outcome.result.score, done: outcome.done } as ActivityView) : current,
@@ -128,13 +150,21 @@ export function ActivityPlayer({ activity, api, open, onOpenChange, onFinished }
     }
     setFinishing(true);
     try {
-      const finished = await api.finish(play.attempt_id);
+      let finished: ActivityFinish;
+      try {
+        finished = await api.finish(play.attempt_id);
+      } catch (error) {
+        if (!(view.type === "quick" && error instanceof ApiError && error.status === 409)) throw error;
+        await new Promise((resolve) => window.setTimeout(resolve, QUICK_FINISH_RETRY_MS));
+        finished = await api.finish(play.attempt_id);
+      }
+      if (!alive.current) return;
       setResult(finished);
       onFinished?.(finished);
     } catch (error) {
-      toastError(error);
+      if (alive.current) toastError(error);
     } finally {
-      setFinishing(false);
+      if (alive.current) setFinishing(false);
     }
   };
 
@@ -168,10 +198,13 @@ export function ActivityPlayer({ activity, api, open, onOpenChange, onFinished }
               </DialogPrimitive.Title>
             </div>
             {view && (
-              <p className="text-right" aria-live="polite">
+              <p className="text-right">
                 <span className="block text-[10px] font-bold uppercase tracking-label text-white/50">Puntos</span>
-                <span className="font-display text-2xl font-semibold text-accent">
+                <span className="font-display text-2xl font-semibold text-accent" aria-hidden>
                   <Points value={view.score} />
+                </span>
+                <span className="sr-only" aria-live="polite">
+                  {view.score} puntos
                 </span>
               </p>
             )}
@@ -255,7 +288,7 @@ export function ActivityPlayer({ activity, api, open, onOpenChange, onFinished }
                   <p className="text-sm text-white/50">
                     Hasta {activity.max_score} puntos · con voz (puedes silenciarla)
                   </p>
-                  {activity.type === "quick" && (
+                  {activity.type === "quick" && allowUntimed && (
                     <label className="flex items-center gap-2 text-sm text-white/70">
                       <input type="checkbox" checked={untimed} onChange={(event) => setUntimed(event.target.checked)} />
                       Jugar sin límite de tiempo (sin bonus por tiempo)
@@ -287,8 +320,13 @@ function Result({ result, onAgain, onClose }: { result: ActivityFinish; onAgain:
       <Trophy className="h-14 w-14 text-accent" />
       <p className="display-md text-white">{verdict}</p>
       <p className="font-display text-5xl font-semibold text-accent">
-        <Points value={result.score} />
-        <span className="text-2xl text-white/50"> / {result.max_score}</span>
+        <span aria-hidden>
+          <Points value={result.score} />
+          <span className="text-2xl text-white/50"> / {result.max_score}</span>
+        </span>
+        <span className="sr-only">
+          {result.score} de {result.max_score} puntos
+        </span>
       </p>
       {result.module_completed && <p className="text-white/70">Completaste el módulo.</p>}
       <div className="flex flex-wrap justify-center gap-3">
