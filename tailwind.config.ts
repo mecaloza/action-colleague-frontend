@@ -40,9 +40,9 @@ const config: Config = {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
-          hover: "#e54400",
-          soft: "#fff1ea",
-          strong: "#b83700", // accent as small text on light backgrounds (AA contrast)
+          hover: "#cf4317",
+          soft: "#fdefe9",
+          strong: "#b23a11", // accent as small text on light backgrounds (AA contrast)
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",

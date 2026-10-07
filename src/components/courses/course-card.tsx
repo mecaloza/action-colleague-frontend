@@ -22,10 +22,10 @@ export function CoverArt({ title, seed, className }: { title: string; seed: numb
       <svg viewBox="0 0 320 180" className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" aria-hidden>
         <rect x={x - 45} y={y - 45} width="90" height="90" transform={`rotate(45 ${x} ${y})`} fill="none" stroke="#fff" strokeOpacity=".12" />
         <rect x={x - 22} y={y + 38} width="44" height="44" transform={`rotate(45 ${x} ${y + 60})`} fill="none" stroke="#fff" strokeOpacity=".2" />
-        <rect x={x + 30} y={y + 58} width="22" height="22" transform={`rotate(45 ${x + 41} ${y + 69})`} fill="#ff4c01" />
+        <rect x={x + 30} y={y + 58} width="22" height="22" transform={`rotate(45 ${x + 41} ${y + 69})`} fill="#E9501E" />
       </svg>
       <span className="absolute bottom-3 left-4 font-display text-5xl font-semibold tracking-tightest text-white/90">
-        {initials || "AC"}
+        {initials || "RC"}
       </span>
     </div>
   );

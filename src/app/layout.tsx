@@ -19,8 +19,8 @@ const sans = Red_Hat_Display({
 
 export const metadata: Metadata = {
   title: {
-    default: "Action Colleague — Estudio de cursos",
-    template: "%s · Action Colleague",
+    default: "Rubinstein Colleague — Estudio de cursos",
+    template: "%s · Rubinstein Colleague",
   },
   description: "Crea cursos de formación con IA o con tu propio material, y sigue el avance de tu equipo.",
 };
