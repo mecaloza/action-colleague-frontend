@@ -122,8 +122,9 @@ export function InspectionPlayer({
     if (!other) return <span />;
     const active = selected === index;
     const state = !other.outcome ? "pendiente" : other.outcome.correct ? "acertada" : "fallada";
+    const waiting = !other.outcome && !active && !over && !reduce; // its badge beats, to call for a look
     return (
-      <motion.button
+      <button
         key={other.id}
         ref={(element) => {
           tiles.current[index] = element;
@@ -132,8 +133,6 @@ export function InspectionPlayer({
         onClick={() => select(index)}
         aria-pressed={active}
         aria-label={`${other.label}: ${state}`}
-        animate={{ scale: !other.outcome && !active && !reduce && !over ? [1, 1.05, 1] : 1 }}
-        transition={{ duration: 1.6, repeat: !other.outcome && !active ? Infinity : 0 }}
         className={cn(
           "relative flex items-center justify-center border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
           view.scene === "truck" ? "h-24 w-16 rounded-md p-1" : "min-h-24 w-full gap-3 px-4 py-3 text-left",
@@ -148,7 +147,9 @@ export function InspectionPlayer({
             <span className="flex-1 font-semibold text-white">{other.label}</span>
           </>
         )}
-        <span
+        <motion.span
+          animate={{ scale: waiting ? [1, 1.25, 1] : 1 }}
+          transition={{ duration: 1.4, repeat: waiting ? Infinity : 0 }}
           className={cn(
             "absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
             !other.outcome && "bg-accent text-ink-950",
@@ -158,13 +159,13 @@ export function InspectionPlayer({
           aria-hidden
         >
           {!other.outcome ? "?" : other.outcome.correct ? "✓" : "✗"}
-        </span>
+        </motion.span>
         {view.scene === "truck" && (
           <span className="absolute -bottom-5 text-[11px] font-semibold text-white/60" aria-hidden>
             {index + 1}
           </span>
         )}
-      </motion.button>
+      </button>
     );
   };
 
