@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import type { InspectionItem, InspectionView } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import type { PlayerProps } from "./activity-player";
-import { TireTread } from "./tire-tread";
+import { LOOK_LABELS, TireTread } from "./tire-tread";
 
 /** Both scenes are two columns wide: a truck's left and right tires, or two columns of cards. */
 const COLUMNS = 2;
@@ -58,8 +58,13 @@ export function InspectionPlayer({
   const [selected, setSelected] = useState(() => Math.max(0, view.items.findIndex((item) => !item.outcome)));
   const [sending, setSending] = useState(false);
   const [gain, setGain] = useState<{ key: number; points: number; correct: boolean } | null>(null);
+  // What a screen reader hears after each decision (a live region mounted from the start, so it is read).
+  const [announcement, setAnnouncement] = useState("");
+  const root = useRef<HTMLDivElement>(null);
   const tiles = useRef<(HTMLButtonElement | null)[]>([]);
   const nextButton = useRef<HTMLButtonElement>(null);
+  const ending = useRef<HTMLParagraphElement>(null);
+  const justDecided = useRef(false);
   const over = view.done;
   const truck = view.scene === "truck";
   const item = items[selected];
@@ -89,22 +94,41 @@ export function InspectionPlayer({
     setLives(result.lives);
     setStreak(result.streak);
     setGain({ key: Date.now(), points: result.points, correct: result.correct });
+    setAnnouncement(
+      result.correct
+        ? `Correcto: +${result.points} puntos.`
+        : `Incorrecto: era ${result.item.outcome?.answer_label}. Te quedan ${result.lives} vidas.`,
+    );
+    justDecided.current = true;
     narration.say([result.item.outcome ? outcome.narration[result.item.outcome.line] : undefined]);
   };
 
-  // Decided: the focus goes to "Siguiente", so Enter moves on.
+  // The keyboard starts on the first tire.
   useEffect(() => {
-    if (item?.outcome && !over) nextButton.current?.focus();
+    tiles.current[selected]?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the game appears
+  }, []);
+
+  // Right after a decision the focus goes to "Siguiente" (Enter moves on), or to the ending when it was the last.
+  useEffect(() => {
+    if (!justDecided.current || !item?.outcome) return;
+    justDecided.current = false;
+    (over ? ending.current : nextButton.current)?.focus();
   }, [item?.outcome, over]);
 
   // The keyboard plays from anywhere in the game (the latest handler: no stale state).
   const onKey = useRef<(event: KeyboardEvent) => void>(() => {});
   onKey.current = (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+    if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing || event.defaultPrevented) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest("input, textarea, select, [contenteditable]")) return;
+    // Another control of the dialog (mute, close, "Ver resultado") keeps its keys.
+    const control = target?.closest("button, a, [role=slider]");
+    if (control && !root.current?.contains(control)) return;
     const key = event.key.toLowerCase();
     const number = Number(key);
     if (Number.isInteger(number) && number >= 1 && number <= view.verdicts.length) {
+      if (over) return;
       event.preventDefault();
       void decide(view.verdicts[number - 1].id);
     } else if (key in DIRECTIONS) {
@@ -133,7 +157,7 @@ export function InspectionPlayer({
         type="button"
         onClick={() => select(index)}
         aria-pressed={active}
-        aria-label={`${other.label}: ${state}`}
+        aria-label={`${other.label}: ${state}${truck ? ` · ${LOOK_LABELS[other.look === "none" ? "even" : other.look]}` : ""}`}
         className={cn(
           "relative flex items-center justify-center border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
           truck ? "h-24 w-16 rounded-md p-1" : "min-h-24 w-full gap-3 px-4 py-3 text-left",
@@ -173,7 +197,10 @@ export function InspectionPlayer({
   const rows = Array.from({ length: Math.ceil(items.length / COLUMNS) }, (_, row) => row);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div ref={root} className="flex flex-col gap-5">
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-lg text-white">{view.prompt}</p>
         <div className="relative flex items-center gap-4 text-sm">
@@ -265,8 +292,8 @@ export function InspectionPlayer({
                   </p>
                   <h3 className="font-display text-xl text-white">{item.label}</h3>
                   <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
-                    {item.facts.map((fact) => (
-                      <div key={fact.label}>
+                    {item.facts.map((fact, index) => (
+                      <div key={index}>
                         <dt className="text-[11px] font-bold uppercase tracking-label text-white/50">{fact.label}</dt>
                         <dd className="font-semibold tabular-nums text-white">{fact.value}</dd>
                       </div>
@@ -315,6 +342,7 @@ export function InspectionPlayer({
                         key={verdict.id}
                         type="button"
                         onClick={() => decide(verdict.id)}
+                        aria-keyshortcuts={String(index + 1)}
                         disabled={sending || over}
                         className="flex items-center gap-3 border border-white/25 px-4 py-3 text-left text-white transition-colors hover:border-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
                       >
@@ -336,7 +364,7 @@ export function InspectionPlayer({
       </div>
 
       {over && (
-        <p className="text-center font-semibold text-white" role="status">
+        <p ref={ending} tabIndex={-1} className="text-center font-semibold text-white outline-none" role="status">
           {lives === 0 ? "Te quedaste sin vidas. " : "¡Inspección terminada! "}
           Acertaste {right} de {items.length}: toca cada una para repasar por qué.
         </p>

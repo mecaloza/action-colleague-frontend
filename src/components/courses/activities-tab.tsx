@@ -351,7 +351,12 @@ interface ActivityEditorProps {
 function ActivityEditor({ courseId, activity, onClose, onSaved }: ActivityEditorProps) {
   const [title, setTitle] = useState(activity.title);
   const [intro, setIntro] = useState(activity.intro);
-  const [spec, setSpec] = useState<AnySpec>(activity.spec as unknown as AnySpec);
+  // An inspection saved in the earlier format (zones on a picture) starts over from the template.
+  const [spec, setSpec] = useState<AnySpec>(() =>
+    activity.type === "inspection" && !("items" in activity.spec)
+      ? TEMPLATES.inspection.spec
+      : (activity.spec as unknown as AnySpec),
+  );
   const [imageUrl, setImageUrl] = useState(activity.image_url);
   const { upload, busy: uploading } = useUpload();
   const [waitingPicture, setWaitingPicture] = useState(false);
