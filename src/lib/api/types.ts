@@ -408,6 +408,26 @@ export interface ActivityMoveResult {
   narration: Record<string, string>;
 }
 
+/** An activity as the admin edits it: its whole spec (answers included). */
+export interface ActivityAdmin {
+  id: number;
+  module_id: number;
+  order: number;
+  type: ActivityType;
+  title: string;
+  intro: string;
+  spec: Record<string, unknown>;
+  version: number;
+  status: "draft" | "ready";
+  image_asset_id: string | null;
+  image_url: string | null;
+  voice_status: "none" | "pending" | "ready" | "failed";
+  max_score: number;
+  /** What keeps it from being published (empty: ready to publish). */
+  problems: string[];
+  updated_at: string | null;
+}
+
 export interface ActivityFinish {
   score: number;
   max_score: number;
