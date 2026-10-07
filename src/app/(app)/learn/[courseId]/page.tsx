@@ -7,13 +7,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BackLink } from "@/components/layout/back-link";
 import { PageError, PageLoading } from "@/components/layout/query-state";
 import { SplashScreen } from "@/components/layout/splash-screen";
+import { ActivityPlayer } from "@/components/learn/activities/activity-player";
 import { CourseCompleteDialog } from "@/components/learn/course-complete-dialog";
 import { ModuleNav } from "@/components/learn/module-nav";
 import { ModuleView } from "@/components/learn/module-view";
 import { QuizDialog } from "@/components/learn/quiz/quiz-dialog";
 import { Progress } from "@/components/ui/progress";
 import { learnApi, learnKeys } from "@/lib/api/learn";
-import type { CompletionResult } from "@/lib/api/types";
+import type { ActivityFinish, CompletionResult, LearnerActivitySummary } from "@/lib/api/types";
 import { formatPercent, plural } from "@/lib/format";
 import { toastError } from "@/lib/notify";
 
@@ -30,6 +31,10 @@ function CoursePlayer() {
   // The quiz belongs to the module it was opened from, even when passing it moves `current` along.
   const [quizModuleId, setQuizModuleId] = useState<number | null>(null);
   const [celebrating, setCelebrating] = useState(false);
+  const [playing, setPlaying] = useState<LearnerActivitySummary | null>(null);
+  const [playSession, setPlaySession] = useState(0);
+  // The last play's result: when it completed the module, closing the activity moves on.
+  const finishedPlay = useRef<ActivityFinish | null>(null);
 
   const detail = useQuery({ queryKey: learnKeys.course(courseId), queryFn: () => learnApi.course(courseId), enabled: validId });
   const modules = detail.data?.modules ?? [];
@@ -123,12 +128,39 @@ function CoursePlayer() {
                   setQuizOpen(true);
                 }}
                 onNext={() => nextModule && show(nextModule.id)}
+                onPlayActivity={(activity) => {
+                  setPlaying(activity);
+                  setPlaySession((session) => session + 1);
+                }}
               />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
+      {playing && (
+        <ActivityPlayer
+          key={`${playing.id}:${playSession}`}
+          activity={playing}
+          open
+          api={{
+            start: (untimed) => learnApi.startActivity(playing.id, untimed),
+            move: learnApi.move,
+            finish: learnApi.finishActivity,
+          }}
+          onFinished={(result) => {
+            finishedPlay.current = result;
+            void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
+          }}
+          onOpenChange={(open) => {
+            if (open) return;
+            setPlaying(null);
+            const result = finishedPlay.current;
+            finishedPlay.current = null;
+            if (result?.module_completed) void advance(result);
+          }}
+        />
+      )}
       {quizModule?.quiz && (
         <QuizDialog
           key={`${quizModule.id}:${quizSession}`} // a new module or a new opening starts clean, never on a past result
