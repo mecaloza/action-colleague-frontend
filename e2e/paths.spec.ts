@@ -1,38 +1,12 @@
-import { test, expect, type APIRequestContext, type Browser, type Page } from "@playwright/test";
+import { test, expect, type Browser, type Page } from "@playwright/test";
+import { adminApi, newLearner, PASSWORD, publishedCourse } from "./fixtures/api";
 
 // Learning paths: the admin builds them (profiles, courses in order, people) and each learner follows theirs.
-const API = process.env.E2E_API_URL ?? "http://localhost:8001/api/v1";
-const admin = { email: process.env.E2E_ADMIN_EMAIL ?? "", password: process.env.E2E_ADMIN_PASSWORD ?? "" };
-const PASSWORD = "Temporal-2026";
-
 test.setTimeout(150_000);
 
-type Call = (method: "post" | "put" | "patch" | "get", path: string, data?: unknown) => Promise<any>;
-
-async function adminApi(request: APIRequestContext): Promise<Call> {
-  const login = await request.post(`${API}/auth/login`, { data: admin });
-  expect(login.ok()).toBeTruthy();
-  const headers = { Authorization: `Bearer ${(await login.json()).access_token}` };
-  return async (method, path, data) => {
-    const response = await request[method](`${API}${path}`, { headers, data });
-    expect(response.ok(), `${method} ${path}: ${await response.text()}`).toBeTruthy();
-    return response.json();
-  };
-}
-
-/** A published course with one reading, completed with "Marcar como completado". */
-async function publishedCourse(call: Call, title: string) {
-  const course = await call("post", "/courses", { title, description: "Un paso de la ruta." });
-  await call("post", `/courses/${course.id}/modules`, { title: `Lectura: ${title}`, content_text: "Lo que hay que saber." });
-  await call("post", `/courses/${course.id}/publish`);
-  return course as { id: number; title: string };
-}
-
-/** A collaborator of their own (the shared learner never gets a path: other specs read its course list). */
-async function newLearner(call: Call, name: string, extra: Record<string, unknown> = {}) {
-  const email = `ruta.${Date.now()}.${Math.random().toString(36).slice(2, 8)}@local.test`;
-  const user = await call("post", "/users", { name, email, password: PASSWORD, role: "collaborator", ...extra });
-  return user as { id: number; name: string; email: string };
+interface Named {
+  id: number;
+  name: string;
 }
 
 /** The learner, signed in on a browser of their own. */
@@ -106,8 +80,14 @@ test("un admin arma una ruta por perfil y el colaborador la sigue curso por curs
   await page.getByRole("button", { name: "Publicar" }).click();
   await expect(page.getByText("Ruta publicada: 0 personas la tienen")).toBeVisible();
 
-  // The learner gets the profile in the team's dialog: the path comes with it.
-  await page.goto("/admin/team");
+  // Nobody takes its first course yet. From here to the course again, the page is never reloaded.
+  await page.getByRole("tab", { name: "Cursos" }).click();
+  await page.getByRole("link", { name: `Curso 1: ${first.title}` }).click();
+  await page.getByRole("tab", { name: "Participantes" }).click();
+  await expect(page.getByText("Nadie toma este curso todavía")).toBeVisible();
+
+  // The learner gets the profile in the team's dialog: the path comes with it, and its courses.
+  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Equipo" }).click();
   await page.getByLabel("Buscar personas").fill(learnerName);
   const row = page.getByRole("row").filter({ hasText: learner.email });
   await expect(row).toHaveCount(1);
@@ -118,6 +98,9 @@ test("un admin arma una ruta por perfil y el colaborador la sigue curso por curs
   await edit.getByRole("button", { name: "Guardar cambios" }).click();
   await expect(edit).toBeHidden();
   await expect(row).toContainText(profile);
+  // Back in the course (seen a moment ago), the learner is among its people.
+  await page.goBack();
+  await expect(page.getByRole("button", { name: `Ver el detalle de ${learnerName}` })).toBeVisible();
 
   // The path's people: the learner, by profile; their first course open, the second locked.
   await page.goto(`${pathUrl}?tab=people`);
@@ -134,7 +117,9 @@ test("un admin arma una ruta por perfil y el colaborador la sigue curso por curs
   await expect(journey).toContainText(`Se desbloquea al terminar «${first.title}»`);
   await expect(journey.getByText("Sigue aquí")).toBeVisible();
   await expect(journey.getByRole("link", { name: `Empezar: ${first.title}` })).toBeVisible();
-  await expect(learnerPage.getByText(`Ruta ${pathTitle} · curso 1 de 2`).first()).toBeVisible(); // the hero goes on with it
+  // The hero goes on with it. Its title already says "Ruta": it isn't said twice.
+  await expect(learnerPage.getByText(`${pathTitle} · curso 1 de 2`, { exact: true }).first()).toBeVisible();
+  await expect(learnerPage.getByText(/Ruta Ruta/)).toHaveCount(0);
   await expect(learnerPage.getByRole("link", { name: new RegExp(second.title) })).toHaveCount(0);
   await expect(learnerPage.getByText("Bloqueado", { exact: true })).toBeVisible(); // its card in "Por empezar"
 
@@ -143,14 +128,14 @@ test("un admin arma una ruta por perfil y el colaborador la sigue curso por curs
   await expect(learnerPage.getByRole("heading", { name: "Este curso aún está bloqueado" })).toBeVisible();
   await learnerPage.getByRole("link", { name: `Ir a «${first.title}»` }).click();
   await expect(learnerPage.getByRole("heading", { level: 1, name: first.title })).toBeVisible();
-  await expect(learnerPage.getByText(`Ruta ${pathTitle} · curso 1 de 2`)).toBeVisible();
+  await expect(learnerPage.getByText(`${pathTitle} · curso 1 de 2`, { exact: true })).toBeVisible();
 
   // Completing course 1 opens course 2, and the celebration offers it.
   await learnerPage.getByRole("button", { name: /Marcar como completado/ }).click();
   const completed = learnerPage.getByRole("dialog", { name: "¡Completaste el curso!" });
   await completed.getByRole("link", { name: `Siguiente curso: ${second.title}` }).click();
   await expect(learnerPage.getByRole("heading", { level: 1, name: second.title })).toBeVisible();
-  await expect(learnerPage.getByText(`Ruta ${pathTitle} · curso 2 de 2`)).toBeVisible();
+  await expect(learnerPage.getByText(`${pathTitle} · curso 2 de 2`, { exact: true })).toBeVisible();
 
   // Completing course 2 completes the path.
   await learnerPage.getByRole("button", { name: /Marcar como completado/ }).click();
@@ -176,10 +161,10 @@ test("rutas: reordenar y quitar cursos, asignar y quitar personas, plazo, borrad
   const courses = [];
   for (const name of ["Inducción", "Seguridad", "Ventas"]) courses.push(await publishedCourse(call, `${name} ${stamp}`));
   const [induction, safety, sales] = courses;
-  const profile = await call("post", "/profiles", { name: `Perfil de gestión ${stamp}` });
+  const profile = await call<Named>("post", "/profiles", { name: `Perfil de gestión ${stamp}` });
   const byProfile = await newLearner(call, `Por perfil ${stamp}`, { profile_id: profile.id });
   const byHand = await newLearner(call, `A mano ${stamp}`);
-  const path = await call("post", "/paths", { title: `Ruta de gestión ${stamp}` });
+  const path = await call<{ id: number; title: string }>("post", "/paths", { title: `Ruta de gestión ${stamp}` });
   await call("put", `/paths/${path.id}/courses`, { course_ids: courses.map((course) => course.id) });
   await call("patch", `/paths/${path.id}`, { profile_ids: [profile.id], status: "published" });
 
@@ -200,6 +185,8 @@ test("rutas: reordenar y quitar cursos, asignar y quitar personas, plazo, borrad
     .getByRole("button", { name: "Quitar de la ruta" })
     .click();
   await expect(page.getByText(`«${safety.title}» salió de la ruta`)).toBeVisible();
+  // Its "Quitar" left with it: the focus goes to the one now last, not to the top of the page.
+  await expect(page.getByRole("button", { name: `Quitar ${sales.title} de la ruta` })).toBeFocused();
   await page.reload();
   await expect(steps).toHaveCount(2);
   await expect(steps.nth(0)).toContainText(induction.title);
@@ -209,6 +196,10 @@ test("rutas: reordenar y quitar cursos, asignar y quitar personas, plazo, borrad
   await page.getByRole("tab", { name: "Personas" }).click();
   const profileRow = page.getByRole("row").filter({ hasText: byProfile.name });
   await expect(profileRow).toContainText("Por perfil");
+  // Between a phone and a wide screen (640-767 px) the table has no "Origen" column: the origin shows by the status.
+  await page.setViewportSize({ width: 700, height: 900 });
+  await expect(profileRow.getByText("Por perfil", { exact: true }).filter({ visible: true })).toHaveCount(1);
+  await page.setViewportSize({ width: 1280, height: 720 });
   // Dimmed (aria-disabled) but still tappable: it says why.
   await profileRow.getByRole("button", { name: `Quitar la ruta a ${byProfile.name}` }).click({ force: true });
   await expect(
@@ -233,16 +224,28 @@ test("rutas: reordenar y quitar cursos, asignar y quitar personas, plazo, borrad
     .click();
   await expect(page.getByText(`Le quitaste la ruta a ${byHand.name}`)).toBeVisible();
   await expect(handRow).toHaveCount(0);
+  // The focus goes to the "Quitar" now in its place.
+  await expect(profileRow.getByRole("button", { name: `Quitar la ruta a ${byProfile.name}` })).toBeFocused();
 
   // A deadline in days: a wrong one says what is expected; a right one shows for whoever has the path.
   await expect(profileRow).toContainText("Sin plazo");
   await page.getByRole("tab", { name: "Ajustes" }).click();
   const deadline = page.getByLabel("Plazo (días)");
+  const deadlineError = page.getByText("Escribe un número de días entre 1 y 365, o déjalo vacío para no poner plazo.");
   await deadline.fill("0");
-  await expect(page.getByText("Escribe un número de días entre 1 y 365, o déjalo vacío para no poner plazo.")).toBeVisible();
+  await expect(deadlineError).toBeVisible();
+  await deadline.fill("3e"); // a number field reads it as empty, which would take the deadline away without a word
+  await expect(deadlineError).toBeVisible();
   await deadline.fill("30");
-  await page.getByRole("button", { name: "Guardar cambios" }).click();
+  await expect(deadlineError).toBeHidden();
+  // Saved from the keyboard, the form stays: the button keeps the focus (nothing left to save) and the field its value.
+  const saveSettings = page.getByRole("button", { name: "Guardar cambios" });
+  await saveSettings.focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByText("Cambios guardados")).toBeVisible();
+  await expect(saveSettings).toBeFocused();
+  await expect(saveSettings).toHaveAttribute("aria-disabled", "true");
+  await expect(deadline).toHaveValue("30");
   await page.getByRole("tab", { name: "Personas" }).click();
   await expect(profileRow).toContainText("Vence el");
 
@@ -276,9 +279,11 @@ test("rutas: reordenar y quitar cursos, asignar y quitar personas, plazo, borrad
 test("perfiles: renombrar, ver sus personas en el equipo y eliminarlo sin quitarles sus cursos", async ({ page, request }) => {
   const call = await adminApi(request);
   const stamp = Date.now();
-  const profile = await call("post", "/profiles", { name: `Perfil de equipo ${stamp}` });
-  const taken = await call("post", "/profiles", { name: `Perfil ocupado ${stamp}` });
+  const profile = await call<Named>("post", "/profiles", { name: `Perfil de equipo ${stamp}` });
+  const taken = await call<Named>("post", "/profiles", { name: `Perfil ocupado ${stamp}` });
   const member = await newLearner(call, `Con perfil ${stamp}`, { profile_id: profile.id });
+  const former = await newLearner(call, `Inactiva con perfil ${stamp}`, { profile_id: profile.id });
+  await call("patch", `/users/${former.id}`, { is_active: false });
   const other = await newLearner(call, `Sin perfil ${stamp}`);
   const course = await publishedCourse(call, `Curso del perfil ${stamp}`);
   await call("post", `/courses/${course.id}/participants`, { user_ids: [member.id] });
@@ -286,7 +291,7 @@ test("perfiles: renombrar, ver sus personas en el equipo y eliminarlo sin quitar
 
   await page.goto("/admin/team/profiles");
   const item = (name: string) => page.getByRole("list", { name: "Perfiles" }).getByRole("listitem").filter({ hasText: name });
-  await expect(item(profile.name)).toContainText("1 persona");
+  await expect(item(profile.name)).toContainText("2 personas"); // the inactive one too
 
   // A name another profile has (in other capitals) is said under the field; a new one is saved.
   await item(profile.name).getByRole("button", { name: `Editar el perfil ${profile.name}` }).click();
@@ -302,27 +307,39 @@ test("perfiles: renombrar, ver sus personas en el equipo y eliminarlo sin quitar
   await expect(page.getByText("Perfil guardado")).toBeVisible();
   await expect(item(renamed)).toContainText("Venden a flotas de carretera.");
 
-  // Its people: the team, filtered by it (and the filter in the address).
-  await item(renamed).getByRole("link", { name: "1 persona" }).click();
-  await expect(page).toHaveURL(new RegExp(`/admin/team\\?profile=${profile.id}$`));
+  // Its people: the team, filtered by it, with the inactive ones the count includes (both filters in the address).
+  await item(renamed).getByRole("link", { name: "2 personas" }).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/team\\?profile=${profile.id}&inactive=1$`));
   await expect(page.getByLabel("Filtrar por perfil")).toHaveValue(String(profile.id));
+  const showInactive = page.getByRole("switch", { name: "Mostrar inactivos" });
+  await expect(showInactive).toBeChecked();
   await page.getByLabel("Buscar personas").fill(String(stamp));
   await expect(page.getByRole("row").filter({ hasText: member.email })).toContainText(renamed);
+  await expect(page.getByRole("row").filter({ hasText: former.email })).toContainText("Inactivo");
   await expect(page.getByRole("row").filter({ hasText: other.email })).toHaveCount(0);
   await page.getByLabel("Filtrar por perfil").selectOption("");
-  await expect(page).toHaveURL(/\/admin\/team$/);
+  await expect(page).toHaveURL(/\/admin\/team\?inactive=1$/);
   await expect(page.getByRole("row").filter({ hasText: other.email })).toHaveCount(1);
+  await showInactive.click();
+  await expect(page).toHaveURL(/\/admin\/team$/);
+  await expect(page.getByRole("row").filter({ hasText: former.email })).toHaveCount(0);
 
   // Deleting it asks first: its people stay without a profile and keep their courses.
   await page.goto("/admin/team/profiles");
   await item(renamed).getByRole("button", { name: `Eliminar el perfil ${renamed}` }).click();
   const confirm = page.getByRole("dialog", { name: `¿Eliminar el perfil «${renamed}»?` });
-  await expect(confirm).toContainText("1 persona queda sin perfil: conserva sus cursos y su avance");
+  await expect(confirm).toContainText("2 personas quedan sin perfil: conservan sus cursos y su avance");
   await confirm.getByRole("button", { name: "Eliminar perfil" }).click();
   await expect(page.getByText(`Perfil «${renamed}» eliminado`)).toBeVisible();
   await expect(item(renamed)).toHaveCount(0);
 
-  await page.goto("/admin/team");
+  // A link to it saved before: the filter says it no longer exists, and "Todos los perfiles" is a change that clears it.
+  await page.goto(`/admin/team?profile=${profile.id}`);
+  const filter = page.getByLabel("Filtrar por perfil");
+  await expect(filter.locator("option:checked")).toHaveText("Perfil que ya no existe");
+  await expect(page.getByText("Nadie coincide con la búsqueda")).toBeVisible();
+  await filter.selectOption("");
+  await expect(page).toHaveURL(/\/admin\/team$/);
   await page.getByLabel("Buscar personas").fill(member.email);
   const row = page.getByRole("row").filter({ hasText: member.email });
   await expect(row).toContainText("0 de 1 curso");

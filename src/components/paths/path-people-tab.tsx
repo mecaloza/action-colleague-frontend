@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Info, UserMinus, UserPlus, Users } from "lucide-react";
@@ -42,6 +43,12 @@ function assignedNote(path: PathDetail): string {
   return `La verán en «Mis cursos» de inmediato y quedarán inscritas en ${courses === 1 ? "su curso" : `sus ${courses} cursos`}.`;
 }
 
+/** The person's "Quitar" on screen: the one of their card (phones) or of their row (the table). */
+function shownRemoveButton(userId: number): HTMLElement | null {
+  const buttons = document.querySelectorAll<HTMLElement>(`[data-remove-person="${userId}"]`);
+  return Array.from(buttons).find((button) => button.offsetParent !== null) ?? null;
+}
+
 /**
  * "Quitar": only someone whose profile doesn't give them the path can lose it by hand. For the others it stays
  * tappable (dimmed) and says why, as a locked module does.
@@ -51,6 +58,7 @@ function RemoveButton({ person, onRemove, compact }: Omit<PersonViewProps, "titl
     <Button
       variant="ghost"
       size={compact ? "icon-sm" : "sm"}
+      data-remove-person={person.user.id}
       className={cn(!compact && "-mr-2 ml-auto", !person.removable && "opacity-45")}
       aria-label={`Quitar la ruta a ${person.user.name}`}
       aria-disabled={!person.removable || undefined}
@@ -108,6 +116,10 @@ function PersonRow({ person, titles, onRemove }: PersonViewProps) {
         <div className="flex flex-col items-start gap-1.5">
           <JourneyBadge status={person.status} />
           <Deadline journey={person} />
+          {/* Its column starts at md: until then, the origin goes here. */}
+          <span className="md:hidden">
+            <SourceBadge source={person.source} />
+          </span>
         </div>
       </TableCell>
       <TableCell>
@@ -146,6 +158,7 @@ export function PathPeopleTab({ path }: { path: PathDetail }) {
   const confirm = useConfirm();
   const { refreshPaths } = usePathCache();
   const assigning = useOpening(null);
+  const assignButton = useRef<HTMLButtonElement>(null);
   const people = useQuery({ queryKey: pathKeys.people(path.id), queryFn: () => pathsApi.people(path.id) });
   const titles = new Map(path.courses.map((course) => [course.course_id, course.title]));
 
@@ -157,18 +170,33 @@ export function PathPeopleTab({ path }: { path: PathDetail }) {
     onSettled: () => void refreshPaths(),
   });
 
-  const askRemove = async (person: PathPerson) => {
+  // Whoever leaves takes their "Quitar" with them: once the list comes back without them, the focus goes to the
+  // "Quitar" now in their place (or the last one), or to "Asignar personas" when nobody is left.
+  const removed = useRef<{ id: number; index: number } | null>(null);
+  const askRemove = async (person: PathPerson, index: number) => {
     const confirmed = await confirm({
       title: `¿Quitarle la ruta a ${person.user.name}?`,
       description: "Deja de verla. Conserva sus cursos y su avance.",
       confirmLabel: "Quitar ruta",
       destructive: true,
     });
-    if (confirmed) remove.mutate(person);
+    if (!confirmed) return;
+    remove.mutate(person, {
+      onSuccess: () => {
+        removed.current = { id: person.user.id, index };
+      },
+    });
   };
+  useEffect(() => {
+    const gone = removed.current;
+    if (!gone || !people.data || people.data.some((person) => person.user.id === gone.id)) return;
+    removed.current = null;
+    const next = people.data[Math.min(gone.index, people.data.length - 1)];
+    (next ? shownRemoveButton(next.user.id) : assignButton.current)?.focus();
+  }, [people.data]);
 
-  const assignButton = (
-    <Button onClick={() => assigning.show(null)}>
+  const assignPeople = (ref?: React.Ref<HTMLButtonElement>) => (
+    <Button ref={ref} onClick={() => assigning.show(null)}>
       <UserPlus /> Asignar personas
     </Button>
   );
@@ -179,7 +207,7 @@ export function PathPeopleTab({ path }: { path: PathDetail }) {
       <SectionHeader
         title="Personas"
         description="Quiénes tienen la ruta y cómo van en cada curso. Las personas de sus perfiles la reciben al publicarla."
-        action={assignButton}
+        action={assignPeople(assignButton)}
       />
       <VisibilityNotice path={path} />
 
@@ -191,8 +219,8 @@ export function PathPeopleTab({ path }: { path: PathDetail }) {
         <div className="space-y-4">
           <StepLegend />
           <ul className="space-y-2 sm:hidden" aria-label="Personas de la ruta">
-            {list.map((person) => (
-              <PersonCard key={person.user.id} person={person} titles={titles} onRemove={() => void askRemove(person)} />
+            {list.map((person, index) => (
+              <PersonCard key={person.user.id} person={person} titles={titles} onRemove={() => void askRemove(person, index)} />
             ))}
           </ul>
           <div className="hidden border border-border bg-white sm:block">
@@ -209,8 +237,13 @@ export function PathPeopleTab({ path }: { path: PathDetail }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.map((person) => (
-                  <PersonRow key={person.user.id} person={person} titles={titles} onRemove={() => void askRemove(person)} />
+                {list.map((person, index) => (
+                  <PersonRow
+                    key={person.user.id}
+                    person={person}
+                    titles={titles}
+                    onRemove={() => void askRemove(person, index)}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -225,7 +258,7 @@ export function PathPeopleTab({ path }: { path: PathDetail }) {
               ? "Las personas de sus perfiles la reciben al publicarla. También puedes asignarla a mano."
               : "Vincula perfiles en Ajustes para que sus personas la reciban, o asígnala a mano."
           }
-          action={assignButton}
+          action={assignPeople()}
         />
       )}
 

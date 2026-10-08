@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { QueryError } from "@/components/layout/query-state";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
@@ -20,7 +21,7 @@ import { plural } from "@/lib/format";
 import { usePathCache } from "@/lib/hooks/use-path-cache";
 import { useUnsavedChangesWarning } from "@/lib/hooks/use-unsaved-changes-warning";
 import { toastError } from "@/lib/notify";
-import { toggled } from "@/lib/utils";
+import { cn, toggled } from "@/lib/utils";
 
 const TITLE_ERROR_ID = "path-title-error";
 const DUE_HINT_ID = "path-due-hint";
@@ -29,10 +30,26 @@ const MAX_DUE_DAYS = 365;
 
 /** The deadline typed: days (1..365), null when empty (no deadline), undefined when it isn't valid. */
 function dueDaysIn(raw: string): number | null | undefined {
-  if (!raw.trim()) return null;
-  const days = Number(raw);
-  return Number.isInteger(days) && days >= 1 && days <= MAX_DUE_DAYS ? days : undefined;
+  const text = raw.trim();
+  if (!text) return null;
+  const days = Number(text);
+  // Digits only: Number() would also take "1e2" or "0x1E".
+  return /^\d+$/.test(text) && days >= 1 && days <= MAX_DUE_DAYS ? days : undefined;
 }
+
+/** The form's fields as the path has them saved. The deadline is the text typed: validated, not clamped. */
+function fieldsOf(path: PathDetail) {
+  return {
+    title: path.title,
+    description: path.description,
+    profileIds: path.profiles.map((profile) => profile.id),
+    sequential: path.settings.sequential,
+    dueDays: path.settings.due_days?.toString() ?? "",
+    certificate: path.settings.certificate,
+  };
+}
+
+type Fields = ReturnType<typeof fieldsOf>;
 
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((id) => b.includes(id));
 
@@ -110,18 +127,24 @@ function ProfilesField({ selected, onToggle, published }: { selected: number[]; 
   );
 }
 
-function SettingsForm({ path }: { path: PathDetail }) {
+/** The path's data and rules: title, description, profiles, order, deadline and certificate. */
+export function PathSettingsTab({ path }: { path: PathDetail }) {
   const { storePath } = usePathCache();
   const titleField = useRef<HTMLInputElement>(null);
   const dueField = useRef<HTMLInputElement>(null);
-  const [title, setTitle] = useState(path.title);
-  const [description, setDescription] = useState(path.description);
-  const [profileIds, setProfileIds] = useState(() => path.profiles.map((profile) => profile.id));
-  const [sequential, setSequential] = useState(path.settings.sequential);
-  // Raw text while typing; validated below instead of clamped on every keystroke.
-  const [dueDays, setDueDays] = useState(path.settings.due_days?.toString() ?? "");
-  const [certificate, setCertificate] = useState(path.settings.certificate);
+  const [fields, setFields] = useState(() => fieldsOf(path));
   const [attempted, setAttempted] = useState(false);
+  // The form starts over whenever the saved values change (after saving, or edited elsewhere). In place, not with a
+  // `key`: a new form would take the focus from the field or the button in use.
+  const savedValues = JSON.stringify(fieldsOf(path));
+  const [shownValues, setShownValues] = useState(savedValues);
+  if (shownValues !== savedValues) {
+    setShownValues(savedValues);
+    setFields(fieldsOf(path));
+    setAttempted(false);
+  }
+  const edit = (changes: Partial<Fields>) => setFields((current) => ({ ...current, ...changes }));
+  const { title, description, profileIds, sequential, dueDays, certificate } = fields;
   const published = path.status === "published";
 
   const due = dueDaysIn(dueDays);
@@ -153,6 +176,8 @@ function SettingsForm({ path }: { path: PathDetail }) {
     },
     onError: toastError,
   });
+  // Nothing to save, or a save on its way: "Guardar cambios" waits.
+  const waiting = !dirty || save.isPending;
 
   return (
     <form
@@ -160,6 +185,7 @@ function SettingsForm({ path }: { path: PathDetail }) {
       className="max-w-2xl space-y-8"
       onSubmit={(event) => {
         event.preventDefault();
+        if (waiting) return; // Enter in a field, or the button that only looks disabled
         const problem = !title.trim() ? titleField : due === undefined ? dueField : null;
         if (!problem) {
           save.mutate(update);
@@ -177,7 +203,7 @@ function SettingsForm({ path }: { path: PathDetail }) {
             ref={titleField}
             id="path-title"
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => edit({ title: event.target.value })}
             maxLength={200}
             required
             aria-invalid={titleError ? true : undefined}
@@ -190,7 +216,7 @@ function SettingsForm({ path }: { path: PathDetail }) {
           <Textarea
             id="path-description"
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={(event) => edit({ description: event.target.value })}
             maxLength={5000}
             placeholder="Qué logra quien la completa."
           />
@@ -200,7 +226,7 @@ function SettingsForm({ path }: { path: PathDetail }) {
       <ProfilesField
         selected={profileIds}
         published={published}
-        onToggle={(id) => setProfileIds((current) => toggled(current, id))}
+        onToggle={(id) => setFields((current) => ({ ...current, profileIds: toggled(current.profileIds, id) }))}
       />
 
       <div className="divide-y divide-border border border-border bg-white">
@@ -209,19 +235,18 @@ function SettingsForm({ path }: { path: PathDetail }) {
           label="Desbloquear los cursos en orden"
           hint="Cada curso se abre al completar el anterior. Un curso que la persona ya empezó sigue abierto."
           checked={sequential}
-          onCheckedChange={setSequential}
+          onCheckedChange={(checked) => edit({ sequential: checked })}
         />
         <div className="p-4">
           <Label htmlFor="path-due-days">Plazo (días)</Label>
           <Input
             ref={dueField}
             id="path-due-days"
-            type="number"
+            // Text with a numeric keyboard, not type="number": that one reads "3e" or "--" as empty, which here means
+            // "no deadline" and would take it away without a word.
             inputMode="numeric"
-            min={1}
-            max={MAX_DUE_DAYS}
             value={dueDays}
-            onChange={(event) => setDueDays(event.target.value)}
+            onChange={(event) => edit({ dueDays: event.target.value })}
             placeholder="Sin plazo"
             className="sm:w-48"
             aria-invalid={dueError ? true : undefined}
@@ -237,20 +262,20 @@ function SettingsForm({ path }: { path: PathDetail }) {
           label="Emitir certificado al completar la ruta"
           hint="Cuando la persona completa todos sus cursos publicados."
           checked={certificate}
-          onCheckedChange={setCertificate}
+          onCheckedChange={(checked) => edit({ certificate: checked })}
         />
       </div>
 
-      <Button type="submit" loading={save.isPending} disabled={!dirty}>
+      {/* Never `disabled` (nothing to save, or saving): the button just pressed would lose the focus. */}
+      <Button
+        type="submit"
+        aria-disabled={waiting || undefined}
+        aria-busy={save.isPending || undefined}
+        className={cn(waiting && "pointer-events-none opacity-45")}
+      >
+        {save.isPending && <Loader2 className="animate-spin" aria-hidden />}
         Guardar cambios
       </Button>
     </form>
   );
-}
-
-/** The path's data and rules: title, description, profiles, order, deadline and certificate. */
-export function PathSettingsTab({ path }: { path: PathDetail }) {
-  // The form starts over whenever the saved values change (after saving, or edited elsewhere).
-  const savedValues = JSON.stringify([path.title, path.description, path.settings, path.profiles.map((profile) => profile.id)]);
-  return <SettingsForm key={savedValues} path={path} />;
 }

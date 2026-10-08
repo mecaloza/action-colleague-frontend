@@ -16,9 +16,12 @@ export const courseHref = (course: Pick<LearnerCourse, "course_id" | "next_modul
 export const courseActionLabel = (course: Pick<LearnerCourse, "status">) =>
   course.status === "assigned" ? "Empezar" : "Continuar";
 
+/** "Ruta Asesor de flotas", or the title as it is when it already says so ("Ruta de flotas", "Rutas comerciales"). */
+const pathName = (title: string) => (/^rutas?\b/i.test(title.trim()) ? title : `Ruta ${title}`);
+
 /** "Ruta Asesor de flotas · curso 2 de 3": where the course sits in the learner's path. */
 export const pathPlace = ({ path }: Pick<LearnerCourse, "path">) =>
-  path ? `Ruta ${path.title} · curso ${path.step} de ${path.steps}` : null;
+  path ? `${pathName(path.title)} · curso ${path.step} de ${path.steps}` : null;
 
 /** A course its path keeps closed: no link (it can't be opened yet), and the course that opens it. */
 function LockedCourseCard({ course }: { course: LearnerCourse }) {

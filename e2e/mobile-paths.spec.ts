@@ -1,43 +1,9 @@
-import { test, expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
+import { adminApi, type Call, newLearner, PASSWORD, publishedCourse } from "./fixtures/api";
 
 // Learning paths on a phone ("mobile" project: Pixel 7, touch, no hover), at the narrowest width we support.
-const API = process.env.E2E_API_URL ?? "http://localhost:8001/api/v1";
-const admin = { email: process.env.E2E_ADMIN_EMAIL ?? "", password: process.env.E2E_ADMIN_PASSWORD ?? "" };
-const PASSWORD = "Temporal-2026";
-
 test.setTimeout(120_000);
 test.use({ viewport: { width: 360, height: 740 } });
-
-type Call = (method: "post" | "put" | "patch" | "get", path: string, data?: unknown) => Promise<any>;
-
-async function adminApi(request: APIRequestContext): Promise<Call> {
-  const login = await request.post(`${API}/auth/login`, { data: admin });
-  expect(login.ok()).toBeTruthy();
-  const headers = { Authorization: `Bearer ${(await login.json()).access_token}` };
-  return async (method, path, data) => {
-    const response = await request[method](`${API}${path}`, { headers, data });
-    expect(response.ok(), `${method} ${path}: ${await response.text()}`).toBeTruthy();
-    return response.json();
-  };
-}
-
-/** A published course with one reading. */
-async function publishedCourse(call: Call, title: string) {
-  const course = await call("post", "/courses", { title, description: "Un paso de la ruta." });
-  await call("post", `/courses/${course.id}/modules`, { title: "Lectura", content_text: "Lo que hay que saber." });
-  await call("post", `/courses/${course.id}/publish`);
-  return course as { id: number; title: string };
-}
-
-/** A collaborator of their own (the shared learner never gets a path: other specs read its course list). */
-async function newLearner(call: Call, name: string) {
-  const email = `celular.ruta.${Date.now()}.${Math.random().toString(36).slice(2, 8)}@local.test`;
-  return (await call("post", "/users", { name, email, password: PASSWORD, role: "collaborator" })) as {
-    id: number;
-    name: string;
-    email: string;
-  };
-}
 
 /** A published path with a deadline and three courses of long titles, assigned by hand to `userId`. */
 async function longPath(call: Call, stamp: number, userId: number) {
@@ -49,14 +15,15 @@ async function longPath(call: Call, stamp: number, userId: number) {
   ]) {
     courses.push(await publishedCourse(call, `${title} ${stamp}`));
   }
-  const path = await call("post", "/paths", {
-    title: `Ruta del asesor de flotas de carretera durante sus primeros treinta días ${stamp}`,
+  // A title that doesn't say "Ruta": the course's header adds it.
+  const path = await call<{ id: number; title: string }>("post", "/paths", {
+    title: `Asesor de flotas de carretera durante sus primeros treinta días ${stamp}`,
     description: "Todo lo que un asesor nuevo necesita para su primera visita a una flota.",
   });
   await call("put", `/paths/${path.id}/courses`, { course_ids: courses.map((course) => course.id) });
   await call("patch", `/paths/${path.id}`, { status: "published", settings: { due_days: 30 } });
   await call("post", `/paths/${path.id}/people`, { user_ids: [userId] });
-  return { path: path as { id: number; title: string }, courses };
+  return { path, courses };
 }
 
 /** Big enough for a finger (polled: a dialog or menu zooming in is smaller for a moment). */
@@ -125,7 +92,7 @@ test.describe("colaborador", () => {
 
     await go.tap();
     await expect(page.getByRole("heading", { level: 1, name: courses[0].title })).toBeVisible();
-    await expect(page.getByText(`Ruta ${path.title} · curso 1 de 3`)).toBeVisible();
+    await expect(page.getByText(`Ruta ${path.title} · curso 1 de 3`, { exact: true })).toBeVisible();
     await expectNoSidewaysScroll(page);
 
     // The last course by its address: a lock screen that fits, and the way to the course that opens it.

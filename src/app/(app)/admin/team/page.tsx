@@ -78,6 +78,9 @@ function RoleFilter({ value, onChange }: { value: RoleFilterValue; onChange: (va
 /** People of one profile: `?profile=` (a link from the profiles' page), or everyone. */
 function ProfileFilter({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
   const profiles = useQuery({ queryKey: profileKeys.list, queryFn: profilesApi.list });
+  // The one in the address has its own option before the list loads, and when it isn't in the list (deleted, an old
+  // link): shown as chosen, so that "Todos los perfiles" is a change that clears it.
+  const unlisted = value !== null && !profiles.data?.some((profile) => profile.id === value);
   return (
     <Select
       value={value ?? ""}
@@ -86,8 +89,7 @@ function ProfileFilter({ value, onChange }: { value: number | null; onChange: (v
       className="sm:w-56"
     >
       <option value="">Todos los perfiles</option>
-      {/* The one in the address shows before the list loads. */}
-      {!profiles.data && value !== null && <option value={value}>Perfil elegido</option>}
+      {unlisted && <option value={value}>{profiles.data ? "Perfil que ya no existe" : "Perfil elegido"}</option>}
       {profiles.data?.map((profile) => (
         <option key={profile.id} value={profile.id}>
           {profile.name}
@@ -259,15 +261,25 @@ function profileIn(value: string | null): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+/** The team's address with these filters: `?profile=12&inactive=1`, or none. */
+function teamQuery(profileId: number | null, inactive: boolean): string {
+  const query = new URLSearchParams();
+  if (profileId !== null) query.set("profile", String(profileId));
+  if (inactive) query.set("inactive", "1");
+  const search = query.toString();
+  return search ? `?${search}` : "";
+}
+
 function Team() {
   const { user } = useAuth();
   const confirm = useConfirm();
   const { refreshPeople } = useCourseCache();
   const pathname = usePathname();
-  const profileId = profileIn(useSearchParams().get("profile"));
+  const searchParams = useSearchParams();
+  const profileId = profileIn(searchParams.get("profile"));
+  const showInactive = searchParams.get("inactive") === "1";
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<RoleFilterValue>("all");
-  const [showInactive, setShowInactive] = useState(false);
   const dialog = useOpening<{ person: UserRow | null; mode: PersonDialogMode }>({ person: null, mode: "details" });
   const sheet = useOpening<UserRow | null>(null);
   const searchTerm = useDebouncedValue(search.trim());
@@ -278,9 +290,10 @@ function Team() {
     include_inactive: showInactive,
   };
   const isFiltered = Boolean(searchTerm) || role !== "all" || profileId !== null;
-  // The profile lives in the address: the profiles' page links to its people. Through `history`, as the course tabs.
-  const filterByProfile = (id: number | null) =>
-    window.history.replaceState(null, "", id === null ? pathname : `${pathname}?profile=${id}`);
+  // The profile and the inactive people live in the address: the profiles' page links to all the people of one
+  // (its count includes the inactive). Through `history`, as the course tabs.
+  const showFilters = (profile: number | null, inactive: boolean) =>
+    window.history.replaceState(null, "", `${pathname}${teamQuery(profile, inactive)}`);
   const people = useQuery({ queryKey: userKeys.list(params), queryFn: () => usersApi.list(params), placeholderData: keepPreviousData });
   const activeUsers = useQuery({ queryKey: userKeys.list(ACTIVE_USERS), queryFn: () => usersApi.list(ACTIVE_USERS) });
 
@@ -327,11 +340,15 @@ function Team() {
         <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
             <RoleFilter value={role} onChange={setRole} />
-            <ProfileFilter value={profileId} onChange={filterByProfile} />
+            <ProfileFilter value={profileId} onChange={(id) => showFilters(id, showInactive)} />
           </div>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <label className="flex min-h-10 items-center gap-2 text-sm">
-              <Switch checked={showInactive} onCheckedChange={setShowInactive} aria-label="Mostrar inactivos" />
+              <Switch
+                checked={showInactive}
+                onCheckedChange={(checked) => showFilters(profileId, checked)}
+                aria-label="Mostrar inactivos"
+              />
               Mostrar inactivos
             </label>
             <div className="relative w-full sm:w-72">

@@ -163,7 +163,7 @@ function Participants({ participants, onOpen, onRemove }: ParticipantsProps) {
 
 export function ParticipantsTab({ course }: { course: CourseDetail }) {
   const confirm = useConfirm();
-  const { refreshCourse, refreshPeople } = useCourseCache();
+  const { refreshPeople } = useCourseCache();
   const [assigning, setAssigning] = useState(false);
   const [inspected, setInspected] = useState<Participant | null>(null);
   const participants = useQuery({
@@ -174,8 +174,7 @@ export function ParticipantsTab({ course }: { course: CourseDetail }) {
   const remove = useMutation({
     mutationFn: (userId: number) => coursesApi.removeParticipant(course.id, userId),
     onSuccess: () => {
-      refreshCourse(course.id);
-      refreshPeople(); // their course counts in Equipo, and the panel
+      refreshPeople(); // the course and its counts, their courses in Equipo, and the panel
       toast.success("Persona retirada del curso");
     },
     onError: toastError,

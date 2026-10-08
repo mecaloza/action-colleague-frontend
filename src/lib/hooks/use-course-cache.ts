@@ -14,17 +14,19 @@ import type { CourseDetail, Participant } from "@/lib/api/types";
 export function useCourseCache() {
   const queryClient = useQueryClient();
 
+  /** The team (lists, each person's courses), the panel's counts, and the paths and profiles. */
+  const refreshTeam = () =>
+    Promise.all(
+      [userKeys.all, dashboardKeys.all, pathKeys.all, profileKeys.all].map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey }),
+      ),
+    );
+
   /**
-   * People or their enrollments changed: refetch the team (lists, each person's courses), the panel's counts, and
-   * the paths and profiles (a person's profile, role or active state decides the paths they get by profile).
+   * People or their enrollments changed: refetch the team and the courses. A person's profile, role or active state
+   * decides the paths they get by profile, and those paths enroll them in their courses (participants and counts).
    */
-  const refreshPeople = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: userKeys.all }),
-      queryClient.invalidateQueries({ queryKey: dashboardKeys.all }),
-      queryClient.invalidateQueries({ queryKey: pathKeys.all }),
-      queryClient.invalidateQueries({ queryKey: profileKeys.all }),
-    ]);
+  const refreshPeople = () => Promise.all([refreshTeam(), queryClient.invalidateQueries({ queryKey: courseKeys.all })]);
 
   return {
     /** Something under a course changed (modules, participants): refetch it and everything below it. */
@@ -39,7 +41,7 @@ export function useCourseCache() {
     /** People were assigned: show the returned list at once, then refetch the course counts. */
     storeParticipants: (courseId: number, participants: Participant[]) => {
       queryClient.setQueryData(courseKeys.participants(courseId), participants);
-      void refreshPeople(); // each person's courses and completions
+      void refreshTeam(); // each person's courses and completions
       // Only the course itself (its counts): the list just stored is already fresh.
       return queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId), exact: true });
     },

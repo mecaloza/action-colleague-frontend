@@ -34,6 +34,9 @@ import { toastError } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { AddCoursesDialog } from "./add-courses-dialog";
 
+/** The id of a course's "Quitar": the focus goes there once another course leaves the path. */
+const removeButtonId = (courseId: number) => `path-course-${courseId}-remove`;
+
 /** Why a course of the path doesn't count for its people yet. */
 function hiddenReason(course: PathCourse): string | null {
   if (course.status === "draft") return "Las personas lo verán cuando lo publiques";
@@ -119,6 +122,7 @@ function PathCourseRow({ course, index, total, moving, onMove, onRemove }: PathC
           <Button
             variant="ghost"
             size="icon-sm"
+            id={removeButtonId(course.course_id)}
             onClick={() => !moving && onRemove()}
             aria-label={`Quitar ${course.title} de la ruta`}
             aria-disabled={moving || undefined}
@@ -137,6 +141,7 @@ export function PathCoursesTab({ path }: { path: PathDetail }) {
   const confirm = useConfirm();
   const { storePath } = usePathCache();
   const adding = useOpening(null);
+  const addButton = useRef<HTMLButtonElement>(null);
   const [courses, setCourses] = useState(path.courses);
   const room = MAX_PATH_COURSES - courses.length;
 
@@ -196,7 +201,10 @@ export function PathCoursesTab({ path }: { path: PathDetail }) {
       },
     });
 
-  const askRemove = async (course: PathCourse) => {
+  // A course that leaves takes its "Quitar" with it: the focus goes to the "Quitar" now in its place (or the last
+  // one), or to "Agregar cursos" when none is left, instead of falling to the top of the page.
+  const removed = useRef<{ id: number; index: number } | null>(null);
+  const askRemove = async (course: PathCourse, index: number) => {
     const confirmed = await confirm({
       title: `¿Quitar «${course.title}» de la ruta?`,
       description: "Sus personas conservan el curso y su avance; deja de contar para la ruta.",
@@ -206,9 +214,21 @@ export function PathCoursesTab({ path }: { path: PathDetail }) {
     if (!confirmed) return;
     save.mutate(
       courses.filter((other) => other.course_id !== course.course_id).map((other) => other.course_id),
-      { onSuccess: () => toast.success(`«${course.title}» salió de la ruta`) },
+      {
+        onSuccess: () => {
+          removed.current = { id: course.course_id, index };
+          toast.success(`«${course.title}» salió de la ruta`);
+        },
+      },
     );
   };
+  useEffect(() => {
+    const gone = removed.current;
+    if (!gone || courses.some((course) => course.course_id === gone.id)) return;
+    removed.current = null;
+    const next = courses[Math.min(gone.index, courses.length - 1)];
+    (next ? document.getElementById(removeButtonId(next.course_id)) : addButton.current)?.focus();
+  }, [courses]);
 
   // dnd-kit speaks English by default ("Picked up draggable item 12").
   const titleOf = (id: UniqueIdentifier) => `«${courses.find((course) => course.course_id === id)?.title ?? "Curso"}»`;
@@ -225,8 +245,8 @@ export function PathCoursesTab({ path }: { path: PathDetail }) {
       "Para mover el curso, pulsa espacio o Enter. Usa las flechas arriba y abajo para cambiarlo de lugar y espacio o Enter para soltarlo; Escape cancela.",
   };
 
-  const addButton = (
-    <Button onClick={() => adding.show(null)} disabled={room <= 0}>
+  const addCourses = (ref?: React.Ref<HTMLButtonElement>) => (
+    <Button ref={ref} onClick={() => adding.show(null)} disabled={room <= 0}>
       <Plus /> Agregar cursos
     </Button>
   );
@@ -243,7 +263,7 @@ export function PathCoursesTab({ path }: { path: PathDetail }) {
         action={
           <div className="flex items-center gap-2">
             {save.isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Guardando" />}
-            {addButton}
+            {addCourses(addButton)}
           </div>
         }
       />
@@ -254,7 +274,7 @@ export function PathCoursesTab({ path }: { path: PathDetail }) {
           icon={<Layers />}
           title="Esta ruta aún no tiene cursos"
           description="Agrega los cursos en el orden en que se deben tomar. Puedes cambiar el orden después."
-          action={addButton}
+          action={addCourses()}
         />
       ) : (
         <DndContext
@@ -273,7 +293,7 @@ export function PathCoursesTab({ path }: { path: PathDetail }) {
                   total={courses.length}
                   moving={save.isPending}
                   onMove={(direction) => move(index, direction)}
-                  onRemove={() => void askRemove(course)}
+                  onRemove={() => void askRemove(course, index)}
                 />
               ))}
             </ol>

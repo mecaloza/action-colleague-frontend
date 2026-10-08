@@ -32,9 +32,9 @@ function ProfileRow({ profile, onEdit, onRemove }: ProfileRowProps) {
         <h2 className="break-words font-display text-xl font-medium tracking-tightest">{profile.name}</h2>
         {profile.description && <p className="mt-1 break-words text-sm text-muted-foreground">{profile.description}</p>}
         <p className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-          {/* Its people: the team, filtered by the profile. */}
+          {/* Its people: the team, filtered by the profile. The inactive ones too: they are in the count. */}
           <Link
-            href={`/admin/team?profile=${profile.id}`}
+            href={`/admin/team?profile=${profile.id}&inactive=1`}
             className="-my-2.5 inline-flex min-h-10 items-center gap-1.5 font-semibold hover:text-accent"
           >
             <Users className="h-4 w-4" aria-hidden /> {plural(profile.user_count, "persona")}
