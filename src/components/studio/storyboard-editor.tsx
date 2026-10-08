@@ -142,6 +142,8 @@ function StoryboardForm({
   // What doesn't fit or overlaps on the slides: the saved script's, or the draft's after a pause in the typing.
   const layout = useLayoutWarnings(module.id, scenes, saved);
   const warnings = warningsByScene(layout.warnings);
+  // Each scene's visual as saved: only that is drawn (an infographic, once the script is saved).
+  const savedVisuals = new Map(saved.scenes.map((scene) => [scene.id, JSON.stringify(scene.visual)]));
 
   const context = (index: number): SlideContext => ({
     course_title: course.title,
@@ -155,9 +157,9 @@ function StoryboardForm({
   /** Takes the admin to a scene's first field with a warning (to its layout, when no field causes it). */
   const showScene = (sceneId: string) => {
     const scene = document.getElementById(`scene-${sceneId}`);
-    // A field with warnings is described by them last (`warnedField`).
+    // A field with warnings is described by them last (`warnedField`); so is the layout's select, by the rest.
     const target =
-      scene?.querySelector<HTMLElement>('[aria-describedby$="-warnings"]') ??
+      scene?.querySelector<HTMLElement>('[aria-describedby$="-warnings"]:not(select)') ??
       scene?.querySelector<HTMLElement>("select");
     target?.focus({ preventScroll: true });
     target?.scrollIntoView({ block: "center" });
@@ -247,6 +249,7 @@ function StoryboardForm({
             total={scenes.length}
             context={context(index)}
             warnings={warnings.get(scene.id) ?? NO_WARNINGS}
+            onPictureReady={savedVisuals.get(scene.id) === JSON.stringify(scene.visual) ? layout.recheck : undefined}
             onChange={(next) => setScenes((list) => replaceAt(list, index, next))}
             onMove={(to) => setScenes((list) => moveItem(list, index, to))}
             onDuplicate={() => setScenes((list) => duplicateScene(list, index))}

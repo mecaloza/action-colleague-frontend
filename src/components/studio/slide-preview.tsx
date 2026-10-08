@@ -56,6 +56,8 @@ function useSeen<T extends Element>() {
 interface SlidePreviewProps extends PreviewRequest {
   className?: string;
   alt?: string;
+  /** The scene's picture, still being drawn when the slide was asked for, is done (shown, or given up on). */
+  onReady?: () => void;
 }
 
 /**
@@ -69,6 +71,7 @@ export function SlidePreview({
   courseId,
   className,
   alt = "Vista previa de la diapositiva",
+  onReady,
 }: SlidePreviewProps) {
   const { ref, seen } = useSeen<HTMLDivElement>();
   // The request travels as text: debounced, and also the query key, so each distinct slide is rendered once.
@@ -91,6 +94,16 @@ export function SlidePreview({
   const [shown, setShown] = useState<Blob | undefined>(undefined);
   if (image.data && image.data.image !== shown) setShown(image.data.image);
   const pending = !image.isPlaceholderData && (image.data?.pending ?? false);
+  // The slide whose picture was still being drawn when it was last asked for: once it no longer is, `onReady`.
+  const drawing = useRef<string | null>(null);
+  useEffect(() => {
+    if (!image.data || image.isPlaceholderData) return;
+    if (image.data.pending) drawing.current = request;
+    else if (drawing.current === request) {
+      drawing.current = null;
+      onReady?.();
+    }
+  }, [image.data, image.isPlaceholderData, request, onReady]);
   const url = useObjectUrl(shown);
   const failed = image.isError && !image.isFetching;
   const retry = (

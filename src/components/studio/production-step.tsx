@@ -118,9 +118,26 @@ function ScriptWarnings({ module, onFix }: { module: ModuleAdmin; onFix: () => v
     gcTime: 0,
     staleTime: STUDIO_STALE_MS,
   });
-  const warnings = storyboard.data?.warnings ?? [];
-  if (!warnings.length) return null;
-  const numbers = new Map(storyboard.data!.scenes.map((scene, index) => [scene.id, index + 1]));
+  const data = storyboard.data;
+  // Not knowing isn't "no warnings": the admin could produce the video again over a text that is cut.
+  if (!data && storyboard.isError) {
+    return (
+      <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+        No se pudieron revisar los avisos de diseño.
+        <Button
+          variant="link"
+          className="text-[13px]"
+          onClick={() => void storyboard.refetch()}
+          aria-label={`Reintentar: avisos de diseño de ${module.title}`}
+        >
+          Reintentar
+        </Button>
+      </p>
+    );
+  }
+  if (!data?.warnings?.length) return null;
+  const { warnings } = data;
+  const numbers = new Map(data.scenes.map((scene, index) => [scene.id, index + 1]));
   const listId = `studio-module-${module.id}-warnings`;
   return (
     <div className="space-y-1">

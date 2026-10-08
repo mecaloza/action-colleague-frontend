@@ -108,6 +108,8 @@ export const studioKeys = {
   materials: (courseId: number) => ["courses", courseId, "materials"] as const,
   job: (jobId: string) => ["jobs", jobId] as const,
   storyboard: (moduleId: number) => ["modules", moduleId, "storyboard"] as const,
+  /** The checks of every draft of the module's script. */
+  storyboardLints: (moduleId: number) => ["modules", moduleId, "storyboard-lint"] as const,
   /** The check of one draft of the script (`draft`: its scenes as JSON). */
   storyboardLint: (moduleId: number, draft: string) => ["modules", moduleId, "storyboard-lint", draft] as const,
 };

@@ -159,10 +159,6 @@ export function LayoutSummary({ warnings, scenes, checking, failed, onRetry, onS
   const error = current.some(isError);
   return (
     <div className="space-y-2">
-      {/* Read aloud when it changes: what the check of the draft found, or that it found nothing. */}
-      <p role="status" className="sr-only">
-        {lines.length ? `Avisos de diseño: ${lines.join(", ")}.` : "Sin avisos de diseño en las diapositivas."}
-      </p>
       {lines.length > 0 && (
         <section
           aria-label="Avisos de diseño"
@@ -184,7 +180,7 @@ export function LayoutSummary({ warnings, scenes, checking, failed, onRetry, onS
               </ul>
               <p className="flex items-center gap-2 text-muted-foreground">
                 Revísalos antes de producir el video.
-                {checking && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Revisando el diseño" />}
+                {checking && <Loader2 className="h-3.5 w-3.5 animate-spin" role="img" aria-label="Revisando el diseño" />}
               </p>
               <div className="flex flex-wrap items-center gap-x-4">
                 <span className="text-muted-foreground">Ir a:</span>
@@ -198,14 +194,22 @@ export function LayoutSummary({ warnings, scenes, checking, failed, onRetry, onS
           </div>
         </section>
       )}
-      {failed && (
-        <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-          No se pudo revisar si los textos caben en las diapositivas.
+      <div className={cn("flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground", !failed && "sr-only")}>
+        {/* Read aloud when it changes: what the check of the draft found, that it found nothing, or that it failed
+            (then the warnings above are an older draft's). */}
+        <p role="status">
+          {failed
+            ? "No se pudo revisar si los textos caben en las diapositivas."
+            : lines.length
+              ? `Avisos de diseño: ${lines.join(", ")}.`
+              : "Sin avisos de diseño en las diapositivas."}
+        </p>
+        {failed && (
           <Button variant="link" className="text-[13px]" onClick={onRetry}>
             Reintentar
           </Button>
-        </p>
-      )}
+        )}
+      </div>
     </div>
   );
 }

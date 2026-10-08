@@ -411,15 +411,23 @@ function InfographicFields({
   visual,
   onChange,
   warnings,
+  redrawing,
+  onAnotherVersion,
 }: {
   id: string;
   visual: SceneVisual;
   onChange: (changes: Partial<SceneVisual>) => void;
   /** The presenter's bubble covers part of the picture already made: another version is the fix. */
   warnings: LayoutWarning[];
+  /** Another version of a covered picture was asked for: it isn't drawn (nor checked) yet. */
+  redrawing: boolean;
+  onAnotherVersion: () => void;
 }) {
   const missing = !visual.prompt.trim();
   const versionId = `${id}-infographic-version`;
+  const noteId = `${versionId}-note`;
+  // Not taken as fixed: the new version is checked once it is drawn (then its warning, if any, comes back here).
+  const unchecked = redrawing && !warnings.length;
   return (
     <div className="space-y-2">
       <Label htmlFor={`${id}-infographic`}>Qué explica la infografía</Label>
@@ -437,6 +445,10 @@ function InfographicFields({
         <div className="min-w-0 flex-1 basis-60">
           {/* Beside the button that fixes it (the same button, so a click never loses the focus). */}
           <FieldWarnings fieldId={versionId} warnings={warnings} className="mb-1.5 mt-0" />
+          {/* Always mounted, so screen readers announce the note when it appears. */}
+          <p id={noteId} role="status" className={unchecked ? "mb-1.5 text-xs text-muted-foreground" : "sr-only"}>
+            {unchecked ? "La nueva versión se dibuja al guardar el guion y se revisa cuando esté lista." : ""}
+          </p>
           <p
             id={`${id}-infographic-hint`}
             className={missing ? "text-xs text-destructive" : "text-xs text-muted-foreground"}
@@ -451,8 +463,11 @@ function InfographicFields({
           variant="outline"
           size="sm"
           disabled={missing}
-          onClick={() => onChange({ variant: ((visual.variant ?? 0) + 1) % 100 })}
-          aria-describedby={warnedField(versionId, warnings)["aria-describedby"]}
+          onClick={() => {
+            onAnotherVersion();
+            onChange({ variant: ((visual.variant ?? 0) + 1) % 100 });
+          }}
+          aria-describedby={warnedField(versionId, warnings)["aria-describedby"] ?? (unchecked ? noteId : undefined)}
         >
           <RefreshCw /> Otra versión
         </Button>
@@ -479,6 +494,11 @@ interface SceneEditorProps {
   courseId: number;
   /** What doesn't fit or overlaps on the scene's slide (or the presenter covers of its infographic). */
   warnings: LayoutWarning[];
+  /**
+   * The scene's infographic, as saved, was just drawn (its preview shows it): the warnings are checked again over it.
+   * Left out while the scene's visual has unsaved changes: only what is saved is drawn.
+   */
+  onPictureReady?: () => Promise<void>;
   onChange: (scene: StoryboardScene) => void;
   onMove: (to: number) => void;
   onDuplicate: () => void;
@@ -496,6 +516,7 @@ export function SceneEditor({
   context,
   courseId,
   warnings,
+  onPictureReady,
   onChange,
   onMove,
   onDuplicate,
@@ -504,6 +525,9 @@ export function SceneEditor({
   const id = `scene-${scene.id}`;
   const slide = scene.slide;
   const notes = sceneWarnings(slide.layout, warnings);
+  const covered = notes.of("visual");
+  // Another version of an infographic the presenter covers: until it is drawn and checked, a note says so.
+  const [redrawing, setRedrawing] = useState(false);
   const setSlide = (changes: Partial<Slide>) => onChange({ ...scene, slide: { ...slide, ...changes } });
   const infographic = slide.layout === "visual";
   // An infographic scene's picture is its content (always an infographic); other layouts may have a decorative
@@ -531,6 +555,8 @@ export function SceneEditor({
             value={slide.layout}
             onChange={(event) => setLayout(event.target.value as SlideLayout)}
             className="h-9"
+            // What no field causes (a line or a frame of the layout) is said about the layout.
+            aria-describedby={warnedField(`${id}-layout`, notes.general)["aria-describedby"]}
           >
             {LAYOUTS.map((layout) => {
               const unavailable = layout.value === "visual" && !infographic && !visuals.includes("infographic");
@@ -563,6 +589,9 @@ export function SceneEditor({
           courseId={courseId}
           alt={`Diapositiva de la escena ${index + 1}`}
           className="lg:sticky lg:top-24 lg:self-start"
+          onReady={
+            infographic && onPictureReady ? () => void onPictureReady().then(() => setRedrawing(false)) : undefined
+          }
         />
         <div className="space-y-4">
           {/* What no field causes (a line or a frame of the layout): the scene's as a whole. */}
@@ -570,7 +599,16 @@ export function SceneEditor({
           <SlideFields id={id} slide={slide} onChange={setSlide} warnings={notes} />
           {infographic ? (
             <div className="border-t border-border pt-4">
-              <InfographicFields id={id} visual={visual} onChange={setVisual} warnings={notes.of("visual")} />
+              <InfographicFields
+                id={id}
+                visual={visual}
+                onChange={setVisual}
+                warnings={covered}
+                redrawing={redrawing}
+                onAnotherVersion={() => {
+                  if (covered.length) setRedrawing(true);
+                }}
+              />
             </div>
           ) : (
             <div className="space-y-3 border-t border-border pt-4">
