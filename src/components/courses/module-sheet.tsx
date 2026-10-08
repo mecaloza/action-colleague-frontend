@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, History, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, History, ScanSearch, Sparkles, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
+import { openReviewLabel, reviewable, reviewLook } from "@/components/studio/qa";
+import { ReviewBadgeLabel } from "@/components/studio/qa-chip";
 import type { RevisionTab } from "@/components/studio/revision-sheet";
 import { StaleVideoNotice, usePendingRevision } from "@/components/studio/revision-status";
 import { Button } from "@/components/ui/button";
@@ -36,9 +38,29 @@ interface ModuleFormProps {
   courseId: number;
   startRecording: boolean;
   script?: ScriptActions;
+  onOpenReview?: (moduleId: number) => void;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onUploadingChange: (uploading: boolean) => void;
+}
+
+/** The automatic review of an AI module's video ("Revisión de calidad"): how it went, and a way into it. */
+function VideoReviewSection({ module, onOpen }: { module: ModuleAdmin; onOpen: () => void }) {
+  const look = reviewLook(module.review);
+  return (
+    <section aria-labelledby="module-video-review" className="space-y-3 border-l-2 border-border bg-mist/60 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="module-video-review" className="text-[11px] font-bold uppercase tracking-label text-ink-700">
+          Revisión de calidad
+        </h3>
+        <ReviewBadgeLabel look={look} />
+      </div>
+      <p className="text-sm text-muted-foreground">{look.sentence}</p>
+      <Button variant="outline" size="sm" onClick={onOpen}>
+        <ScanSearch /> {openReviewLabel(module.review)}
+      </Button>
+    </section>
+  );
 }
 
 /** An AI module's script: a change to ask the AI for (or one waiting), its history, a video that no longer matches. */
@@ -76,6 +98,7 @@ function ModuleForm({
   courseId,
   startRecording,
   script,
+  onOpenReview,
   onClose,
   onDirtyChange,
   onUploadingChange,
@@ -184,6 +207,9 @@ function ModuleForm({
         ) : (
           <ModuleMedia module={module} startRecording={startRecording} onUploadingChange={setUploading} />
         )}
+        {onOpenReview && reviewable(module) && (
+          <VideoReviewSection module={module} onOpen={() => onOpenReview(module.id)} />
+        )}
         {module.source === "ai" && module.scene_count > 0 && script && <ScriptChanges module={module} script={script} />}
         <div>
           <Label htmlFor="module-title">Título</Label>
@@ -238,6 +264,7 @@ export function ModuleSheet({
   courseId,
   startRecording = false,
   script,
+  onOpenReview,
   onClose,
 }: {
   module: ModuleAdmin | null;
@@ -246,6 +273,8 @@ export function ModuleSheet({
   startRecording?: boolean;
   /** What it offers for an AI module's script. */
   script?: ScriptActions;
+  /** Opens the review of an AI module's video, over this panel. */
+  onOpenReview?: (moduleId: number) => void;
   onClose: () => void;
 }) {
   const confirm = useConfirm();
@@ -290,6 +319,7 @@ export function ModuleSheet({
             courseId={courseId}
             startRecording={startRecording}
             script={script}
+            onOpenReview={onOpenReview}
             onClose={() => {
               dirty.current = false;
               onClose();

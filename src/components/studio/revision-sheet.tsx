@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { skipToken, useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, Check, Info, RotateCcw, Sparkles } from "lucide-react";
 import { QueryError } from "@/components/layout/query-state";
@@ -151,6 +151,13 @@ const BUSY: Record<NonNullable<ModuleActivity>, string> = {
 
 export type RevisionTab = "change" | "history";
 
+/** A finding of the video's review a change is asked for: once the change is applied it shows as fixed. */
+export interface QaIssueRef {
+  id: string;
+  /** What the review found ("" when not known here). */
+  description: string;
+}
+
 /** What the sheet opens on. */
 export interface RevisionRequest {
   moduleId: number;
@@ -161,6 +168,10 @@ export interface RevisionRequest {
   sceneIds?: string[];
   /** The questions a new change to the quiz starts scoped to (a question's own button). */
   questionIds?: string[];
+  /** The observation a new change starts with (the admin can reword it). */
+  observation?: string;
+  /** The finding of the video's review the change fixes («Corregir»). */
+  qaIssue?: QaIssueRef;
   /** The history instead of a change. */
   tab?: RevisionTab;
 }
@@ -229,12 +240,18 @@ function scopeLabel(ids: string[], scope: Scope): string {
   return `${capitalized(words.many)} ${listed.slice(0, -1).join(", ")} y ${listed[listed.length - 1]}`;
 }
 
-/** What is sent to ask for a change: only the fields its target takes. */
-function proposal({ target, activityId }: RevisionRef, observation: string, chosen: string[]): RevisionCreate {
+/** What is sent to ask for a change: only the fields its target takes (and the review's finding it fixes, if any). */
+function proposal(
+  { target, activityId }: RevisionRef,
+  observation: string,
+  chosen: string[],
+  qaIssue: QaIssueRef | null,
+): RevisionCreate {
   const ids = chosen.length ? chosen : null;
-  if (target === "quiz") return { target, observation, question_ids: ids };
-  if (target === "activity") return { target, observation, activity_id: activityId };
-  return { target, observation, scene_ids: ids };
+  const fixes = qaIssue ? { qa_issue_id: qaIssue.id } : {};
+  if (target === "quiz") return { target, observation, question_ids: ids, ...fixes };
+  if (target === "activity") return { target, observation, activity_id: activityId, ...fixes };
+  return { target, observation, scene_ids: ids, ...fixes };
 }
 
 /**
@@ -266,6 +283,8 @@ interface ComposeState {
   scope: string[];
   /** The proposal it replaces ("Pedir otro ajuste", a scene's own button): the admin can go back to it. */
   replacing: Pick<RevisionSummary, "id" | "observation"> | null;
+  /** The finding of the video's review it fixes. */
+  qaIssue: QaIssueRef | null;
 }
 
 /** What the change tab shows: the form for an observation, or a change (being prepared, to review, failed...). */
@@ -468,18 +487,39 @@ function PanelBody({ course, module, busy, request, unsaved, onClose, subject }:
     observation: "",
     scope: requested,
     replacing: null,
+    qaIssue: null,
     ...from,
   });
   const compose = (from?: Partial<ComposeState>) => go(composing(from));
+  // The finding of the video's review a change was asked for (as the request knows it, with what it found).
+  const qaIssueOf = (revision: Revision): QaIssueRef | null => {
+    const id = revision.scope.qa_issue_id;
+    if (!id) return null;
+    return request.qaIssue?.id === id ? request.qaIssue : { id, description: "" };
+  };
   // As it opens (from the server's answer, not a copy kept from before): a proposal still waiting is shown first
-  // (asking for another replaces it); otherwise the form. A scene's or question's own button opens the form on it,
-  // saying which proposal it replaces; not while one is being prepared (another can't be asked until it ends).
-  if (view === null && !history.isPending && !history.isFetching) {
-    const pending = history.data?.find(isPendingRevision);
+  // (asking for another replaces it); otherwise the form. A scene's or question's own button, or a finding of the
+  // video's review («Corregir», with its observation), opens the form on it, saying which proposal it replaces; not
+  // while one is being prepared (another can't be asked until it ends), nor over the proposal asked for that same
+  // finding (even reworded; another finding may suggest the same words).
+  const opening = view === null && !history.isPending && !history.isFetching;
+  const pending = opening ? history.data?.find(isPendingRevision) : undefined;
+  const asked = { observation: request.observation ?? "", qaIssue: request.qaIssue ?? null };
+  // Which finding a proposal waiting was asked for: the change says it, the history's list doesn't. (Only that is read
+  // from it, and it never changes: a copy kept from before will do.)
+  const waitingFixId = asked.qaIssue && pending?.status === "proposed" && pending.source === "qa" ? pending.id : null;
+  const waitingFix = useQuery({
+    queryKey: revisionKeys.detail(waitingFixId ?? 0),
+    queryFn: waitingFixId === null ? skipToken : () => revisionsApi.get(waitingFixId),
+  });
+  if (opening && !waitingFix.isLoading) {
+    const ownRequest = requested.length > 0 || asked.qaIssue !== null;
+    // Not known when it can't be read: then the form says which proposal it replaces, and goes back to it.
+    const sameFinding = asked.qaIssue !== null && waitingFix.data?.scope.qa_issue_id === asked.qaIssue.id;
     const first: ViewTarget = !pending
-      ? composing()
-      : requested.length && pending.status === "proposed"
-        ? composing({ replacing: pending })
+      ? composing(asked)
+      : ownRequest && pending.status === "proposed" && !sameFinding
+        ? composing({ ...asked, replacing: pending })
         : { kind: "revision", id: pending.id };
     setView({ ...first, serial: 0, focus: false });
   }
@@ -519,13 +559,18 @@ function PanelBody({ course, module, busy, request, unsaved, onClose, subject }:
               unsaved={unsaved}
               onClose={onClose}
               onAnother={(revision) =>
-                compose({ scope: requested.length ? requested : (scope?.of(revision) ?? []), replacing: revision })
+                compose({
+                  scope: requested.length ? requested : (scope?.of(revision) ?? []),
+                  replacing: revision,
+                  qaIssue: qaIssueOf(revision), // another way to fix the same finding
+                })
               }
               onAskAgain={(revision, replacing) =>
                 compose({
                   observation: revision.observation,
                   scope: scope?.of(revision) ?? [],
                   replacing: replacing ? revision : null,
+                  qaIssue: qaIssueOf(revision),
                 })
               }
               onCompose={() => compose()}
@@ -577,12 +622,29 @@ interface SharedProps {
   numbers: Map<string, number>;
 }
 
-/** What was asked for: the observation and, a script's or quiz's, its scenes or questions. */
+/** What was asked for: the observation and, a script's or quiz's, its scenes or questions (and what it fixes). */
 function Asked({ revision, subject }: { revision: Revision; subject: Subject }) {
   const { scope } = subject;
   return (
     <p className="break-words text-sm text-muted-foreground">
       Pediste: «{revision.observation}»{scope && ` · ${scopeLabel(scope.of(revision), scope)}`}
+      {revision.scope.qa_issue_id && " · Corrige un hallazgo de la revisión de calidad"}
+    </p>
+  );
+}
+
+/** The finding of the video's review the change fixes, said above the form. */
+function FixesNote({ qaIssue }: { qaIssue: QaIssueRef }) {
+  // Quoted without its own final period: «… en el borde derecho».
+  const found = qaIssue.description.trim().replace(/\.$/, "");
+  return (
+    <p className="break-words border-l-2 border-accent bg-accent-soft px-4 py-3 text-sm">
+      {found ? (
+        <>Corrige lo que encontró la revisión de calidad: «{found}».</>
+      ) : (
+        "Corrige un hallazgo de la revisión de calidad."
+      )}{" "}
+      Al aplicar el cambio, el hallazgo queda corregido.
     </p>
   );
 }
@@ -623,7 +685,7 @@ function ComposeView({ course, module, subject, numbers, start, focus, unsaved, 
   const inScope = scope?.query.data ? chosen.filter((id) => numbers.has(id)) : chosen;
 
   const propose = useMutation({
-    mutationFn: () => revisionsApi.propose(module.id, proposal(ref, observation.trim(), inScope)),
+    mutationFn: () => revisionsApi.propose(module.id, proposal(ref, observation.trim(), inScope, start.qaIssue)),
     onSuccess: ({ revision, job }) => {
       queryClient.setQueryData(revisionKeys.detail(revision.id), revision);
       queryClient.setQueryData(studioKeys.job(job.id), job);
@@ -659,6 +721,7 @@ function ComposeView({ course, module, subject, numbers, start, focus, unsaved, 
   return (
     <>
       <SheetBody className="space-y-6">
+        {start.qaIssue && <FixesNote qaIssue={start.qaIssue} />}
         {start.replacing && (
           <p className="border-l-2 border-border bg-mist px-4 py-3 text-sm">
             La propuesta anterior («{start.replacing.observation}») se reemplaza por la que pidas ahora.
@@ -954,16 +1017,17 @@ function ProposedChanges({ course, module, subject, revision, changes, numbers }
   }
 }
 
-/** What else the toast of an applied change says: what is still to happen after it. */
+/** What else the toast of an applied change says: the finding of the video's review it fixed, what is still to come. */
 function appliedNotes(subject: Subject, { revision, render_job: renderJob }: RevisionApplied, hasVideo: boolean) {
   const { changes } = revision;
+  const fixed = revision.scope.qa_issue_id ? ["El hallazgo de la revisión de calidad quedó corregido."] : [];
   if (subject.ref.target === "script") {
     const videoBehind = !renderJob && changes !== null && leavesVideoBehind(changes, hasVideo);
-    return videoBehind ? ["El video no lo refleja hasta que lo vuelvas a producir."] : [];
+    return videoBehind ? [...fixed, "El video no lo refleja hasta que lo vuelvas a producir."] : fixed;
   }
   // A published activity's new lines are voiced (the others keep their voice).
   const voiced = subject.activity?.status === "ready" && (changes?.activity?.lines_changed ?? 0) > 0;
-  return voiced ? ["La voz de las líneas nuevas se está grabando."] : [];
+  return voiced ? [...fixed, "La voz de las líneas nuevas se está grabando."] : fixed;
 }
 
 /** The AI's proposal: what it changes, what it means, and the admin's decision. */

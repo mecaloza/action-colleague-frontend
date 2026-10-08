@@ -94,6 +94,11 @@ export interface ModuleAdmin {
   stale_scene_ids?: string[];
   /** A change the AI proposed (or is proposing) waits for the admin's review. Older servers leave it out. */
   revision_pending?: boolean;
+  /**
+   * The automatic review of its AI video, at a glance: null while that video has none (or it has no AI video). Older
+   * servers leave it out.
+   */
+  review?: ReviewBadge | null;
   evaluation: EvaluationSummary | null;
   updated_at: string | null;
 }
@@ -467,11 +472,20 @@ export interface RankingSettings {
   points_path: number;
 }
 
+/** The automatic review of the AI videos ("Revisión de calidad"). */
+export interface QaSettings {
+  /** Every video is reviewed as soon as it is produced. */
+  auto_review: boolean;
+  /** A course can't be published while one of its videos has critical findings still open. */
+  block_publish: boolean;
+}
+
 export interface PlatformSettings {
   general: GeneralSettings;
   evaluations: EvaluationDefaults;
   certificates: CertificateSettings;
   ranking: RankingSettings;
+  qa: QaSettings;
 }
 
 /** The parameters a learner's app needs. */
@@ -1381,6 +1395,111 @@ export interface RevisionConflict {
   question_ids?: string[];
   /** An activity's parts, as `EntityChange.path`. */
   paths?: string[];
+}
+
+// The automatic review of a module's AI video ("Revisión de calidad"): frames of the video the AI looks at, what the
+// video's own checks find, and what the AI reads in its script. It only tells: the video never changes. Each finding
+// is fixed with a change to the script (the change says which one), or ignored.
+export type ReviewStatus = "queued" | "running" | "done" | "error";
+export type ReviewVerdict = "ok" | "warnings" | "problems";
+export type IssueCategory =
+  | "overlap" // things on top of each other
+  | "cut_text" // a text cut, or a word split
+  | "presenter_covers" // the presenter hides part of the slide
+  | "illegible"
+  | "garbled_text" // misspelled or made-up words (an infographic's)
+  | "empty" // nothing on screen (a black screen)
+  | "mismatch" // the frame doesn't show what the script says
+  | "other"
+  | "content"; // the script itself: narration against slide, quiz, materials
+export type IssueSeverity = "critical" | "major" | "minor";
+/** "fixed": a change to the script made for it was applied (undoing it opens it again). */
+export type IssueStatus = "open" | "dismissed" | "fixed";
+/** Who found it: the AI in the frames or in the script, the slides' layout lint, FFmpeg in the video. */
+export type IssueSource = "vision" | "content" | "lint" | "video";
+/** "settled": the scene's slide whole; "scene": at random inside it; "random": anywhere in the video. */
+export type FrameKind = "settled" | "scene" | "random";
+
+export interface ReviewIssue {
+  /** "{review id}-{n}". */
+  id: string;
+  source: IssueSource;
+  scene_id: string | null;
+  /** Where to see it in the video. */
+  at_seconds: number | null;
+  /** The frame that shows it. */
+  frame_index: number | null;
+  category: IssueCategory;
+  severity: IssueSeverity;
+  /** For the admin, in Spanish. */
+  description: string;
+  /** How to ask for the fix ("Pedir un cambio"); "" when a change to the script can't fix it (the video's own). */
+  suggested_observation: string;
+  /** [x0, y0, x1, y1] in fractions (0-1) of the frame's width and height; null: the whole frame, or none. */
+  box: [number, number, number, number] | null;
+  status: IssueStatus;
+}
+
+export interface ReviewFrame {
+  index: number;
+  at_seconds: number;
+  scene_id: string | null;
+  kind: FrameKind;
+  /** A signed link to its JPEG (960 × 540); null when it couldn't be signed. */
+  url: string | null;
+}
+
+/** A stretch of the video, in seconds. */
+export interface Span {
+  start: number;
+  end: number;
+  seconds: number;
+}
+
+/** What the video's own checks found (they are among the findings too); empty until they ran. */
+export interface ReviewChecks {
+  lint?: { warnings: LayoutWarning[] } | null;
+  black?: Span[];
+  silence?: Span[];
+  /** Null without a presenter, or when it is unknown when each scene shows. */
+  frozen?: Span[] | null;
+  presenter_seconds?: number | null;
+  /** Why the script couldn't be read against the quiz and the materials (the frames' review stands). */
+  content_error?: string;
+}
+
+export interface VideoReview {
+  id: number;
+  module_id: number;
+  video_asset_id: string | null;
+  status: ReviewStatus;
+  /** Null until it is done, and when it failed. Dismissing, reopening or fixing findings never changes it. */
+  verdict: ReviewVerdict | null;
+  summary: string;
+  /** Why it couldn't be done (what the checks found is still there). */
+  error: string | null;
+  job_id: string | null;
+  issues: ReviewIssue[];
+  /** In the video's order. */
+  frames: ReviewFrame[];
+  checks: ReviewChecks;
+  created_at: string | null;
+  finished_at: string | null;
+}
+
+export interface VideoReviewQueued {
+  review: VideoReview;
+  job: Job;
+}
+
+/** A module's video review at a glance (`ModuleAdmin.review`). */
+export interface ReviewBadge {
+  status: ReviewStatus;
+  verdict: ReviewVerdict | null;
+  /** Neither dismissed nor fixed. */
+  open_issues: number;
+  /** Of them, critical. */
+  critical: number;
 }
 
 export interface OutlineModule {

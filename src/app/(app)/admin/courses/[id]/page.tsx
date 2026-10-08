@@ -11,13 +11,14 @@ import { ParticipantsTab } from "@/components/courses/participants-tab";
 import { ResultsTab } from "@/components/courses/results-tab";
 import { SettingsTab } from "@/components/courses/settings-tab";
 import { PageError, PageLoading } from "@/components/layout/query-state";
+import { isReviewing } from "@/components/studio/qa";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { CourseDetail } from "@/lib/api/types";
 
-/** While a module is still being generated, the editor refetches every few seconds. */
+/** While a module is still being generated (or its video reviewed), the editor refetches every few seconds. */
 const GENERATION_POLL_MS = 4000;
 
 /** The editor's sections, in order: `?tab=` opens one (a link to a course's participants, its evaluations...). */
@@ -34,8 +35,12 @@ type TabValue = (typeof TABS)[number]["value"];
 
 const isTab = (value: string | null): value is TabValue => TABS.some((tab) => tab.value === value);
 
-function hasPendingGeneration(course: CourseDetail | undefined): boolean {
-  return course?.modules.some((m) => m.generation_status === "queued" || m.generation_status === "generating") ?? false;
+function hasPendingWork(course: CourseDetail | undefined): boolean {
+  return (
+    course?.modules.some(
+      (m) => m.generation_status === "queued" || m.generation_status === "generating" || isReviewing(m.review),
+    ) ?? false
+  );
 }
 
 function CourseEditor() {
@@ -50,7 +55,7 @@ function CourseEditor() {
     queryKey: courseKeys.detail(courseId),
     queryFn: () => coursesApi.get(courseId),
     enabled: validId,
-    refetchInterval: (query) => (hasPendingGeneration(query.state.data) ? GENERATION_POLL_MS : false),
+    refetchInterval: (query) => (hasPendingWork(query.state.data) ? GENERATION_POLL_MS : false),
   });
 
   if (!validId) notFound();

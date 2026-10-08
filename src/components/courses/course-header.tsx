@@ -5,6 +5,8 @@ import { Archive, Eye, MoreHorizontal, Rocket, Sparkles, Trash2, Undo2 } from "l
 import { DiamondMotif } from "@/components/brand/motif";
 import { BackLink } from "@/components/layout/back-link";
 import { useConfirm } from "@/components/layout/confirm-dialog";
+import { CourseQaSummary } from "@/components/studio/qa-chip";
+import { QaReportSheet, useQaSheet } from "@/components/studio/qa-report-sheet";
 import { isBusy } from "@/components/studio/steps";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,7 +17,26 @@ import { useCourseActions } from "@/lib/hooks/use-course-actions";
 import { PHONE, useMediaQuery } from "@/lib/hooks/use-media-query";
 import { StatusBadge } from "./status-badge";
 
-function PublishProblemsDialog({ problems, onClose }: { problems: PublishProblem[] | null; onClose: () => void }) {
+/**
+ * A problem that is a video's review with critical findings still open (what the parameters can make block
+ * publishing): the module's other problems (being produced, no content) come first on the server too.
+ */
+function reviewProblem(problem: PublishProblem, course: CourseDetail): number | null {
+  const reviewed = course.modules.find((each) => each.id === problem.module_id);
+  return reviewed?.review?.critical && !isBusy(reviewed) ? reviewed.id : null;
+}
+
+interface PublishProblemsDialogProps {
+  course: CourseDetail;
+  problems: PublishProblem[] | null;
+  onClose: () => void;
+  /** Opens a video's review (the dialog closes). */
+  onReview: (moduleId: number) => void;
+}
+
+function PublishProblemsDialog({ course, problems, onClose, onReview }: PublishProblemsDialogProps) {
+  // Each problem with the video's review it is about, if any.
+  const listed = (problems ?? []).map((problem) => ({ problem, reviewed: reviewProblem(problem, course) }));
   return (
     <Dialog open={problems !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
@@ -24,13 +45,27 @@ function PublishProblemsDialog({ problems, onClose }: { problems: PublishProblem
           <DialogDescription>Resuelve esto y vuelve a intentarlo:</DialogDescription>
         </DialogHeader>
         <ul className="space-y-3">
-          {problems?.map((problem, index) => (
+          {listed.map(({ problem, reviewed }, index) => (
             <li key={index} className="flex items-start gap-3 text-sm">
               <span className="mt-1.5 h-2 w-2 shrink-0 rotate-45 bg-accent" />
-              {problem.message}
+              <div className="min-w-0 space-y-1">
+                <p className="break-words">{problem.message}</p>
+                {reviewed !== null && (
+                  <Button variant="link" className="text-[13px]" onClick={() => onReview(reviewed)}>
+                    Ver la revisión
+                  </Button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
+        {/* How the review of the course's videos went (those linked above aren't listed again). */}
+        <CourseQaSummary
+          course={course}
+          onOpen={onReview}
+          linked={listed.flatMap(({ reviewed }) => (reviewed === null ? [] : [reviewed]))}
+          className="mt-6 border-t border-border pt-4"
+        />
         <DialogFooter>
           <Button onClick={onClose}>Entendido</Button>
         </DialogFooter>
@@ -56,10 +91,14 @@ function madeInStudio(course: CourseDetail): boolean {
   );
 }
 
+const PUBLISH_ID = "course-publish";
+
 /** Black band at the top of the editor: status, title and the publish, preview and delete actions. */
 export function CourseHeader({ course }: { course: CourseDetail }) {
   const confirm = useConfirm();
   const actions = useCourseActions(course.id);
+  // A video's review, opened from what keeps the course from being published.
+  const qa = useQaSheet();
   const phone = useMediaQuery(PHONE);
   const archived = course.status === "archived";
   const isDraft = course.status !== "published" && !archived;
@@ -124,6 +163,7 @@ export function CourseHeader({ course }: { course: CourseDetail }) {
               </Button>
               {isDraft ? (
                 <Button
+                  id={PUBLISH_ID}
                   variant="accent"
                   className="flex-1 sm:flex-none"
                   onClick={() => actions.publish.mutate()}
@@ -182,7 +222,17 @@ export function CourseHeader({ course }: { course: CourseDetail }) {
         </div>
       </section>
 
-      <PublishProblemsDialog problems={actions.publishProblems} onClose={actions.dismissPublishProblems} />
+      <PublishProblemsDialog
+        course={course}
+        problems={actions.publishProblems}
+        onClose={actions.dismissPublishProblems}
+        onReview={(moduleId) => {
+          actions.dismissPublishProblems();
+          qa.show(moduleId);
+        }}
+      />
+      {/* What opened it went with the dialog: as it closes, the focus goes back to publishing. */}
+      <QaReportSheet course={course} {...qa.sheet} focusFallbackId={PUBLISH_ID} />
     </>
   );
 }

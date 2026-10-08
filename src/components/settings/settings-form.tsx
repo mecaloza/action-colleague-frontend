@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Award, Building2, ClipboardCheck, Loader2, Trophy } from "lucide-react";
+import { Award, Building2, ClipboardCheck, Loader2, ScanEye, Trophy } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,14 @@ import { Label } from "@/components/ui/label";
 import { SwitchRow } from "@/components/ui/switch-row";
 import { ApiError } from "@/lib/api/client";
 import { type SettingsPatch, settingsApi, settingsKeys } from "@/lib/api/settings";
-import type { CertificateSettings, EvaluationDefaults, GeneralSettings, PlatformSettings, RankingSettings } from "@/lib/api/types";
+import type {
+  CertificateSettings,
+  EvaluationDefaults,
+  GeneralSettings,
+  PlatformSettings,
+  QaSettings,
+  RankingSettings,
+} from "@/lib/api/types";
 import { useLeaveGuard } from "@/lib/hooks/use-leave-guard";
 import { toastError } from "@/lib/notify";
 import { cn } from "@/lib/utils";
@@ -50,7 +57,7 @@ function wholeIn(raw: string, { min, max }: { min: number; max: number }): numbe
 
 /** The form's fields as the parameters are saved. Numbers are the text typed: validated, not clamped. */
 function fieldsOf(settings: PlatformSettings) {
-  const { general, evaluations, certificates, ranking } = settings;
+  const { general, evaluations, certificates, ranking, qa } = settings;
   return {
     companyName: general.company_name,
     timezone: general.timezone,
@@ -67,6 +74,8 @@ function fieldsOf(settings: PlatformSettings) {
     pointsModule: String(ranking.points_module),
     pointsCourse: String(ranking.points_course),
     pointsPath: String(ranking.points_path),
+    autoReview: qa.auto_review,
+    blockPublish: qa.block_publish,
   };
 }
 
@@ -130,11 +139,16 @@ function changesOf(values: Values, fields: Fields, saved: PlatformSettings): Set
   }
   if (values.pointsPath != null && values.pointsPath !== saved.ranking.points_path) ranking.points_path = values.pointsPath;
 
+  const qa: Partial<QaSettings> = {};
+  if (fields.autoReview !== saved.qa.auto_review) qa.auto_review = fields.autoReview;
+  if (fields.blockPublish !== saved.qa.block_publish) qa.block_publish = fields.blockPublish;
+
   const patch: SettingsPatch = {};
   if (Object.keys(general).length) patch.general = general;
   if (Object.keys(evaluations).length) patch.evaluations = evaluations;
   if (Object.keys(certificates).length) patch.certificates = certificates;
   if (Object.keys(ranking).length) patch.ranking = ranking;
+  if (Object.keys(qa).length) patch.qa = qa;
   return patch;
 }
 
@@ -201,7 +215,10 @@ function NumberField({ id, label, value, onChange, error, hint, placeholder, inp
   );
 }
 
-/** The platform's parameters: general, the evaluations' defaults and the certificates, saved together. */
+/**
+ * The platform's parameters: general, the evaluations' defaults, the certificates, the ranking and the review of the
+ * videos, saved together.
+ */
 export function SettingsForm({ settings }: { settings: PlatformSettings }) {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
@@ -487,6 +504,30 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
             Se ganan una sola vez, al completarlo. Además, cada actividad y cada evaluación dan lo que la persona mejora su
             mejor resultado: hasta 100 puntos cada una.
           </p>
+        </div>
+      </Section>
+
+      <Section
+        id="settings-qa"
+        icon={<ScanEye className="h-5 w-5 text-accent" aria-hidden />}
+        title="Revisión de calidad"
+        hint="La IA revisa cada video producido con IA apenas está listo y te avisa lo que encuentra. Solo avisa: un video nunca cambia sin que tú lo pidas."
+      >
+        <div className="divide-y divide-border border border-border bg-white">
+          <SwitchRow
+            id="settings-qa-auto"
+            label="Revisar cada video al producirlo"
+            hint="Mira un fotograma de cada escena completa y otros al azar, y lee el guion contra la evaluación y los materiales del curso. Cada módulo puede revisarse de nuevo cuando quieras."
+            checked={fields.autoReview}
+            onCheckedChange={(autoReview) => edit({ autoReview })}
+          />
+          <SwitchRow
+            id="settings-qa-block"
+            label="Los problemas críticos impiden publicar"
+            hint="Un curso no se publica mientras uno de sus videos tenga problemas críticos sin corregir ni ignorar."
+            checked={fields.blockPublish}
+            onCheckedChange={(blockPublish) => edit({ blockPublish })}
+          />
         </div>
       </Section>
 
