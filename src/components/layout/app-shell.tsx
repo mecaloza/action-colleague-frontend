@@ -195,12 +195,19 @@ function MobileMenu({ nav, pathname, user, open, onOpenChange, onLogout }: Mobil
   );
 }
 
+interface TabBarProps {
+  nav: NavItem[];
+  pathname: string;
+  /** An item whose place is kept, unseen and out of reach, until it is known whether it shows. */
+  held?: NavItem;
+}
+
 /**
  * A learner's sections at the bottom of the screen, below lg (where the header has no room for them): within reach of
  * the thumb, clear of the home bar. `data-tab-bar` publishes its height (`--tab-bar`, globals.css): what sticks to the
  * bottom of the page, and the toasts, keep above it.
  */
-function TabBar({ nav, pathname }: { nav: NavItem[]; pathname: string }) {
+function TabBar({ nav, pathname, held }: TabBarProps) {
   const active = activeItem(pathname, nav);
   return (
     <nav
@@ -213,7 +220,7 @@ function TabBar({ nav, pathname }: { nav: NavItem[]; pathname: string }) {
           const current = item === active;
           const Icon = item.tab?.icon ?? House;
           return (
-            <li key={item.href} className="flex-1">
+            <li key={item.href} className={cn("flex-1", item === held && "invisible")}>
               <Link
                 href={item.href}
                 aria-current={current ? "page" : undefined}
@@ -242,9 +249,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const lacksAdminAccess = pathname.startsWith("/admin") && user?.role !== "admin";
   const isLearner = status === "authenticated" && user?.role !== "admin";
-  // Whether the parameters show the ranking to collaborators: it has its place in the nav until they say it doesn't.
+  // "Ranking" shows only once the parameters say collaborators see it: never by mistake, while they are asked or if
+  // they can't be read. While asked, its place is kept: when it comes (as it usually does) nothing in the nav moves.
   const learnerSettings = useQuery({ queryKey: learnKeys.settings, queryFn: learnApi.settings, enabled: isLearner });
-  const rankingVisible = learnerSettings.data?.ranking_visible ?? true;
+  const held = isLearner && learnerSettings.isPending ? RANKING_ITEM : undefined;
+  const withRanking = held !== undefined || learnerSettings.data?.ranking_visible === true;
 
   useEffect(() => {
     if (status === "anonymous") {
@@ -260,7 +269,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (status !== "authenticated" || !user || lacksAdminAccess) return <SplashScreen />;
 
-  const nav = isLearner ? [LEARNER_HOME, ...(rankingVisible ? [RANKING_ITEM] : []), PROFILE_ITEM] : ADMIN_NAV;
+  const nav = isLearner ? [LEARNER_HOME, ...(withRanking ? [RANKING_ITEM] : []), PROFILE_ITEM] : ADMIN_NAV;
   const active = activeItem(pathname, nav);
   const handleLogout = () => {
     signingOut.current = true;
@@ -290,6 +299,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "relative py-1 text-[11.5px] font-bold uppercase tracking-label transition-colors hover:text-accent",
                     current ? "text-accent" : "text-ink-800",
+                    item === held && "invisible",
                   )}
                 >
                   {item.label}
@@ -314,7 +324,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       {/* Fixed at the bottom, but right after the header for keyboards and screen readers (as the header's nav). */}
-      {isLearner && <TabBar nav={nav} pathname={pathname} />}
+      {isLearner && <TabBar nav={nav} pathname={pathname} held={held} />}
 
       <main className="flex-1">{children}</main>
 

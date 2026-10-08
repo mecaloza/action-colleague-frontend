@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/layout/empty-state";
 import { PageHero } from "@/components/layout/page-hero";
 import { PageLoading, QueryError } from "@/components/layout/query-state";
 import { defaultRankingPath, scopeName } from "@/components/ranking/learner-ranking";
-import { isPeriod, PeriodPicker, periodWhen } from "@/components/ranking/period-picker";
+import { isPeriod, PeriodPicker, periodStart, periodWhen } from "@/components/ranking/period-picker";
 import { LearnerRankingList, Points } from "@/components/ranking/ranking-list";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -160,8 +160,10 @@ function Ranking() {
             ) : (
               // What it says comes from the ranking shown (the previous one, while another period or path loads).
               <div aria-busy={ranking.isPlaceholderData || undefined}>
+                {/* Read out as it changes. It says the period: another one is heard even with as many people. */}
                 <p className="mb-3 text-sm text-muted-foreground" aria-live="polite">
-                  {scopeName(data.path)} · {plural(data.total_people, "persona con puntos", "personas con puntos")}
+                  {periodStart(data.period, data.starts_at)} · {scopeName(data.path)} ·{" "}
+                  {plural(data.total_people, "persona con puntos", "personas con puntos")}
                 </p>
                 {data.items.length ? (
                   <LearnerRankingList items={data.items} label={`${TITLES[data.period]}: ${scopeName(data.path)}`} />

@@ -175,6 +175,8 @@ test("la ficha de una persona: su avance módulo por módulo, otro intento en la
     .getByRole("listitem")
     .filter({ hasText: "Tú" });
   const nav = learnerPage.getByRole("navigation", { name: "Principal" });
+  // What is read out as the list changes: since when, in which path and how many have points.
+  const announced = learnerPage.locator("[aria-live=polite]").filter({ hasText: "con puntos" });
   await whileShown(learnerPage, async () => {
     await expect(mine).toContainText(learner.name, SOON);
     await expect(mine).toContainText("540 pts");
@@ -182,6 +184,7 @@ test("la ficha de una persona: su avance módulo por módulo, otro intento en la
     // In the nav, "Ranking" is the page on screen ("Mis cursos" isn't).
     await expect(nav.getByRole("link", { name: "Ranking" })).toHaveAttribute("aria-current", "page", SOON);
     await expect(nav.getByRole("link", { name: "Mis cursos" })).not.toHaveAttribute("aria-current", "page");
+    await expect(announced).toHaveText(`Desde la medianoche · ${path.title} · 1 persona con puntos`);
   });
   await whileShown(learnerPage, async () => {
     await learnerPage.getByRole("group", { name: "Periodo" }).getByRole("button", { name: "Semana" }).click(SOON);
@@ -189,6 +192,9 @@ test("la ficha de una persona: su avance módulo por módulo, otro intento en la
       "540 pts",
       SOON,
     );
+    // Another period is heard, even with as many people.
+    const week = new RegExp(`^Desde el lunes \\d{1,2} de [a-z]+ · ${path.title} · 1 persona con puntos$`);
+    await expect(announced).toHaveText(week);
   });
   await expect(learnerPage).toHaveURL(new RegExp(`/learn/ranking\\?path=${path.id}&period=week$`));
   await expect(learnerPage.getByRole("heading", { level: 1, name: "Los mejores de la semana" })).toBeVisible();
@@ -284,6 +290,8 @@ test("la ficha desde el equipo y los participantes: vista rápida, editar, revoc
   await page.getByRole("menuitem", { name: "Vista rápida" }).click();
   const sheet = page.getByRole("dialog", { name: learner.name });
   await expect(sheet.getByRole("link", { name: course.title })).toBeVisible();
+  // Each course's bar says whose progress it is.
+  await expect(sheet.getByRole("progressbar", { name: `Avance en ${course.title}` })).toHaveAttribute("aria-valuenow", "100");
   await sheet.getByRole("link", { name: "Ver ficha completa" }).click();
   await expect(page).toHaveURL(new RegExp(`/admin/team/${learner.id}$`));
   await expect(page.getByRole("heading", { level: 1, name: learner.name })).toBeVisible();

@@ -34,7 +34,7 @@ export function PersonCourses({ userId }: { userId: number }) {
             </Link>
             <EnrollmentBadge status={course.status} />
           </div>
-          <ProgressLine value={course.progress_pct} />
+          <ProgressLine value={course.progress_pct} label={`Avance en ${course.title}`} />
           <p className="mt-2 text-xs text-muted-foreground">
             {course.completed_modules} de {plural(course.total_modules, "módulo")}
             {course.completed_at ? ` · terminado el ${formatDate(course.completed_at)}` : ""}

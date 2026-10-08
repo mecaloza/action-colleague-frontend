@@ -62,8 +62,8 @@ function PathCard({ path }: { path: PersonPath }) {
           <Deadline journey={path} />
         </div>
         <h3 id={titleId} className="font-display text-xl font-medium leading-tight tracking-tightest">
-          {/* Its people, with how each one goes. */}
-          <Link href={`/admin/paths/${path.id}?tab=people`} className="-my-1 inline-block break-words py-1 hover:text-accent">
+          {/* Its people, with how each one goes. Finger-sized (taller than its line) without spacing the card out. */}
+          <Link href={`/admin/paths/${path.id}?tab=people`} className="-my-2 inline-block break-words py-2 hover:text-accent">
             {path.title}
           </Link>
         </h3>

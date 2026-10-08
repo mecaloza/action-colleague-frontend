@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { DECISION } from "./fixtures/activities";
-import { adminApi, type Call, type CourseRef, learnerApi, newLearner, PASSWORD } from "./fixtures/api";
+import { adminApi, API, type Call, type CourseRef, learnerApi, newLearner, PASSWORD, publishedCourse } from "./fixtures/api";
 
 // A person's page and the learner's ranking on a phone ("mobile" project: Pixel 7, touch, no hover), at the narrowest
 // width we support.
@@ -36,8 +36,8 @@ async function expectNoSidewaysScroll(page: Page) {
 }
 
 /**
- * Checks a learner's page where the ranking shows. The parameters are global and a spec running alongside may hide the
- * ranking for a moment (people.spec.ts does): the page is reloaded until it shows again.
+ * Checks a learner's page where the ranking shows (its tab, its card, its page). The parameters are global and a spec
+ * running alongside may hide the ranking for a moment (people.spec.ts does): the page is reloaded until it shows again.
  */
 async function whileShown(page: Page, check: () => Promise<void>) {
   let again = false;
@@ -123,6 +123,12 @@ test("la ficha de una persona en el celular: cabe y sus acciones se tocan con el
   const call = await adminApi(request);
   const stamp = Date.now();
   const { learner, course } = await learnerWithResults(call, request, stamp);
+  // Also a path and a course of short names: on a single line, their links are at their shortest.
+  const brief = await publishedCourse(call, `Frenos ${stamp % 1000}`);
+  const briefPath = await call<{ id: number; title: string }>("post", "/paths", { title: `Ruta ${stamp % 1000}` });
+  await call("put", `/paths/${briefPath.id}/courses`, { course_ids: [brief.id] });
+  await call("patch", `/paths/${briefPath.id}`, { status: "published" });
+  await call("post", `/paths/${briefPath.id}/people`, { user_ids: [learner.id] });
 
   await page.goto(`/admin/team/${learner.id}`);
   await expect(page.getByRole("heading", { level: 1, name: learner.name })).toBeVisible({ timeout: 20_000 }); // a cold route
@@ -133,6 +139,9 @@ test("la ficha de una persona en el celular: cabe y sus acciones se tocan con el
   await expect(points.locator("dd").first()).toHaveText("120");
   await expectWithinWidth(page, points);
   await expectNoSidewaysScroll(page);
+  // The names of a path and of a course lead to their pages: finger-sized, short ones too.
+  await expectTarget(page.getByRole("link", { name: briefPath.title, exact: true }));
+  await expectTarget(page.getByRole("link", { name: brief.title, exact: true }));
 
   // Its course opens module by module; the quiz's actions take a finger and stay inside the screen.
   const card = page.getByRole("list", { name: "Sus cursos" }).getByRole("listitem").filter({ hasText: course.title }).first();
@@ -178,11 +187,13 @@ test.describe("colaborador", () => {
 
     // The sections in a bar at the bottom, within the thumb's reach; no menu button for a learner.
     const tabs = page.getByRole("navigation", { name: "Principal" });
-    for (const name of ["Inicio", "Ranking", "Perfil"]) {
-      const tab = tabs.getByRole("link", { name });
-      await expect(tab).toBeInViewport({ ratio: 1 });
-      await expectTarget(tab);
-    }
+    await whileShown(page, async () => {
+      for (const name of ["Inicio", "Ranking", "Perfil"]) {
+        const tab = tabs.getByRole("link", { name });
+        await expect(tab).toBeInViewport({ ratio: 1, timeout: 5_000 });
+        await expectTarget(tab);
+      }
+    });
     await expect(tabs.getByRole("link", { name: "Inicio" })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("button", { name: "Abrir menú" })).toHaveCount(0);
     // Signing out lives in their own menu (their initials), finger-sized.
@@ -197,23 +208,28 @@ test.describe("colaborador", () => {
     await expectNoSidewaysScroll(page);
 
     // The ranking page: the list and their own place, pinned above the bar.
-    await tabs.getByRole("link", { name: "Ranking" }).tap();
-    await expect(page).toHaveURL(/\/learn\/ranking$/);
     const mine = page.getByRole("list", { name: /^Los mejores de hoy/ }).getByRole("listitem").filter({ hasText: "Tú" });
+    const place = page.getByText("Tu posición").locator("xpath=ancestor::div[contains(@class, 'sticky')][1]");
+    const periods = page.getByRole("group", { name: "Periodo" });
     await whileShown(page, async () => {
+      await tabs.getByRole("link", { name: "Ranking" }).tap({ timeout: 5_000 });
+      await expect(page).toHaveURL(/\/learn\/ranking$/);
       await expect(mine).toContainText("120 pts", { timeout: 5_000 });
       await expect(tabs.getByRole("link", { name: "Ranking" })).toHaveAttribute("aria-current", "page");
+      await expectWithinWidth(page, mine);
+      await expect(place).toBeInViewport({ ratio: 1 });
+      const placeBox = (await place.boundingBox())!;
+      const barBox = (await tabs.boundingBox())!;
+      expect(placeBox.y + placeBox.height).toBeLessThanOrEqual(barBox.y + 1);
+      for (const period of ["Hoy", "Semana", "Mes", "Total"]) {
+        await expectTarget(periods.getByRole("button", { name: period }));
+      }
     });
-    await expectWithinWidth(page, mine);
-    const place = page.getByText("Tu posición").locator("xpath=ancestor::div[contains(@class, 'sticky')][1]");
-    await expect(place).toBeInViewport({ ratio: 1 });
-    const placeBox = (await place.boundingBox())!;
-    const barBox = (await tabs.boundingBox())!;
-    expect(placeBox.y + placeBox.height).toBeLessThanOrEqual(barBox.y + 1);
-    for (const period of ["Hoy", "Semana", "Mes", "Total"]) {
-      await expectTarget(page.getByRole("group", { name: "Periodo" }).getByRole("button", { name: period }));
-    }
-    await page.getByRole("button", { name: "Mes" }).tap();
+    // Another period: its list is asked for (it may come hidden for a moment too).
+    await whileShown(page, async () => {
+      await periods.getByRole("button", { name: "Mes" }).tap({ timeout: 5_000 });
+      await expect(page.getByRole("list", { name: /^Los mejores del mes/ })).toContainText("120 pts", { timeout: 5_000 });
+    });
     await expect(page.getByRole("heading", { level: 1, name: "Los mejores del mes" })).toBeVisible();
     await expectTarget(page.getByLabel("Ranking de"));
     await expectNoSidewaysScroll(page);
@@ -223,5 +239,57 @@ test.describe("colaborador", () => {
     await expect(page).toHaveURL(/\/profile$/);
     await tabs.getByRole("link", { name: "Inicio" }).tap();
     await expect(page).toHaveURL(/\/learn$/);
+  });
+
+  test("la pestaña del ranking: guarda su lugar mientras pregunta y no aparece si los parámetros lo ocultan", async ({
+    page,
+    request,
+  }) => {
+    const call = await adminApi(request);
+    const learner = await newLearner(call, `Colaboradora de la barra ${Date.now()}`);
+    // The parameters answer when the test says, with what it says (not changed for real: other specs read them).
+    let visible = true;
+    let release = (): void => undefined;
+    let gate = new Promise<void>((resolve) => {
+      release = () => resolve();
+    });
+    await page.route(`${API}/learn/settings`, async (route) => {
+      await gate;
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), ranking_visible: visible } });
+    });
+
+    await page.goto("/login");
+    await page.getByLabel("Correo electrónico").fill(learner.email);
+    await page.getByLabel("Contraseña", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: /Ingresar/ }).tap();
+    await expect(page).toHaveURL(/\/learn$/, { timeout: 20_000 }); // a cold route
+
+    // While it asks: no "Ranking" to tap, but its place is kept.
+    const tabs = page.getByRole("navigation", { name: "Principal" });
+    const ranking = tabs.getByRole("link", { name: "Ranking" });
+    const profile = tabs.getByRole("link", { name: "Perfil" });
+    await expect(profile).toBeInViewport({ ratio: 1 });
+    await expect(ranking).toHaveCount(0);
+    const kept = (await profile.boundingBox())!;
+    // Shown: it comes to its place, and the other tabs stay where the finger expects them.
+    release();
+    await expect(ranking).toBeInViewport({ ratio: 1 });
+    expect((await profile.boundingBox())!.x).toBe(kept.x);
+
+    // Hidden: it never shows, not even while it asks; then the other two share the bar.
+    visible = false;
+    gate = new Promise<void>((resolve) => {
+      release = () => resolve();
+    });
+    await page.reload();
+    await expect(profile).toBeInViewport({ ratio: 1 });
+    await expect(ranking).toHaveCount(0);
+    const answered = page.waitForResponse(`${API}/learn/settings`);
+    release();
+    await answered;
+    await expect.poll(async () => (await profile.boundingBox())?.x).toBeLessThan(kept.x);
+    await expect(ranking).toHaveCount(0);
+    await expectTarget(profile);
   });
 });

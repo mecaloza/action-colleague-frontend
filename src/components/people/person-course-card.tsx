@@ -219,7 +219,8 @@ export function PersonCourseCard({ course, person, focused = false }: PersonCour
       <div className="space-y-3 p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <h3 className="min-w-0 font-display text-xl font-medium leading-tight tracking-tightest">
-            <Link href={`/admin/courses/${course.course_id}?tab=participants`} className="-my-1 inline-block break-words py-1 hover:text-accent">
+            {/* A finger-sized target (taller than its line) without spacing the card out. */}
+            <Link href={`/admin/courses/${course.course_id}?tab=participants`} className="-my-2 inline-block break-words py-2 hover:text-accent">
               {course.title}
             </Link>
           </h3>
