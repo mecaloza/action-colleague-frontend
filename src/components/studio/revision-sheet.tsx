@@ -199,17 +199,20 @@ function RevisionPanel({ course, module, request, unsaved, onClose }: PanelProps
     setTab("change");
     setView((current) => ({ ...next, serial: (current?.serial ?? 0) + 1, focus: true }));
   };
-  const compose = (from: Partial<ComposeState> = {}) =>
-    go({ kind: "compose", observation: "", sceneIds: request.sceneIds ?? [], replacing: null, ...from });
+  const composing = (from: Partial<ComposeState> = {}): ViewTarget => ({
+    kind: "compose",
+    observation: "",
+    sceneIds: request.sceneIds ?? [],
+    replacing: null,
+    ...from,
+  });
+  const compose = (from?: Partial<ComposeState>) => go(composing(from));
   // As it opens (from the server's answer, not a copy kept from before): a proposal still waiting is shown first
   // (asking for another replaces it); otherwise the form.
   if (view === null && !history.isPending && !history.isFetching) {
     const pending = history.data?.find(isPendingRevision);
-    setView(
-      pending
-        ? { kind: "revision", id: pending.id, serial: 0, focus: false }
-        : { kind: "compose", observation: "", sceneIds: request.sceneIds ?? [], replacing: null, serial: 0, focus: false },
-    );
+    const first: ViewTarget = pending ? { kind: "revision", id: pending.id } : composing();
+    setView({ ...first, serial: 0, focus: false });
   }
 
   const shared = { course, module, storyboard, numbers };
@@ -229,9 +232,7 @@ function RevisionPanel({ course, module, request, unsaved, onClose }: PanelProps
             inactive panel is only `hidden`, which its `flex` would override: hidden by its state instead. */}
         <TabsContent value="change" forceMount className="mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
           {view === null ? (
-            <SheetBody>
-              <Skeleton className="h-64" />
-            </SheetBody>
+            <LoadingBody />
           ) : view.kind === "compose" ? (
             <ComposeView
               key={view.serial}
@@ -268,11 +269,7 @@ function RevisionPanel({ course, module, request, unsaved, onClose }: PanelProps
         </TabsContent>
         <TabsContent value="history" className="mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
           <SheetBody className="space-y-4">
-            {unsaved && (
-              <p id={unsavedId} className="border-l-2 border-warning bg-amber-50 px-4 py-3 text-sm">
-                {UNSAVED_UNDO}
-              </p>
-            )}
+            {unsaved && <BlockedNote id={unsavedId}>{UNSAVED_UNDO}</BlockedNote>}
             <RevisionHistory
               moduleId={module.id}
               blockedBy={unsaved ? unsavedId : undefined}
@@ -283,6 +280,23 @@ function RevisionPanel({ course, module, request, unsaved, onClose }: PanelProps
         </TabsContent>
       </Tabs>
     </>
+  );
+}
+
+function LoadingBody() {
+  return (
+    <SheetBody>
+      <Skeleton className="h-64" />
+    </SheetBody>
+  );
+}
+
+/** Why applying or undoing is held back; the buttons point at it. */
+function BlockedNote({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <p id={id} className="border-l-2 border-warning bg-amber-50 px-4 py-3 text-sm">
+      {children}
+    </p>
   );
 }
 
@@ -515,13 +529,7 @@ function RevisionView({ id, focus, ...props }: RevisionViewProps) {
     if (seen.ended) void cache.refreshChanges(course.id, module.id);
   }, [seen, cache, course.id, module.id]);
 
-  if (revision.isPending) {
-    return (
-      <SheetBody>
-        <Skeleton className="h-64" />
-      </SheetBody>
-    );
-  }
+  if (revision.isPending) return <LoadingBody />;
   if (!revision.data) {
     return (
       <SheetBody>
@@ -648,6 +656,7 @@ function ProposalView(props: ViewProps) {
     },
   });
   const busy = apply.isPending || discard.isPending;
+  const cannotApply = Boolean(blocked) || Boolean(stale) || busy;
   const questions = changes?.affected_question_ids.length ?? 0;
 
   return (
@@ -697,11 +706,7 @@ function ProposalView(props: ViewProps) {
             <RevisionImpactPanel impact={changes.impact} hasVideo={hasVideo} />
           </>
         )}
-        {blocked && (
-          <p id={blockedId} className="border-l-2 border-warning bg-amber-50 px-4 py-3 text-sm">
-            {blocked}
-          </p>
-        )}
+        {blocked && <BlockedNote id={blockedId}>{blocked}</BlockedNote>}
       </SheetBody>
       <SheetFooter className="flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex items-center justify-center gap-6 sm:justify-start">
@@ -723,7 +728,7 @@ function ProposalView(props: ViewProps) {
             variant={hasVideo ? "outline" : "accent"}
             onClick={() => apply.mutate(false)}
             loading={apply.isPending && !apply.variables}
-            disabled={Boolean(blocked) || Boolean(stale) || busy}
+            disabled={cannotApply}
             aria-describedby={blocked ? blockedId : undefined}
           >
             <Check /> Aplicar
@@ -733,7 +738,7 @@ function ProposalView(props: ViewProps) {
               variant="accent"
               onClick={() => apply.mutate(true)}
               loading={apply.isPending && apply.variables}
-              disabled={Boolean(blocked) || Boolean(stale) || busy}
+              disabled={cannotApply}
               aria-describedby={blocked ? blockedId : undefined}
             >
               <RotateCcw /> Aplicar y volver a producir

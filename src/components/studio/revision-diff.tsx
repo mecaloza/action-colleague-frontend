@@ -41,7 +41,7 @@ const FIELDS: [name: string, label: string][] = [
   ["visual", "Visual"],
   ["narration", "Narración"],
 ];
-const KNOWN_FIELDS = new Set(FIELDS.map(([name]) => name));
+const FIELD_LABELS = new Map(FIELDS);
 
 const VISUAL_LABELS: Record<VisualKind, string> = {
   none: "Sin visual (solo el diseño)",
@@ -226,8 +226,6 @@ function NarrationDiff({ parts }: { parts: TextOp[] }) {
   );
 }
 
-const fieldLabel = (name: string) => FIELDS.find(([field]) => field === name)?.[1] ?? name;
-
 /** A scene's slide as the video draws it, before or after the change. */
 type ScenePreview = (scene: StoryboardScene, when: "before" | "after", number: number) => ReactNode;
 
@@ -238,7 +236,7 @@ function SceneChangeCard({ change, preview }: { change: SceneChange; preview: Sc
   const look = ACTIONS[action] ?? ACTIONS.update;
   const names = [
     ...FIELDS.map(([name]) => name).filter((name) => name in fields),
-    ...Object.keys(fields).filter((name) => !KNOWN_FIELDS.has(name)),
+    ...Object.keys(fields).filter((name) => !FIELD_LABELS.has(name)),
   ];
   const before = action === "insert" ? undefined : change.before;
   const after = action === "delete" ? undefined : change.after;
@@ -282,7 +280,9 @@ function SceneChangeCard({ change, preview }: { change: SceneChange; preview: Sc
           const field = fields[name];
           return (
             <div key={name}>
-              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-label text-ink-700">{fieldLabel(name)}</p>
+              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-label text-ink-700">
+                {FIELD_LABELS.get(name) ?? name}
+              </p>
               {name === "narration" && action === "update" && change.narration_diff.length ? (
                 <NarrationDiff parts={change.narration_diff} />
               ) : (
