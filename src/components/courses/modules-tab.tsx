@@ -17,6 +17,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSo
 import { Film, Loader2, Plus } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { SectionHeader } from "@/components/layout/section-header";
+import { QaReportSheet, useQaSheet } from "@/components/studio/qa-report-sheet";
 import { RevisionSheet, useRevisionSheet } from "@/components/studio/revision-sheet";
 import { useProduceModule } from "@/components/studio/use-produce-module";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,8 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
   // "Pedir un cambio" to an AI module's script (over its panel, when asked from there), and its video produced again.
   const revisions = useRevisionSheet();
   const { produce, producingId } = useProduceModule(course);
+  // The review of an AI module's video, from its row or its panel (over it).
+  const qa = useQaSheet();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -152,6 +155,7 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
                   onRequestChange={() => revisions.show({ moduleId: module.id })}
                   onProduce={() => void produce(module)}
                   producing={producingId === module.id}
+                  onOpenReview={() => qa.show(module.id)}
                 />
               ))}
             </ol>
@@ -177,9 +181,11 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
           onProduce: (module) => void produce(module),
           producingId,
         }}
+        onOpenReview={qa.show}
         onClose={() => setOpened(null)}
       />
       <RevisionSheet course={course} {...revisions.sheet} />
+      <QaReportSheet course={course} {...qa.sheet} />
     </div>
   );
 }

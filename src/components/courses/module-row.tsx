@@ -14,6 +14,8 @@ import {
   Video,
   type LucideIcon,
 } from "lucide-react";
+import { reviewable } from "@/components/studio/qa";
+import { QaChip } from "@/components/studio/qa-chip";
 import { PendingChangeBadge, StaleVideoNotice } from "@/components/studio/revision-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,6 +77,8 @@ interface ModuleRowProps {
   /** Produces the module's video again (the script changed since it was made). */
   onProduce?: () => void;
   producing?: boolean;
+  /** Opens the review of the module's AI video ("Revisión de calidad"). */
+  onOpenReview?: () => void;
 }
 
 /** One row of the module list: dragged by its handle or moved with its arrows. */
@@ -88,6 +92,7 @@ export function ModuleRow({
   onRequestChange,
   onProduce,
   producing,
+  onOpenReview,
 }: ModuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: module.id });
   const { label, icon: SourceIcon } = SOURCE_META[module.source] ?? SOURCE_META.text;
@@ -156,6 +161,7 @@ export function ModuleRow({
             <span className="sr-only">: ver el motivo</span>
           </button>
         )}
+        {onOpenReview && reviewable(module) && <QaChip module={module} onOpen={onOpenReview} compact />}
         {scripted && onRequestChange && <PendingChangeBadge module={module} onReview={onRequestChange} />}
         {/* On phones the arrows go to a line of their own, at its end. */}
         <div className="ml-auto">

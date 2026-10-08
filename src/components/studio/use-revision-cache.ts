@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { activityKeys } from "@/lib/api/activities";
 import { courseKeys } from "@/lib/api/courses";
+import { reviewKeys } from "@/lib/api/reviews";
 import { revisionKeys, revisionsApi } from "@/lib/api/revisions";
 import { studioKeys } from "@/lib/api/studio";
 import type { RevisionTarget } from "@/lib/api/types";
@@ -90,11 +91,15 @@ export function useRevisionCache() {
         refreshChanges(courseId, moduleId),
       ]);
 
-    /** A change was applied or undone: what it changed (the script, the quiz or the activity) and its history. */
+    /**
+     * A change was applied or undone: what it changed (the script, the quiz or the activity), its history and the
+     * module's video review (a change made for one of its findings fixes it; undone, it is open again).
+     */
     const refreshContent = (courseId: number, { target, moduleId }: RevisionRef) => {
-      if (target === "quiz") return refreshQuiz(courseId, moduleId);
-      if (target === "activity") return refreshActivity(courseId, moduleId);
-      return refreshScript(courseId, moduleId);
+      const review = queryClient.invalidateQueries({ queryKey: reviewKeys.module(moduleId) });
+      if (target === "quiz") return Promise.all([refreshQuiz(courseId, moduleId), review]);
+      if (target === "activity") return Promise.all([refreshActivity(courseId, moduleId), review]);
+      return Promise.all([refreshScript(courseId, moduleId), review]);
     };
 
     /** Undoes an applied change: what it changed goes back, edits made since elsewhere stay. True when undone. */
