@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { CourseDetail, PublishProblem } from "@/lib/api/types";
 import { formatPercent, plural } from "@/lib/format";
 import { useCourseActions } from "@/lib/hooks/use-course-actions";
+import { PHONE, useMediaQuery } from "@/lib/hooks/use-media-query";
 import { StatusBadge } from "./status-badge";
 
 function PublishProblemsDialog({ problems, onClose }: { problems: PublishProblem[] | null; onClose: () => void }) {
@@ -59,8 +60,13 @@ function madeInStudio(course: CourseDetail): boolean {
 export function CourseHeader({ course }: { course: CourseDetail }) {
   const confirm = useConfirm();
   const actions = useCourseActions(course.id);
+  const phone = useMediaQuery(PHONE);
   const archived = course.status === "archived";
   const isDraft = course.status !== "published" && !archived;
+  const studio = madeInStudio(course);
+  const studioHref = `/admin/courses/${course.id}/studio`;
+  const previewHref = `/admin/courses/${course.id}/preview`;
+  const unpublishLabel = archived ? "Restaurar como borrador" : "Despublicar";
 
   const confirmDelete = async () => {
     const confirmed = await confirm({
@@ -102,30 +108,37 @@ export function CourseHeader({ course }: { course: CourseDetail }) {
               <h1 className="display-lg text-balance text-white">{course.title}</h1>
               {course.description && <p className="mt-3 max-w-2xl text-white/70">{course.description}</p>}
             </div>
+            {/* On a phone one action stays in sight (publishing a draft, or the preview) and the rest go to the menu. */}
             <div className="flex flex-wrap items-center gap-3">
-              {madeInStudio(course) && (
-                <Button variant="outline-inverse" asChild>
-                  <Link href={`/admin/courses/${course.id}/studio`}>
+              {studio && (
+                <Button variant="outline-inverse" className="hidden sm:inline-flex" asChild>
+                  <Link href={studioHref}>
                     <Sparkles /> Estudio IA
                   </Link>
                 </Button>
               )}
-              <Button variant="outline-inverse" asChild>
-                <Link href={`/admin/courses/${course.id}/preview`}>
+              <Button variant="outline-inverse" className={isDraft ? "hidden sm:inline-flex" : "flex-1 sm:flex-none"} asChild>
+                <Link href={previewHref}>
                   <Eye /> Vista previa
                 </Link>
               </Button>
               {isDraft ? (
-                <Button variant="accent" onClick={() => actions.publish.mutate()} loading={actions.publish.isPending}>
+                <Button
+                  variant="accent"
+                  className="flex-1 sm:flex-none"
+                  onClick={() => actions.publish.mutate()}
+                  loading={actions.publish.isPending}
+                >
                   <Rocket /> Publicar
                 </Button>
               ) : (
                 <Button
                   variant="outline-inverse"
+                  className="hidden sm:inline-flex"
                   onClick={confirmUnpublish}
                   loading={actions.unpublish.isPending}
                 >
-                  <Undo2 /> {archived ? "Restaurar como borrador" : "Despublicar"}
+                  <Undo2 /> {unpublishLabel}
                 </Button>
               )}
               <DropdownMenu>
@@ -135,6 +148,25 @@ export function CourseHeader({ course }: { course: CourseDetail }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
+                  {phone && studio && (
+                    <DropdownMenuItem asChild>
+                      <Link href={studioHref}>
+                        <Sparkles /> Estudio IA
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {phone && isDraft && (
+                    <DropdownMenuItem asChild>
+                      <Link href={previewHref}>
+                        <Eye /> Vista previa
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {phone && !isDraft && (
+                    <DropdownMenuItem onSelect={confirmUnpublish} disabled={actions.unpublish.isPending}>
+                      <Undo2 /> {unpublishLabel}
+                    </DropdownMenuItem>
+                  )}
                   {!archived && (
                     <DropdownMenuItem onSelect={() => actions.archive.mutate()}>
                       <Archive /> Archivar curso

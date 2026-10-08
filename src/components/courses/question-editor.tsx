@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, CheckCircle2, Circle, Plus, Trash2, X, type LucideI
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { GrowingTextarea, Textarea } from "@/components/ui/textarea";
 import type {
   FillBlankQuestion,
   MatchingQuestion,
@@ -133,13 +133,16 @@ function SingleChoiceOptions({ question, onChange }: FieldsProps<SingleChoiceQue
               <button
                 type="button"
                 onClick={() => onChange({ ...question, correct_index: index })}
-                className={cn("shrink-0 transition-colors", isCorrect ? "text-success" : "text-muted-foreground hover:text-ink-800")}
+                className={cn(
+                  "-ml-2.5 flex h-10 w-10 shrink-0 items-center justify-center transition-colors",
+                  isCorrect ? "text-success" : "text-muted-foreground hover:text-ink-800",
+                )}
                 aria-label={isCorrect ? "Respuesta correcta" : "Marcar como correcta"}
                 aria-pressed={isCorrect}
               >
                 {isCorrect ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
               </button>
-              <Input
+              <GrowingTextarea
                 aria-label={`Opción ${index + 1}`}
                 value={option}
                 onChange={(event) =>
@@ -342,7 +345,7 @@ export function QuestionEditor({
 
         <div>
           <Label htmlFor={`${fieldId}-prompt`}>{question.type === "true_false" ? "Afirmación" : "Enunciado"}</Label>
-          <Input
+          <GrowingTextarea
             id={`${fieldId}-prompt`}
             value={question.prompt}
             onChange={(event) => onChange({ ...question, prompt: event.target.value })}

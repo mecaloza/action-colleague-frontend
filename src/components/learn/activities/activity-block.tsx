@@ -22,17 +22,19 @@ const ICONS: Record<ActivityType, typeof Play> = {
   quick: Timer,
 };
 
-/** A play left open is picked up where it was; otherwise a new one starts. */
-const playLabel = (activity: LearnerActivitySummary) =>
-  activity.resumable ? "Continuar" : activity.finished ? "Jugar de nuevo" : "Jugar";
+/** A play left open is picked up where it was; otherwise a new one starts. An admin's preview only tries it. */
+const playLabel = (activity: LearnerActivitySummary, preview: boolean) =>
+  preview ? "Probar" : activity.resumable ? "Continuar" : activity.finished ? "Jugar de nuevo" : "Jugar";
 
 interface ActivityBlockProps {
   activities: LearnerActivitySummary[];
   onPlay: (activity: LearnerActivitySummary) => void;
+  /** The admin's preview of the course: each activity is tried, nothing is pending or scored. */
+  preview?: boolean;
 }
 
 /** The module's activities, after its video: what each is, its best score, and a button to play. */
-export function ActivityBlock({ activities, onPlay }: ActivityBlockProps) {
+export function ActivityBlock({ activities, onPlay, preview = false }: ActivityBlockProps) {
   if (!activities.length) return null;
   const pending = activities.filter((activity) => !activity.finished).length;
   return (
@@ -47,16 +49,18 @@ export function ActivityBlock({ activities, onPlay }: ActivityBlockProps) {
           </h3>
         </div>
         <p className="text-sm text-muted-foreground">
-          {pending
-            ? `Te ${pending === 1 ? "falta" : "faltan"} ${plural(pending, "actividad", "actividades")}`
-            : "Las completaste todas"}
+          {preview
+            ? "Pruébalas como las jugará tu equipo: nada se guarda."
+            : pending
+              ? `Te ${pending === 1 ? "falta" : "faltan"} ${plural(pending, "actividad", "actividades")}`
+              : "Las completaste todas"}
         </p>
       </div>
       <ul className="grid gap-3 md:grid-cols-2">
         {activities.map((activity) => {
           const Icon = ICONS[activity.type];
-          const replay = activity.finished && !activity.resumable;
-          const label = playLabel(activity);
+          const replay = !preview && activity.finished && !activity.resumable;
+          const label = playLabel(activity, preview);
           return (
             <li key={activity.id} className="flex flex-col gap-4 border border-border bg-white p-5">
               <div className="flex items-start gap-3">
@@ -75,7 +79,9 @@ export function ActivityBlock({ activities, onPlay }: ActivityBlockProps) {
                 </div>
               </div>
               <div className="mt-auto flex items-center justify-between gap-3">
-                {activity.finished ? (
+                {preview ? (
+                  <p className="text-sm text-muted-foreground">Hasta {activity.max_score} puntos</p>
+                ) : activity.finished ? (
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-success">
                     <CheckCircle2 className="h-4 w-4" /> {activity.best_score} de {activity.max_score} puntos
                   </p>

@@ -4,8 +4,9 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// A button never shrinks below its size in a crowded row; on a touch screen the small ones still take a 40px finger.
 const buttonVariants = cva(
-  "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-sm font-sans font-bold uppercase tracking-[0.08em] transition-[background-color,color,border-color,transform] duration-150 active:translate-y-px disabled:pointer-events-none disabled:opacity-45 [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-sm font-sans font-bold uppercase tracking-[0.08em] transition-[background-color,color,border-color,transform] duration-150 active:translate-y-px disabled:pointer-events-none disabled:opacity-45 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -17,14 +18,14 @@ const buttonVariants = cva(
         inverse: "bg-white text-ink-900 hover:bg-mist",
         "outline-inverse": "border border-white/40 bg-ink-950/70 text-white hover:border-white hover:bg-white hover:text-ink-900",
         destructive: "bg-destructive text-white hover:bg-destructive/90",
-        link: "h-auto p-0 normal-case tracking-normal text-accent underline-offset-4 hover:underline",
+        link: "h-auto p-0 normal-case tracking-normal text-accent underline-offset-4 hover:underline touch:min-h-10",
       },
       size: {
         default: "h-11 px-6 text-[12px]",
-        sm: "h-9 px-4 text-[11px]",
+        sm: "h-9 px-4 text-[11px] touch:min-h-10",
         lg: "h-12 px-8 text-[13px]",
         icon: "h-10 w-10",
-        "icon-sm": "h-8 w-8",
+        "icon-sm": "h-8 w-8 touch:min-h-10 touch:min-w-10",
       },
     },
     compoundVariants: [{ variant: "link", className: "h-auto px-0" }],

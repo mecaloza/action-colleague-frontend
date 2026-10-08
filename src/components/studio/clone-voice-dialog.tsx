@@ -77,7 +77,11 @@ export function CloneVoiceDialog({ open, onOpenChange, onCloned }: CloneVoiceDia
                 <Mic className="h-4 w-4 shrink-0 text-accent" />
                 <span className="truncate">{sample.name}</span>
               </span>
-              <button type="button" className="text-[11px] font-bold uppercase tracking-label text-accent" onClick={() => setSample(null)}>
+              <button
+                type="button"
+                className="-my-3 inline-flex min-h-10 shrink-0 items-center text-[11px] font-bold uppercase tracking-label text-accent"
+                onClick={() => setSample(null)}
+              >
                 Cambiar
               </button>
             </p>

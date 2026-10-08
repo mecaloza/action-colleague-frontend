@@ -8,15 +8,18 @@ import { ModuleVideo } from "@/components/courses/module-video";
 import { BackLink } from "@/components/layout/back-link";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageError, PageLoading } from "@/components/layout/query-state";
+import { ActivityBlock } from "@/components/learn/activities/activity-block";
+import { ActivityPlayer } from "@/components/learn/activities/activity-player";
 import { Reading } from "@/components/learn/reading";
 import { Button } from "@/components/ui/button";
+import { activitiesApi } from "@/lib/api/activities";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
-import type { LearnerModule } from "@/lib/api/types";
+import type { LearnerActivitySummary, LearnerModule } from "@/lib/api/types";
 import { formatDuration, plural, twoDigits } from "@/lib/format";
 import { safeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 
-function ModuleContent({ module }: { module: LearnerModule }) {
+function ModuleContent({ module, onTry }: { module: LearnerModule; onTry: (activity: LearnerActivitySummary) => void }) {
   return (
     <article className="space-y-6">
       <div>
@@ -36,9 +39,10 @@ function ModuleContent({ module }: { module: LearnerModule }) {
       {!module.video && !module.document && !module.content_text && (
         <EmptyState icon={<FileText />} title="Este módulo aún no tiene contenido" />
       )}
+      <ActivityBlock activities={module.activities} onPlay={onTry} preview />
       {module.quiz && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <HelpCircle className="h-4 w-4 text-accent" />
+          <HelpCircle className="h-4 w-4 shrink-0 text-accent" />
           Evaluación de {plural(module.quiz.question_count, "pregunta")} · aprueba con {module.quiz.passing_score}% ·{" "}
           {plural(module.quiz.max_attempts, "intento")}
         </p>
@@ -60,7 +64,7 @@ interface ModuleNavProps {
 
 function ModuleNav({ modules, selected, onSelect }: ModuleNavProps) {
   return (
-    <nav aria-label="Módulos del curso">
+    <nav aria-label="Módulos del curso" className="min-w-0">
       <ol className="space-y-1">
         {modules.map((module, index) => (
           <li key={module.id}>
@@ -88,7 +92,7 @@ function ModuleNav({ modules, selected, onSelect }: ModuleNavProps) {
   );
 }
 
-/** The course exactly as a learner sees it (every module unlocked, no progress saved). */
+/** The course exactly as a learner sees it (every module unlocked, no progress saved), its activities included. */
 export default function CoursePreviewPage() {
   const params = useParams<{ id: string }>();
   const courseId = Number(params.id);
@@ -99,6 +103,8 @@ export default function CoursePreviewPage() {
     enabled: validId,
   });
   const [selected, setSelected] = useState(0);
+  // The activity being tried, played as the admin's preview (nothing is saved); a new session starts it anew.
+  const [trying, setTrying] = useState<{ activity: LearnerActivitySummary; session: number } | null>(null);
 
   if (!validId) notFound();
   if (preview.isPending) return <PageLoading bodyClassName="aspect-video" />;
@@ -127,10 +133,29 @@ export default function CoursePreviewPage() {
           <EmptyState icon={<FileText />} title="El curso aún no tiene módulos" />
         </div>
       ) : (
-        <div className="container grid gap-10 py-10 lg:grid-cols-[300px_1fr]">
+        // One column on phones; from lg the list of modules and the module side by side. The tracks never grow past
+        // the screen for a long title: it truncates instead.
+        <div className="container grid grid-cols-1 gap-10 py-10 lg:grid-cols-[300px_minmax(0,1fr)]">
           <ModuleNav modules={modules} selected={selected} onSelect={setSelected} />
-          {current && <ModuleContent module={current} />}
+          {current && (
+            <ModuleContent
+              module={current}
+              onTry={(activity) => setTrying((last) => ({ activity, session: (last?.session ?? 0) + 1 }))}
+            />
+          )}
         </div>
+      )}
+
+      {trying && (
+        <ActivityPlayer
+          key={trying.session}
+          activity={trying.activity}
+          open
+          onOpenChange={(open) => !open && setTrying(null)}
+          allowUntimed={false}
+          language={course.language}
+          api={{ start: () => activitiesApi.preview(trying.activity.id), move: activitiesApi.previewMove }}
+        />
       )}
     </>
   );

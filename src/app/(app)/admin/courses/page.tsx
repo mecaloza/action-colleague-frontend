@@ -8,6 +8,7 @@ import { NewCourseButton } from "@/components/courses/new-course-button";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHero } from "@/components/layout/page-hero";
 import { QueryError } from "@/components/layout/query-state";
+import { ScrollRow } from "@/components/layout/scroll-row";
 import { Input } from "@/components/ui/input";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { CourseStatus } from "@/lib/api/types";
@@ -27,7 +28,7 @@ const COURSE_GRID = "grid gap-6 sm:grid-cols-2 lg:grid-cols-3";
 
 function StatusFilter({ value, onChange }: { value: StatusFilterValue; onChange: (value: StatusFilterValue) => void }) {
   return (
-    <div role="group" aria-label="Filtrar cursos" className="scrollbar-thin flex gap-6 overflow-x-auto border-b border-border">
+    <ScrollRow role="group" aria-label="Filtrar cursos" className="gap-6 border-b border-border">
       {FILTERS.map((filter) => (
         <button
           key={filter.value}
@@ -35,14 +36,14 @@ function StatusFilter({ value, onChange }: { value: StatusFilterValue; onChange:
           aria-pressed={value === filter.value}
           onClick={() => onChange(filter.value)}
           className={cn(
-            "-mb-px whitespace-nowrap border-b-2 pb-3 text-[11.5px] font-bold uppercase tracking-label transition-colors",
+            "-mb-px whitespace-nowrap border-b-2 py-3 text-[11.5px] font-bold uppercase tracking-label transition-colors",
             value === filter.value ? "border-accent text-ink-800" : "border-transparent text-muted-foreground hover:text-ink-800",
           )}
         >
           {filter.label}
         </button>
       ))}
-    </div>
+    </ScrollRow>
   );
 }
 

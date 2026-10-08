@@ -45,7 +45,7 @@ function ParticipantRow({ participant, onOpen, onRemove }: ParticipantRowProps) 
         </button>
         <p className="text-xs text-muted-foreground">{participant.user.department || participant.user.email}</p>
       </TableCell>
-      <TableCell className="hidden sm:table-cell">
+      <TableCell>
         <EnrollmentBadge status={participant.status} />
       </TableCell>
       <TableCell>
@@ -75,40 +75,89 @@ function ParticipantRow({ participant, onOpen, onRemove }: ParticipantRowProps) 
   );
 }
 
-interface ParticipantsTableProps {
+/** On a phone each participant is a card (a table there would hide "Retirar" past the edge). */
+function ParticipantCard({ participant, onOpen, onRemove }: ParticipantRowProps) {
+  const { user } = participant;
+  return (
+    <li className="space-y-3 border border-border bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <button
+            type="button"
+            className="-my-2.5 block max-w-full truncate py-2.5 text-left font-semibold hover:text-accent"
+            onClick={onOpen}
+            aria-label={`Ver el detalle de ${user.name}`}
+          >
+            {user.name}
+          </button>
+          <p className="truncate text-xs text-muted-foreground">{user.department || user.email}</p>
+        </div>
+        <EnrollmentBadge status={participant.status} />
+      </div>
+      <div className="flex items-center gap-3">
+        <Progress value={participant.progress_pct} className="flex-1" />
+        <span className="w-10 text-right text-xs font-semibold">{formatPercent(participant.progress_pct)}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span>
+          Promedio {formatPercent(participant.average_score)} ·{" "}
+          {participant.last_activity_at ? formatRelative(participant.last_activity_at) : "Sin actividad"}
+        </span>
+        <Button variant="ghost" size="sm" className="-mr-2" onClick={onRemove} aria-label={`Retirar a ${user.name}`}>
+          <UserMinus /> Retirar
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+interface ParticipantsProps {
   participants: Participant[];
   onOpen: (participant: Participant) => void;
   onRemove: (participant: Participant) => void;
 }
 
-function ParticipantsTable({ participants, onOpen, onRemove }: ParticipantsTableProps) {
+/** Cards on a phone, a table from `sm` up. */
+function Participants({ participants, onOpen, onRemove }: ParticipantsProps) {
   return (
-    <div className="border border-border bg-white">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Persona</TableHead>
-            <TableHead className="hidden sm:table-cell">Estado</TableHead>
-            <TableHead className="w-48">Avance</TableHead>
-            <TableHead className="hidden md:table-cell">Promedio</TableHead>
-            <TableHead className="hidden lg:table-cell">Última actividad</TableHead>
-            <TableHead className="w-10">
-              <span className="sr-only">Acciones</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {participants.map((participant) => (
-            <ParticipantRow
-              key={participant.enrollment_id}
-              participant={participant}
-              onOpen={() => onOpen(participant)}
-              onRemove={() => onRemove(participant)}
-            />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <>
+      <ul className="space-y-2 sm:hidden" aria-label="Participantes">
+        {participants.map((participant) => (
+          <ParticipantCard
+            key={participant.enrollment_id}
+            participant={participant}
+            onOpen={() => onOpen(participant)}
+            onRemove={() => onRemove(participant)}
+          />
+        ))}
+      </ul>
+      <div className="hidden border border-border bg-white sm:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Persona</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="w-48">Avance</TableHead>
+              <TableHead className="hidden md:table-cell">Promedio</TableHead>
+              <TableHead className="hidden lg:table-cell">Última actividad</TableHead>
+              <TableHead className="w-10">
+                <span className="sr-only">Acciones</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {participants.map((participant) => (
+              <ParticipantRow
+                key={participant.enrollment_id}
+                participant={participant}
+                onOpen={() => onOpen(participant)}
+                onRemove={() => onRemove(participant)}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   );
 }
 
@@ -159,7 +208,7 @@ export function ParticipantsTab({ course }: { course: CourseDetail }) {
       ) : participants.error ? (
         <QueryError query={participants} />
       ) : participants.data?.length ? (
-        <ParticipantsTable participants={participants.data} onOpen={setInspected} onRemove={confirmRemove} />
+        <Participants participants={participants.data} onOpen={setInspected} onRemove={confirmRemove} />
       ) : (
         <EmptyState
           icon={<Users />}

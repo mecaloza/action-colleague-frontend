@@ -25,7 +25,8 @@ function PersonCourses({ person }: { person: UserRow }) {
       {courses.data.map((course) => (
         <li key={course.course_id} className="border border-border p-4">
           <div className="mb-3 flex items-start justify-between gap-3">
-            <Link href={`/admin/courses/${course.course_id}`} className="font-semibold hover:text-accent">
+            {/* A finger-sized target (taller than its line) without spacing the card out. */}
+            <Link href={`/admin/courses/${course.course_id}`} className="-my-2.5 min-w-0 py-2.5 font-semibold hover:text-accent">
               {course.title}
             </Link>
             <EnrollmentBadge status={course.status} />

@@ -8,6 +8,7 @@ import { ConfirmProvider } from "@/components/layout/confirm-dialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/auth-context";
 import { ApiError } from "@/lib/api/client";
+import { PHONE, useMediaQuery } from "@/lib/hooks/use-media-query";
 
 const TOAST_OPTIONS = {
   classNames: {
@@ -15,6 +16,8 @@ const TOAST_OPTIONS = {
     title: "font-semibold",
   },
 };
+// On a phone, toasts at the top (clear of the notch): at the bottom they would cover a panel's buttons.
+const PHONE_TOAST_OFFSET = { top: "max(16px, env(safe-area-inset-top))" };
 
 const isClientError = (error: unknown) => error instanceof ApiError && error.status >= 400 && error.status < 500;
 
@@ -33,6 +36,7 @@ function makeQueryClient() {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(makeQueryClient);
+  const phone = useMediaQuery(PHONE);
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -40,7 +44,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <TooltipProvider delayDuration={200}>
             <ConfirmProvider>
               {children}
-              <Toaster position="bottom-right" toastOptions={TOAST_OPTIONS} />
+              <Toaster
+                position={phone ? "top-center" : "bottom-right"}
+                mobileOffset={PHONE_TOAST_OFFSET}
+                toastOptions={TOAST_OPTIONS}
+              />
             </ConfirmProvider>
           </TooltipProvider>
         </MotionConfig>

@@ -61,7 +61,11 @@ function UploadStatus({ state, onCancel, onRetry }: UploadProgressProps) {
         <div className="flex-1">
           <p>{state.message}</p>
           {onRetry && (
-            <button type="button" onClick={onRetry} className="mt-2 text-[11px] font-bold uppercase tracking-label text-accent">
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-1 inline-flex min-h-10 items-center text-[11px] font-bold uppercase tracking-label text-accent"
+            >
               Intentar de nuevo
             </button>
           )}

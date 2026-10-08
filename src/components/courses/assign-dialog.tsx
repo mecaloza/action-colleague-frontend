@@ -118,7 +118,8 @@ export function AssignDialog({ course, enrolledIds, open, onOpenChange }: Assign
           <span>{plural(candidates.length, "disponible")}</span>
           {candidates.length > 0 && (
             <button
-              className="font-bold uppercase tracking-label text-accent"
+              type="button"
+              className="-my-3 inline-flex min-h-10 items-center font-bold uppercase tracking-label text-accent"
               // Adds the people shown (e.g. a search) to those already chosen.
               onClick={() => setSelected((current) => new Set(Array.from(current).concat(candidates.map((user) => user.id))))}
             >

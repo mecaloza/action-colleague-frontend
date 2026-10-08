@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { GrowingTextarea, Textarea } from "@/components/ui/textarea";
 import { LOOK_LABELS, TireTread } from "@/components/learn/activities/tire-tread";
 import type { ActivityType, InspectionVerdict, TireLook } from "@/lib/api/types";
 import { removeAt, replaceAt } from "@/lib/array";
@@ -236,7 +236,7 @@ function DecisionForm({ spec, onChange }: FormProps<DecisionSpec>) {
             return (
               <div key={choice.id} className="space-y-2 border-l-2 border-accent pl-3">
                 <div className="grid gap-2 sm:grid-cols-[1fr_90px]">
-                  <Input
+                  <GrowingTextarea
                     aria-label={`Opción ${at + 1} de la situación ${index + 1}`}
                     value={choice.text}
                     maxLength={200}
@@ -378,7 +378,7 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
     <div className="space-y-5">
       <div>
         <Label htmlFor="inspection-prompt">Misión</Label>
-        <Input
+        <GrowingTextarea
           id="inspection-prompt"
           value={spec.prompt}
           maxLength={200}
@@ -414,7 +414,9 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
       )}
 
       <fieldset className="space-y-2 border border-border p-4">
-        <legend className="px-1 text-sm font-semibold">Decisiones (teclas 1 a {spec.verdicts.length})</legend>
+        <legend className="px-1 text-sm font-semibold">
+          Decisiones<span className="touch:hidden"> (teclas 1 a {spec.verdicts.length})</span>
+        </legend>
         {spec.verdicts.map((verdict, index) => (
           <div key={verdict.id} className="flex gap-2">
             <Input
@@ -608,7 +610,7 @@ function SimulatorForm({ spec, onChange }: FormProps<SimulatorSpec>) {
     <div className="space-y-4">
       <div>
         <Label htmlFor="sim-prompt">Reto</Label>
-        <Input
+        <GrowingTextarea
           id="sim-prompt"
           value={spec.prompt}
           maxLength={200}
@@ -772,7 +774,7 @@ function SimulatorForm({ spec, onChange }: FormProps<SimulatorSpec>) {
         maxLength={600}
         onChange={(event) => onChange({ ...spec, fail_text: event.target.value })}
       />
-      <Input
+      <GrowingTextarea
         aria-label="Pista"
         value={spec.hint}
         maxLength={600}
@@ -786,7 +788,7 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
   return (
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-[1fr_200px_120px]">
-        <Input
+        <GrowingTextarea
           aria-label="Instrucción"
           value={spec.prompt}
           maxLength={200}
@@ -864,7 +866,7 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
                   onChange({ ...spec, pairs: replaceAt(spec.pairs, index, { ...pair, left: event.target.value }) })
                 }
               />
-              <Input
+              <GrowingTextarea
                 aria-label={`Pareja ${index + 1}`}
                 value={pair.right}
                 maxLength={200}

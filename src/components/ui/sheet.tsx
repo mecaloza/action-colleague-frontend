@@ -3,6 +3,7 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { matchesMedia, TOUCH_ONLY } from "@/lib/hooks/use-media-query";
 import { useReturnFocus } from "@/lib/hooks/use-return-focus";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,18 @@ const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
-  const focus = useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus });
+  const focus = useReturnFocus({
+    onOpenAutoFocus: (event) => {
+      onOpenAutoFocus?.(event);
+      // On a touch screen, focusing the first field would pop the keyboard up over the panel: it starts on the
+      // panel itself (screen readers still hear its title).
+      if (!event.defaultPrevented && matchesMedia(TOUCH_ONLY)) {
+        event.preventDefault();
+        (event.target as HTMLElement).focus();
+      }
+    },
+    onCloseAutoFocus,
+  });
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-950/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
@@ -28,7 +40,7 @@ const SheetContent = React.forwardRef<
         {...focus}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-mist hover:text-ink-800">
+        <DialogPrimitive.Close className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-mist hover:text-ink-800">
           <X className="h-5 w-5" />
           <span className="sr-only">Cerrar</span>
         </DialogPrimitive.Close>

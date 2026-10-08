@@ -286,14 +286,17 @@ export function EvaluationsTab({ course }: { course: CourseDetail }) {
               onClick={() => toggle(module.id)}
               aria-expanded={expanded}
             >
-              <span className="font-display text-2xl font-medium text-accent">{twoDigits(module.order)}</span>
-              <span className="flex-1 font-semibold">{module.title}</span>
-              <span className="text-xs text-muted-foreground">
-                {module.evaluation
-                  ? `${plural(module.evaluation.question_count, "pregunta")} · aprueba con ${module.evaluation.passing_score}%`
-                  : "Sin evaluación"}
+              <span className="shrink-0 font-display text-2xl font-medium text-accent">{twoDigits(module.order)}</span>
+              {/* On a phone the summary goes under the title: side by side the title got a word per line. */}
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
+                <span className="min-w-0 break-words font-semibold sm:flex-1">{module.title}</span>
+                <span className="text-xs text-muted-foreground">
+                  {module.evaluation
+                    ? `${plural(module.evaluation.question_count, "pregunta")} · aprueba con ${module.evaluation.passing_score}%`
+                    : "Sin evaluación"}
+                </span>
               </span>
-              <ChevronDown className={cn("h-5 w-5 transition-transform", expanded && "rotate-180")} />
+              <ChevronDown className={cn("h-5 w-5 shrink-0 transition-transform", expanded && "rotate-180")} />
             </button>
             {expanded && (
               <div className="border-t border-border bg-mist/40 p-5">
