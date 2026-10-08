@@ -87,6 +87,13 @@ export interface ModuleAdmin {
   scene_count: number;
   /** Something the AI video came out without, and why (e.g. its presenter). */
   video_warning: string | null;
+  /**
+   * The scenes the AI video doesn't show as the script has them now (edited, added or moved since it was made; last,
+   * those it shows that the script no longer has): it needs producing again. Older servers leave it out.
+   */
+  stale_scene_ids?: string[];
+  /** A change the AI proposed (or is proposing) waits for the admin's review. Older servers leave it out. */
+  revision_pending?: boolean;
   evaluation: EvaluationSummary | null;
   updated_at: string | null;
 }
@@ -1152,6 +1159,146 @@ export interface StoryboardDraft {
 /** What doesn't fit or overlaps on the slides of a script being edited (it is checked, never saved). */
 export interface StoryboardLint {
   warnings: LayoutWarning[];
+}
+
+// Changes to a module's script: proposed by the AI from an observation (reviewed before applying), or made otherwise
+// (saved by hand, rewritten, undone). Any applied one can be undone.
+export type RevisionTarget = "script" | "quiz" | "activity";
+export type RevisionSource = "observation" | "qa" | "manual" | "regenerate" | "revert";
+export type RevisionStatus = "proposing" | "proposed" | "applied" | "discarded" | "failed" | "superseded" | "reverted";
+
+export interface RevisionScope {
+  /** The scenes the observation is about (empty: the whole script). */
+  scene_ids: string[];
+  question_ids: string[];
+  /** The video review's finding it fixes. */
+  qa_issue_id: string | null;
+  /** An undo: the change it undid. */
+  reverted_id: number | null;
+}
+
+/** One field of a scene before and after the change (its value's shape depends on the field: see `SceneChange`). */
+export interface FieldChange {
+  before: unknown;
+  after: unknown;
+}
+
+/** A piece of a narration compared word by word. */
+export interface TextOp {
+  op: "equal" | "insert" | "delete";
+  text: string;
+}
+
+export type SceneChangeAction = "update" | "insert" | "delete" | "move";
+
+export interface SceneChange {
+  scene_id: string;
+  /** "move": the same scene in another place. */
+  action: SceneChangeAction;
+  /** Where the scene is in the script (1 = first) before and after the change (null: not there). */
+  position: { before: number | null; after: number | null };
+  /**
+   * What changed, by field: "layout", "title", "subtitle", "points", "icons", "icon", "stat" ({stat_value,
+   * stat_label}), "quote" (its author), "comparison" ({left, right}), "chart" ({chart_labels, chart_values,
+   * chart_unit}), "eyebrow", "narration" and "visual".
+   */
+  fields: Record<string, FieldChange>;
+  /** Why the AI changed it (empty for other changes). */
+  reason: string;
+  /** The narration word by word when it changed: the equal and inserted parts make the new one. */
+  narration_diff: TextOp[];
+  /** The whole scene before and after (null where it isn't), as stored: one saved long ago may lack newer fields. */
+  before: StoryboardScene | null;
+  after: StoryboardScene | null;
+}
+
+export interface ReadingChange {
+  before: string;
+  after: string;
+}
+
+/** What producing the video again takes after the change. */
+export interface RevisionImpact {
+  /** Scenes narrated again, and their characters. */
+  narration_scenes: string[];
+  narration_chars: number;
+  /** Presenter takes recorded again. */
+  presenter_takes: number;
+  /** A scene added or removed swaps the presenters of the scenes after it. */
+  reassigns_presenters: boolean;
+  /** Infographics, images or clips to make. */
+  visuals_to_make: number;
+  /** The module has a video and its scenes changed. */
+  needs_render: boolean;
+}
+
+/** Something the AI proposed that was left out, and why (in Spanish). */
+export interface IgnoredChange {
+  scene_id: string;
+  action: string;
+  reason: string;
+}
+
+export interface RevisionChanges {
+  scenes: SceneChange[];
+  reading: ReadingChange | null;
+  impact: RevisionImpact | null;
+  ignored: IgnoredChange[];
+  /** Quiz questions the new script may contradict. */
+  affected_question_ids: string[];
+  /** Applied over other edits made after the proposal. */
+  rebased: boolean;
+}
+
+export interface RevisionSummary {
+  id: number;
+  module_id: number;
+  target: RevisionTarget;
+  activity_id: number | null;
+  source: RevisionSource;
+  status: RevisionStatus;
+  observation: string;
+  summary: string;
+  created_at: string | null;
+  applied_at: string | null;
+  created_by_name: string | null;
+}
+
+export interface Revision extends RevisionSummary {
+  scope: RevisionScope;
+  /** What the observation asked that the AI could not do, and why. */
+  unresolved: string;
+  /** Null while it is being proposed (or when that failed). */
+  changes: RevisionChanges | null;
+  error: string | null;
+  job_id: string | null;
+}
+
+export interface RevisionCreate {
+  target: "script";
+  observation: string;
+  /** Null or empty: the whole script. */
+  scene_ids?: string[] | null;
+  qa_issue_id?: string | null;
+}
+
+export interface RevisionProposal {
+  revision: Revision;
+  job: Job;
+}
+
+export interface RevisionApplied {
+  revision: Revision;
+  /** The video being produced again ("Aplicar y volver a producir" on a module with a video). */
+  render_job: Job | null;
+}
+
+/** The `detail` of a 409 when the script changed since, in the places a change touches (scenes and/or reading). */
+export interface RevisionConflict {
+  code: "revision_stale" | "revision_conflict";
+  message: string;
+  scene_ids: string[];
+  reading: boolean;
 }
 
 export interface OutlineModule {

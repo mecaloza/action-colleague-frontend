@@ -14,6 +14,7 @@ import {
   Video,
   type LucideIcon,
 } from "lucide-react";
+import { PendingChangeBadge, StaleVideoNotice } from "@/components/studio/revision-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ModuleAdmin, ModuleSource } from "@/lib/api/types";
@@ -69,10 +70,25 @@ interface ModuleRowProps {
   /** A move is being saved: the arrows wait for it. */
   moving: boolean;
   onOpen: () => void;
+  /** Asks the AI for a change to the module's script (AI modules with one), or opens the change waiting. */
+  onRequestChange?: () => void;
+  /** Produces the module's video again (the script changed since it was made). */
+  onProduce?: () => void;
+  producing?: boolean;
 }
 
 /** One row of the module list: dragged by its handle or moved with its arrows. */
-export function ModuleRow({ module, index, total, onMove, moving, onOpen }: ModuleRowProps) {
+export function ModuleRow({
+  module,
+  index,
+  total,
+  onMove,
+  moving,
+  onOpen,
+  onRequestChange,
+  onProduce,
+  producing,
+}: ModuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: module.id });
   const { label, icon: SourceIcon } = SOURCE_META[module.source] ?? SOURCE_META.text;
   const poster = useStableUrl(module.poster_url);
@@ -80,6 +96,8 @@ export function ModuleRow({ module, index, total, onMove, moving, onOpen }: Modu
   // A badge's reason opens under the row with a tap or a click: a tooltip never shows on a touch screen.
   const [showIssue, setShowIssue] = useState(false);
   const issueId = `module-${module.id}-issue`;
+  // An AI module with a script: the AI can change it (on phones, from the module's panel).
+  const scripted = module.source === "ai" && module.scene_count > 0;
   return (
     <li
       ref={setNodeRef}
@@ -138,6 +156,7 @@ export function ModuleRow({ module, index, total, onMove, moving, onOpen }: Modu
             <span className="sr-only">: ver el motivo</span>
           </button>
         )}
+        {scripted && onRequestChange && <PendingChangeBadge module={module} onReview={onRequestChange} />}
         {/* On phones the arrows go to a line of their own, at its end. */}
         <div className="ml-auto">
           <MoveButtons
@@ -149,11 +168,25 @@ export function ModuleRow({ module, index, total, onMove, moving, onOpen }: Modu
             onMove={onMove}
           />
         </div>
+        {/* Until lg only its icon fits the row (its name says what it does). */}
+        {scripted && onRequestChange && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRequestChange}
+            className="hidden min-w-10 px-2.5 sm:inline-flex lg:px-4"
+            aria-label={`Pedir un cambio al guion de ${module.title}`}
+          >
+            <Sparkles />
+            <span className="hidden lg:inline">Pedir un cambio</span>
+          </Button>
+        )}
         {/* On phones the title opens the module; the row keeps room for it. */}
         <Button variant="outline" size="sm" onClick={onOpen} className="hidden sm:inline-flex" aria-label={`Editar ${module.title}`}>
           Editar
         </Button>
       </div>
+      {scripted && <StaleVideoNotice module={module} onProduce={onProduce} producing={producing} className="mt-3" />}
       {issue && (
         <p
           id={issueId}

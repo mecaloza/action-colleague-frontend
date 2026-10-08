@@ -12,8 +12,11 @@ import { plural, twoDigits } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { cn } from "@/lib/utils";
 import { JobFailure, JobStatus } from "./job-status";
+import { RevisionSheet, useRevisionSheet } from "./revision-sheet";
+import { PendingChangeBadge, StaleVideoNotice } from "./revision-status";
 import { aiModules, type ModuleActivity, moduleActivity, moduleJob } from "./steps";
 import { StoryboardEditor } from "./storyboard-editor";
+import { useProduceModule } from "./use-produce-module";
 import { useStudioCache } from "./use-studio-cache";
 
 function ModuleState({ module, activity, job }: { module: ModuleAdmin; activity: ModuleActivity; job?: Job }) {
@@ -72,6 +75,9 @@ export function ContentStep({ course, jobs, dirty, onDirtyChange, onContinue, op
   const confirm = useConfirm();
   const { refreshCourse } = useCourseCache();
   const { trackJobs, failed } = useStudioCache();
+  const { produce, producingId } = useProduceModule(course);
+  // "Pedir un cambio" (to a module's script, or to one of its scenes from the editor).
+  const revisions = useRevisionSheet();
   const [openId, setOpenId] = useState<number | null>(openModuleId);
   // Came to fix a script: its module goes to the top of the screen, with the focus on its (open) toggle.
   useEffect(() => {
@@ -161,22 +167,44 @@ export function ContentStep({ course, jobs, dirty, onDirtyChange, onContinue, op
                 <div className="min-w-0 flex-1 basis-60 space-y-1.5">
                   <p className="font-semibold">{module.title}</p>
                   <ModuleState module={module} activity={activity} job={job} />
+                  {/* The script changed since its video: it can be produced again from here. */}
+                  {drafted && (
+                    <StaleVideoNotice
+                      module={module}
+                      onProduce={() => void produce(module)}
+                      producing={producingId === module.id}
+                    />
+                  )}
                 </div>
                 {activity === "drafting" ? (
                   <Badge variant="secondary" pulse>
                     Escribiendo
                   </Badge>
                 ) : drafted ? (
-                  <Button
-                    id={scriptToggleId(module.id)}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggle(module.id)}
-                    aria-expanded={expanded}
-                  >
-                    {expanded ? "Cerrar" : "Revisar guion"}
-                    <ChevronDown className={cn("transition-transform", expanded && "rotate-180")} />
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <PendingChangeBadge module={module} onReview={() => revisions.show({ moduleId: module.id })} />
+                    {/* The open script has its own, above its scenes. */}
+                    {!expanded && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => revisions.show({ moduleId: module.id })}
+                        aria-label={`Pedir un cambio al guion de ${module.title}`}
+                      >
+                        <Sparkles /> Pedir un cambio
+                      </Button>
+                    )}
+                    <Button
+                      id={scriptToggleId(module.id)}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggle(module.id)}
+                      aria-expanded={expanded}
+                    >
+                      {expanded ? "Cerrar" : "Revisar guion"}
+                      <ChevronDown className={cn("transition-transform", expanded && "rotate-180")} />
+                    </Button>
+                  </div>
                 ) : module.generation_status === "failed" ? (
                   <Button variant="outline" size="sm" onClick={() => writeScript(module)} loading={writing}>
                     <RotateCcw /> Reintentar
@@ -195,6 +223,7 @@ export function ContentStep({ course, jobs, dirty, onDirtyChange, onContinue, op
                     rendering={activity === "rendering"}
                     dirty={dirty}
                     onDirtyChange={onDirtyChange}
+                    onRequestChange={(sceneIds) => revisions.show({ moduleId: module.id, sceneIds })}
                   />
                 </div>
               )}
@@ -202,6 +231,9 @@ export function ContentStep({ course, jobs, dirty, onDirtyChange, onContinue, op
           );
         })}
       </ol>
+
+      {/* Applying a change replaces the open script's copy: not while it has edits not saved. */}
+      <RevisionSheet course={course} {...revisions.sheet} unsaved={dirty && openId === revisions.moduleId} />
     </div>
   );
 }
