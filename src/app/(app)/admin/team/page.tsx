@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { KeyRound, MoreHorizontal, Pencil, Search, UserCheck, UserPlus, UserX, Users } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHero } from "@/components/layout/page-hero";
-import { QueryError } from "@/components/layout/query-state";
+import { PageLoading, QueryError } from "@/components/layout/query-state";
 import { PersonDialog, type PersonDialogMode } from "@/components/team/person-dialog";
 import { PersonSheet } from "@/components/team/person-sheet";
+import { TeamTabs } from "@/components/team/team-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,15 +22,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/auth-context";
+import { profileKeys, profilesApi } from "@/lib/api/profiles";
 import type { Role, UserRow } from "@/lib/api/types";
 import { type UserListParams, userKeys, usersApi } from "@/lib/api/users";
 import { initials, plural } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
+import { useOpening } from "@/lib/hooks/use-opening";
 import { toastError } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +75,30 @@ function RoleFilter({ value, onChange }: { value: RoleFilterValue; onChange: (va
   );
 }
 
+/** People of one profile: `?profile=` (a link from the profiles' page), or everyone. */
+function ProfileFilter({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
+  const profiles = useQuery({ queryKey: profileKeys.list, queryFn: profilesApi.list });
+  // The one in the address has its own option before the list loads, and when it isn't in the list (deleted, an old
+  // link): shown as chosen, so that "Todos los perfiles" is a change that clears it.
+  const unlisted = value !== null && !profiles.data?.some((profile) => profile.id === value);
+  return (
+    <Select
+      value={value ?? ""}
+      onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)}
+      aria-label="Filtrar por perfil"
+      className="sm:w-56"
+    >
+      <option value="">Todos los perfiles</option>
+      {unlisted && <option value={value}>{profiles.data ? "Perfil que ya no existe" : "Perfil elegido"}</option>}
+      {profiles.data?.map((profile) => (
+        <option key={profile.id} value={profile.id}>
+          {profile.name}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
 interface RowActions {
   onOpen: (person: UserRow) => void;
   onEdit: (person: UserRow) => void;
@@ -84,6 +113,16 @@ function PersonBadges({ person }: { person: UserRow }) {
       {person.role === "admin" ? <Badge>Administrador</Badge> : <Badge variant="secondary">Colaborador</Badge>}
       {!person.is_active && <Badge variant="outline">Inactivo</Badge>}
     </>
+  );
+}
+
+/** The person's profile: what gives them their learning paths. */
+function ProfileBadge({ name }: { name: string }) {
+  return (
+    <Badge variant="outline" className="max-w-full">
+      <span className="sr-only">Perfil: </span>
+      <span className="truncate">{name}</span>
+    </Badge>
   );
 }
 
@@ -126,10 +165,20 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActi
             <div className="mt-1 flex flex-wrap gap-1.5 sm:hidden">
               <PersonBadges person={person} />
             </div>
+            {person.profile && (
+              <div className="mt-1 md:hidden">
+                <ProfileBadge name={person.profile.name} />
+              </div>
+            )}
           </div>
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell">
+        {person.profile && (
+          <div className="mb-1">
+            <ProfileBadge name={person.profile.name} />
+          </div>
+        )}
         <p className="text-sm">{person.position || "—"}</p>
         <p className="text-xs text-muted-foreground">{person.department}</p>
       </TableCell>
@@ -188,7 +237,7 @@ function PeopleTable({ people, selfId, ...actions }: PeopleTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead>Persona</TableHead>
-            <TableHead className="hidden md:table-cell">Cargo y área</TableHead>
+            <TableHead className="hidden md:table-cell">Perfil y cargo</TableHead>
             <TableHead className="hidden sm:table-cell">Rol</TableHead>
             <TableHead className="hidden lg:table-cell">Cursos terminados</TableHead>
             <TableHead className="w-12">
@@ -206,35 +255,45 @@ function PeopleTable({ people, selfId, ...actions }: PeopleTableProps) {
   );
 }
 
-/**
- * Open state for a dialog or panel that keeps its last value until the next opening, so it doesn't
- * empty while animating closed. `key` changes on each opening: keyed content starts afresh.
- */
-function useOpening<T>(initial: T) {
-  const [state, setState] = useState({ open: false, value: initial, key: 0 });
-  return {
-    ...state,
-    show: (value: T) => setState((current) => ({ open: true, value, key: current.key + 1 })),
-    hide: () => setState((current) => ({ ...current, open: false })),
-  };
+/** `?profile=12`: the team filtered by that profile. */
+function profileIn(value: string | null): number | null {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-export default function TeamPage() {
+/** The team's address with these filters: `?profile=12&inactive=1`, or none. */
+function teamQuery(profileId: number | null, inactive: boolean): string {
+  const query = new URLSearchParams();
+  if (profileId !== null) query.set("profile", String(profileId));
+  if (inactive) query.set("inactive", "1");
+  const search = query.toString();
+  return search ? `?${search}` : "";
+}
+
+function Team() {
   const { user } = useAuth();
   const confirm = useConfirm();
   const { refreshPeople } = useCourseCache();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const profileId = profileIn(searchParams.get("profile"));
+  const showInactive = searchParams.get("inactive") === "1";
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<RoleFilterValue>("all");
-  const [showInactive, setShowInactive] = useState(false);
   const dialog = useOpening<{ person: UserRow | null; mode: PersonDialogMode }>({ person: null, mode: "details" });
   const sheet = useOpening<UserRow | null>(null);
   const searchTerm = useDebouncedValue(search.trim());
   const params: UserListParams = {
     q: searchTerm || undefined,
     role: role === "all" ? undefined : role,
+    profile_id: profileId ?? undefined,
     include_inactive: showInactive,
   };
-  const isFiltered = Boolean(searchTerm) || role !== "all";
+  const isFiltered = Boolean(searchTerm) || role !== "all" || profileId !== null;
+  // The profile and the inactive people live in the address: the profiles' page links to all the people of one
+  // (its count includes the inactive). Through `history`, as the course tabs.
+  const showFilters = (profile: number | null, inactive: boolean) =>
+    window.history.replaceState(null, "", `${pathname}${teamQuery(profile, inactive)}`);
   const people = useQuery({ queryKey: userKeys.list(params), queryFn: () => usersApi.list(params), placeholderData: keepPreviousData });
   const activeUsers = useQuery({ queryKey: userKeys.list(ACTIVE_USERS), queryFn: () => usersApi.list(ACTIVE_USERS) });
 
@@ -277,11 +336,19 @@ export default function TeamPage() {
       />
 
       <section className="container py-10">
-        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <RoleFilter value={role} onChange={setRole} />
+        <TeamTabs />
+        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
+            <RoleFilter value={role} onChange={setRole} />
+            <ProfileFilter value={profileId} onChange={(id) => showFilters(id, showInactive)} />
+          </div>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <label className="flex min-h-10 items-center gap-2 text-sm">
-              <Switch checked={showInactive} onCheckedChange={setShowInactive} aria-label="Mostrar inactivos" />
+              <Switch
+                checked={showInactive}
+                onCheckedChange={(checked) => showFilters(profileId, checked)}
+                aria-label="Mostrar inactivos"
+              />
               Mostrar inactivos
             </label>
             <div className="relative w-full sm:w-72">
@@ -334,5 +401,13 @@ export default function TeamPage() {
       />
       <PersonSheet open={sheet.open} person={sheet.value} onClose={sheet.hide} />
     </>
+  );
+}
+
+export default function TeamPage() {
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <Team />
+    </Suspense>
   );
 }

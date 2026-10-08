@@ -187,6 +187,20 @@ export interface ModuleAttempts {
 
 export type Role = "admin" | "collaborator";
 
+/** A role in the company ("Asesor de flotas"): its people get the learning paths linked to it. */
+export interface ProfileRef {
+  id: number;
+  name: string;
+}
+
+export interface ProfileItem extends ProfileRef {
+  description: string;
+  /** Everyone with the profile (any role, active or not). */
+  user_count: number;
+  /** Paths linked to it, whatever their status. */
+  path_count: number;
+}
+
 export interface UserRow {
   id: number;
   name: string;
@@ -194,10 +208,134 @@ export interface UserRow {
   role: Role;
   position: string;
   department: string;
+  profile: ProfileRef | null;
   is_active: boolean;
   created_at: string | null;
   enrolled_count: number;
   completed_count: number;
+}
+
+// Learning paths: courses in an order for the people of some profiles, and whoever is assigned by hand.
+export type PathStatus = "draft" | "published" | "archived";
+/** How a person got a path: their profile, or an admin by hand (that one stays whatever their profile). */
+export type AssignmentSource = "profile" | "manual";
+/** A person's progress in a path ("overdue": not completed and past its deadline). */
+export type JourneyStatus = "not_started" | "in_progress" | "completed" | "overdue";
+/** A person's state in one course of a path. */
+export type StepStatus = "completed" | "in_progress" | "available" | "locked";
+
+export interface PathSettings {
+  /** Each course opens once the previous one (published) is completed. */
+  sequential: boolean;
+  /** Days to finish the path from the day it is assigned (null: no deadline). */
+  due_days: number | null;
+  certificate: boolean;
+}
+
+export interface CourseRef {
+  course_id: number;
+  title: string;
+}
+
+export interface PathRef {
+  id: number;
+  title: string;
+}
+
+/** Where a course sits in the learner's path: `step` of `steps` (its published courses). */
+export interface CoursePath extends PathRef {
+  step: number;
+  steps: number;
+}
+
+export interface PathRow {
+  id: number;
+  title: string;
+  description: string;
+  status: PathStatus;
+  /** Every course of the path, whatever its status. */
+  course_count: number;
+  profiles: ProfileRef[];
+  people_count: number;
+  completed_count: number;
+  completion_rate: number;
+  updated_at: string | null;
+}
+
+export interface PathCourse {
+  course_id: number;
+  title: string;
+  status: CourseStatus;
+  module_count: number;
+  /** 1-based position in the path. */
+  order: number;
+  cover_url: string | null;
+}
+
+export interface PathDetail {
+  id: number;
+  title: string;
+  description: string;
+  status: PathStatus;
+  settings: PathSettings;
+  profiles: ProfileRef[];
+  /** In path order, every status (learners only see the published ones). */
+  courses: PathCourse[];
+  people_count: number;
+  completed_count: number;
+  published_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface PathPerson {
+  user: { id: number; name: string; email: string; position: string; department: string; profile: ProfileRef | null };
+  source: AssignmentSource;
+  /** False while their profile gives them the path (whatever the source): it is taken away by changing the profile. */
+  removable: boolean;
+  assigned_at: string | null;
+  due_at: string | null;
+  completed_at: string | null;
+  status: JourneyStatus;
+  progress_pct: number;
+  current_course_id: number | null;
+  /** The path's published courses, in order. */
+  steps: { course_id: number; status: StepStatus; progress_pct: number }[];
+}
+
+export interface LearnerPathStep {
+  course_id: number;
+  title: string;
+  cover_url: string | null;
+  status: StepStatus;
+  progress_pct: number;
+  total_modules: number;
+  completed_modules: number;
+  /** The course to complete first (while locked). */
+  locked_by: CourseRef | null;
+}
+
+export interface LearnerPath {
+  id: number;
+  title: string;
+  description: string;
+  status: JourneyStatus;
+  progress_pct: number;
+  assigned_at: string | null;
+  due_at: string | null;
+  completed_at: string | null;
+  /** The course to go on with: the first one neither completed nor locked (null once the path is completed). */
+  current_course_id: number | null;
+  /** Its published courses, in order. */
+  steps: LearnerPathStep[];
+}
+
+/** What completing a course opened in the learner's paths (both null until the course is completed). */
+export interface PathOutcome {
+  /** The next course of its path, now available. */
+  next_course: CourseRef | null;
+  /** The path this course completed. */
+  path_completed: PathRef | null;
 }
 
 export interface Dashboard {
@@ -233,6 +371,11 @@ export interface LearnerCourse {
   total_duration_seconds: number;
   enrolled_at: string | null;
   completed_at: string | null;
+  /** Kept closed by a sequential learning path until `locked_by` is completed. */
+  locked: boolean;
+  locked_by: CourseRef | null;
+  /** The first of the learner's paths with this course. */
+  path: CoursePath | null;
 }
 
 export interface QuizSummary {
@@ -427,7 +570,7 @@ export interface ActivityPlay {
   resumed: boolean;
 }
 
-export interface ActivityMoveResult {
+export interface ActivityMoveResult extends PathOutcome {
   result: Record<string, unknown> & { score: number; done: boolean };
   done: boolean;
   narration: Record<string, string>;
@@ -457,7 +600,7 @@ export interface ActivityAdmin {
   updated_at: string | null;
 }
 
-export interface ActivityFinish {
+export interface ActivityFinish extends PathOutcome {
   score: number;
   max_score: number;
   module_completed: boolean;
@@ -469,6 +612,10 @@ export interface LearnerCourseDetail {
   course: { id: number; title: string; description: string; language: Language };
   enrollment: { id: number; status: EnrollmentStatus; progress_pct: number; completed_at: string | null } | null;
   modules: LearnerModule[];
+  /** Kept closed by a learning path: every module locked, until `locked_by` is completed. */
+  locked: boolean;
+  locked_by: CourseRef | null;
+  path: CoursePath | null;
 }
 
 export interface Choice {
@@ -506,7 +653,7 @@ export type QuizResponse =
   | { matches: Record<string, string> }
   | { text: string };
 
-export interface AttemptResult {
+export interface AttemptResult extends PathOutcome {
   score: number;
   passed: boolean;
   correct: number;
@@ -520,7 +667,7 @@ export interface AttemptResult {
   course_completed: boolean;
 }
 
-export interface CompletionResult {
+export interface CompletionResult extends PathOutcome {
   module_completed: boolean;
   next_module_id: number | null;
   course_completed: boolean;

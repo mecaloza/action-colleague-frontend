@@ -29,6 +29,7 @@ interface NavItem {
 
 const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Panel", exact: true },
+  { href: "/admin/paths", label: "Rutas" },
   { href: "/admin/courses", label: "Cursos" },
   { href: "/admin/team", label: "Equipo" },
 ];
@@ -38,8 +39,18 @@ const LEARNER_NAV: NavItem[] = [
   { href: "/profile", label: "Mi perfil" },
 ];
 
-function isActive(pathname: string, { href, exact }: NavItem): boolean {
+function matches(pathname: string, { href, exact }: NavItem): boolean {
   return pathname === href || (!exact && pathname.startsWith(`${href}/`));
+}
+
+/**
+ * The item of the page on screen: the most specific one that matches, so a section with an item of its own under
+ * another one's prefix (a future `/learn/ranking`) never lights up both. Its pages (`/learn/12`) keep the parent's.
+ */
+function activeItem(pathname: string, nav: NavItem[]): NavItem | undefined {
+  return nav
+    .filter((item) => matches(pathname, item))
+    .reduce<NavItem | undefined>((best, item) => (!best || item.href.length > best.href.length ? item : best), undefined);
 }
 
 function UserMenu({ user, onLogout }: { user: CurrentUser; onLogout: () => void }) {
@@ -47,7 +58,7 @@ function UserMenu({ user, onLogout }: { user: CurrentUser; onLogout: () => void 
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Menú de ${user.name}`}
-        className="hidden items-center gap-3 rounded-sm py-1 pl-1 pr-2 transition-colors hover:bg-mist md:flex"
+        className="hidden items-center gap-3 rounded-sm py-1 pl-1 pr-2 transition-colors hover:bg-mist lg:flex"
       >
         <span className="flex h-8 w-8 items-center justify-center bg-ink-800 text-[11px] font-bold text-white">
           {initials(user.name)}
@@ -82,14 +93,15 @@ interface MobileMenuProps {
   onLogout: () => void;
 }
 
-/** Full-screen menu for small screens (Radix Dialog: focus trap, Escape, scroll lock). */
+/** Full-screen menu for small screens and tablets (Radix Dialog: focus trap, Escape, scroll lock). */
 function MobileMenu({ nav, pathname, user, open, onOpenChange, onLogout }: MobileMenuProps) {
   const close = () => onOpenChange(false);
   const links = nav.some((item) => item.href === "/profile") ? nav : [...nav, { href: "/profile", label: "Mi perfil" }];
+  const active = activeItem(pathname, links);
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Trigger
-        className="flex h-10 w-10 items-center justify-center md:hidden"
+        className="flex h-10 w-10 items-center justify-center lg:hidden"
         aria-label="Abrir menú"
       >
         <Menu className="h-5 w-5" />
@@ -99,7 +111,7 @@ function MobileMenu({ nav, pathname, user, open, onOpenChange, onLogout }: Mobil
           <DialogPrimitive.Portal forceMount>
             <DialogPrimitive.Content forceMount asChild aria-describedby={undefined}>
               <motion.div
-                className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-ink-950 text-white md:hidden"
+                className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-ink-950 text-white lg:hidden"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -114,7 +126,7 @@ function MobileMenu({ nav, pathname, user, open, onOpenChange, onLogout }: Mobil
                 </div>
                 <nav className="container mt-10 flex flex-col gap-2" aria-label="Principal">
                   {links.map((item, index) => {
-                    const active = isActive(pathname, item);
+                    const current = item === active;
                     return (
                       <motion.div
                         key={item.href}
@@ -125,10 +137,10 @@ function MobileMenu({ nav, pathname, user, open, onOpenChange, onLogout }: Mobil
                         <Link
                           href={item.href}
                           onClick={close}
-                          aria-current={active ? "page" : undefined}
+                          aria-current={current ? "page" : undefined}
                           className={cn(
                             "block py-2 font-display text-4xl font-medium tracking-tightest",
-                            active ? "text-accent" : "text-white",
+                            current ? "text-accent" : "text-white",
                           )}
                         >
                           {item.label}
@@ -181,6 +193,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (status !== "authenticated" || !user || lacksAdminAccess) return <SplashScreen />;
 
   const nav = user.role === "admin" ? ADMIN_NAV : LEARNER_NAV;
+  const active = activeItem(pathname, nav);
   const handleLogout = () => {
     signingOut.current = true;
     setMenuOpen(false);
@@ -195,17 +208,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Logo />
           </Link>
 
-          <nav className="hidden flex-1 items-center justify-center gap-10 md:flex" aria-label="Principal">
+          {/* Four items and the user's name only fit side by side from lg: below, the menu holds them. */}
+          <nav className="hidden flex-1 items-center justify-center gap-8 lg:flex" aria-label="Principal">
             {nav.map((item) => {
-              const active = isActive(pathname, item);
+              const current = item === active;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  aria-current={active ? "page" : undefined}
+                  aria-current={current ? "page" : undefined}
                   className={cn(
                     "relative py-1 text-[11.5px] font-bold uppercase tracking-label transition-colors hover:text-accent",
-                    active ? "text-accent" : "text-ink-800",
+                    current ? "text-accent" : "text-ink-800",
                   )}
                 >
                   {item.label}

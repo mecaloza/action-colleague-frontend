@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Lock } from "lucide-react";
 import { EnrollmentBadge } from "@/components/courses/status-badge";
 import { QueryError } from "@/components/layout/query-state";
+import { pathPlace } from "@/components/learn/learner-course-card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -18,7 +19,11 @@ function PersonCourses({ person }: { person: UserRow }) {
   if (courses.isPending) return <Skeleton className="h-40" />;
   if (!courses.data) return <QueryError query={courses} />;
   if (!courses.data.length) {
-    return <p className="text-sm text-muted-foreground">No tiene cursos asignados. Asígnalos desde cada curso, en Participantes.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        No tiene cursos asignados. Asígnalos desde cada curso, en Participantes, o con una ruta de aprendizaje.
+      </p>
+    );
   }
   return (
     <ul className="space-y-3">
@@ -39,6 +44,12 @@ function PersonCourses({ person }: { person: UserRow }) {
             {course.completed_modules} de {plural(course.total_modules, "módulo")}
             {course.completed_at ? ` · terminado el ${formatDate(course.completed_at)}` : ""}
           </p>
+          {course.path && <p className="mt-1 text-xs text-muted-foreground">{pathPlace(course)}</p>}
+          {course.locked_by && (
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden /> Se desbloquea al terminar «{course.locked_by.title}»
+            </p>
+          )}
         </li>
       ))}
     </ul>
@@ -64,6 +75,7 @@ function PersonDetail({ person }: { person: UserRow }) {
       </SheetHeader>
       <SheetBody className="space-y-8">
         <dl className="grid grid-cols-2 gap-4 text-sm">
+          <Detail label="Perfil">{person.profile?.name ?? "Sin perfil"}</Detail>
           <Detail label="Cargo">{person.position || "—"}</Detail>
           <Detail label="Área">{person.department || "—"}</Detail>
           <Detail label="Desde">{formatDate(person.created_at)}</Detail>

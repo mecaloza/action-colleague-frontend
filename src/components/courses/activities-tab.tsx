@@ -85,7 +85,7 @@ export function ActivitiesTab({ course }: { course: CourseDetail }) {
 function ModuleActivities({ courseId, language, module }: { courseId: number; language: Language; module: ModuleAdmin }) {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
-  const { refreshCourse, refreshPeople } = useCourseCache();
+  const { refreshPeople } = useCourseCache();
   const key = activityKeys.module(module.id);
   const [jobId, setJobId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ActivityAdmin | null>(null);
@@ -115,7 +115,7 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
   // Unpublished or deleted: whoever only had it pending completed the module, so the course's progress changed
   // (participants, results, the course's counts; each person's courses in Equipo, and the panel).
   const refreshProgress = () =>
-    Promise.all([queryClient.invalidateQueries({ queryKey: key }), refreshCourse(courseId), refreshPeople()]);
+    Promise.all([queryClient.invalidateQueries({ queryKey: key }), refreshPeople()]);
 
   useEffect(() => {
     const status = job.data?.status;

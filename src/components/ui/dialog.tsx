@@ -3,6 +3,7 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { matchesMedia, TOUCH_ONLY } from "@/lib/hooks/use-media-query";
 import { useReturnFocus } from "@/lib/hooks/use-return-focus";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +48,16 @@ const DialogContent = React.forwardRef<
 });
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
+/**
+ * For `onOpenAutoFocus` of a dialog that starts on a field only to type in it later (a search): on a touch screen it
+ * starts on the dialog itself, so the keyboard doesn't pop up over what is being picked.
+ */
+function keepKeyboardDown(event: Event) {
+  if (!matchesMedia(TOUCH_ONLY)) return;
+  event.preventDefault();
+  (event.target as HTMLElement).focus();
+}
+
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("mb-6 flex flex-col gap-2 pr-8", className)} {...props} />;
 }
@@ -84,4 +95,5 @@ export {
   DialogTitle,
   DialogDescription,
   DialogClose,
+  keepKeyboardDown,
 };

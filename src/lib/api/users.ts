@@ -8,11 +8,14 @@ export interface UserInput {
   role: Role;
   position: string;
   department: string;
+  /** Null: no profile (on an edit, removes it). */
+  profile_id: number | null;
 }
 
 export interface UserListParams {
   q?: string;
   role?: Role;
+  profile_id?: number;
   include_inactive?: boolean;
 }
 
