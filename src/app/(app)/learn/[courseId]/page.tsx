@@ -159,9 +159,11 @@ function CoursePlayer() {
     content.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const refreshCourse = () => queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
+
   /** After a module is done: refresh the course (unlocks the next), then go on or celebrate. */
   const advance = async (result: Pick<CompletionResult, "course_completed" | "next_module_id"> & PathOutcome) => {
-    await queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
+    await refreshCourse();
     void queryClient.invalidateQueries({ queryKey: learnKeys.courses });
     void queryClient.invalidateQueries({ queryKey: learnKeys.paths });
     // A completed course may open the next one of its path: other courses seen before load afresh (never shown locked
@@ -183,7 +185,7 @@ function CoursePlayer() {
     onError: (error) => {
       toastError(error);
       // e.g. the admin added a quiz meanwhile, or another device completed it: show the course as it is now.
-      void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
+      void refreshCourse();
     },
   });
 
@@ -262,7 +264,7 @@ function CoursePlayer() {
             finish: learnApi.finishActivity,
           }}
           onFinished={(result) => {
-            void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
+            void refreshCourse();
             // Playing again for a better score moves nothing on; the play that completed the module does: as the
             // activity on screen closes (this one, or another opened meanwhile), or right away if none is open.
             if (playing.wasCompleted || !result.module_completed) return;
@@ -270,7 +272,7 @@ function CoursePlayer() {
             else void advance(result);
           }}
           // Its save as it closed failed: the module shows what the server kept (the last move counted the play).
-          onRecordFailed={() => void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) })}
+          onRecordFailed={() => void refreshCourse()}
           onOpenChange={(open) => {
             if (open) return;
             playerOpen.current = false;
@@ -279,7 +281,7 @@ function CoursePlayer() {
             finishedPlay.current = null;
             if (result) void advance(result);
             // A play left open is resumed from its card ("Continuar"); one that ended shows once it is recorded.
-            else void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
+            else void refreshCourse();
           }}
         />
       )}

@@ -1,20 +1,13 @@
 import Link from "next/link";
 import { Check, Lock, PlayCircle, Trophy } from "lucide-react";
-import { JourneyBadge } from "@/components/paths/path-badges";
+import { Deadline, JourneyBadge } from "@/components/paths/path-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { LearnerCourse, LearnerPath, LearnerPathStep } from "@/lib/api/types";
-import { formatDate, formatPercent, plural } from "@/lib/format";
+import { formatPercent, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { courseHref } from "./learner-course-card";
-
-/** "Vence el 12 oct 2026", "Venció el…", "Completada el…" (nothing without a deadline). */
-function deadline(path: LearnerPath): string | null {
-  if (path.status === "completed") return path.completed_at ? `Completada el ${formatDate(path.completed_at)}` : null;
-  if (!path.due_at) return null;
-  return `${path.status === "overdue" ? "Venció" : "Vence"} el ${formatDate(path.due_at)}`;
-}
 
 /** The line under a step's title: where the learner is in it, or what unlocks it. */
 function stepNote(step: LearnerPathStep, current: boolean): string {
@@ -79,7 +72,8 @@ function JourneyStep({ step, index, last, current }: { step: LearnerPathStep; in
 function PathJourney({ path, courses }: { path: LearnerPath; courses: LearnerCourse[] }) {
   const current = path.steps.find((step) => step.course_id === path.current_course_id) ?? null;
   const completed = path.steps.filter((step) => step.status === "completed").length;
-  const due = deadline(path);
+  // Nothing to say without a deadline (or, once completed, without its date).
+  const hasDeadline = Boolean(path.status === "completed" ? path.completed_at : path.due_at);
   // The module to resume, as the course cards do.
   const nextModule = courses.find((course) => course.course_id === current?.course_id)?.next_module_id ?? null;
   const titleId = `learner-path-${path.id}`;
@@ -88,11 +82,7 @@ function PathJourney({ path, courses }: { path: LearnerPath; courses: LearnerCou
       <div className="space-y-4 border-b border-border p-5 sm:p-6">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <JourneyBadge status={path.status} />
-          {due && (
-            <span className={cn("text-xs", path.status === "overdue" ? "font-semibold text-destructive" : "text-muted-foreground")}>
-              {due}
-            </span>
-          )}
+          {hasDeadline && <Deadline journey={path} />}
         </div>
         <div>
           <p className="eyebrow mb-2">Ruta de aprendizaje</p>

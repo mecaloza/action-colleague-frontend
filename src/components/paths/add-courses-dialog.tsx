@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { CourseSummary } from "@/lib/api/types";
 import { plural } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { cn, toggled } from "@/lib/utils";
 
 function CourseOption({ course, order, onToggle }: { course: CourseSummary; order: number; onToggle: () => void }) {
   const selected = order > 0;
@@ -84,9 +84,6 @@ export function AddCoursesDialog({ open, onOpenChange, excludedIds, room, saving
   );
   const tooMany = picked.length > room;
 
-  const toggle = (id: number) =>
-    setPicked((current) => (current.includes(id) ? current.filter((other) => other !== id) : [...current, id]));
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl" onOpenAutoFocus={keepKeyboardDown}>
@@ -111,7 +108,7 @@ export function AddCoursesDialog({ open, onOpenChange, excludedIds, room, saving
           {tooMany
             ? `La ruta admite ${plural(room, "curso")} más: quita ${plural(picked.length - room, "curso")} de tu selección.`
             : picked.length
-              ? `${plural(picked.length, "curso elegido", "cursos elegidos")}`
+              ? plural(picked.length, "curso elegido", "cursos elegidos")
               : plural(candidates.length, "disponible")}
         </p>
         {courses.error ? (
@@ -128,7 +125,7 @@ export function AddCoursesDialog({ open, onOpenChange, excludedIds, room, saving
                 key={course.id}
                 course={course}
                 order={picked.indexOf(course.id) + 1}
-                onToggle={() => toggle(course.id)}
+                onToggle={() => setPicked((current) => toggled(current, course.id))}
               />
             ))}
             {!courses.isLoading && candidates.length === 0 && (

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Lock } from "lucide-react";
 import { EnrollmentBadge } from "@/components/courses/status-badge";
 import { QueryError } from "@/components/layout/query-state";
+import { pathPlace } from "@/components/learn/learner-course-card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -43,11 +44,7 @@ function PersonCourses({ person }: { person: UserRow }) {
             {course.completed_modules} de {plural(course.total_modules, "módulo")}
             {course.completed_at ? ` · terminado el ${formatDate(course.completed_at)}` : ""}
           </p>
-          {course.path && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Ruta {course.path.title} · curso {course.path.step} de {course.path.steps}
-            </p>
-          )}
+          {course.path && <p className="mt-1 text-xs text-muted-foreground">{pathPlace(course)}</p>}
           {course.locked_by && (
             <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
               <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden /> Se desbloquea al terminar «{course.locked_by.title}»

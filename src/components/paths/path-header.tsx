@@ -23,6 +23,13 @@ const STATUS_SAVED: Record<PathStatus, (path: PathDetail) => string> = {
   archived: () => "Ruta archivada: las personas ya no la ven",
 };
 
+/** What deleting does to the people who have the path (they keep their courses either way). */
+function peopleLoseNote(count: number): string {
+  if (count === 0) return "";
+  if (count === 1) return "Se le quita a la persona que la tiene, que conserva sus cursos y su avance. ";
+  return `Se les quita a sus ${count} personas, que conservan sus cursos y su avance. `;
+}
+
 /** Black band at the top of a path: status, title, figures and the publish, draft, archive and delete actions. */
 export function PathHeader({ path }: { path: PathDetail }) {
   const router = useRouter();
@@ -65,13 +72,9 @@ export function PathHeader({ path }: { path: PathDetail }) {
   const askRemove = async () => {
     const confirmed = await confirm({
       title: "¿Eliminar esta ruta?",
-      description: `${
-        path.people_count === 0
-          ? ""
-          : path.people_count === 1
-            ? "Se le quita a la persona que la tiene, que conserva sus cursos y su avance. "
-            : `Se les quita a sus ${path.people_count} personas, que conservan sus cursos y su avance. `
-      }No se puede deshacer${path.status === "archived" ? "." : "; si solo quieres ocultarla, archívala."}`,
+      description: `${peopleLoseNote(path.people_count)}No se puede deshacer${
+        path.status === "archived" ? "." : "; si solo quieres ocultarla, archívala."
+      }`,
       confirmLabel: "Eliminar ruta",
       destructive: true,
     });

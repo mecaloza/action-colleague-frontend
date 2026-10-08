@@ -20,6 +20,7 @@ import { plural } from "@/lib/format";
 import { usePathCache } from "@/lib/hooks/use-path-cache";
 import { useUnsavedChangesWarning } from "@/lib/hooks/use-unsaved-changes-warning";
 import { toastError } from "@/lib/notify";
+import { toggled } from "@/lib/utils";
 
 const TITLE_ERROR_ID = "path-title-error";
 const DUE_HINT_ID = "path-due-hint";
@@ -199,9 +200,7 @@ function SettingsForm({ path }: { path: PathDetail }) {
       <ProfilesField
         selected={profileIds}
         published={published}
-        onToggle={(id) =>
-          setProfileIds((current) => (current.includes(id) ? current.filter((other) => other !== id) : [...current, id]))
-        }
+        onToggle={(id) => setProfileIds((current) => toggled(current, id))}
       />
 
       <div className="divide-y divide-border border border-border bg-white">

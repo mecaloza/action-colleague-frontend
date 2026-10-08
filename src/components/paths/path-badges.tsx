@@ -39,11 +39,16 @@ export function SourceBadge({ source }: { source: AssignmentSource }) {
   return <Badge variant="outline">{source === "profile" ? "Por perfil" : "Manual"}</Badge>;
 }
 
-/** "Vence el 12 oct 2026", "Venció el…", "Completada el…", or "Sin plazo". */
-export function deadlineText(person: Pick<PathPerson, "status" | "due_at" | "completed_at">): string {
-  if (person.status === "completed") return `Completada el ${formatDate(person.completed_at)}`;
-  if (!person.due_at) return "Sin plazo";
-  return `${person.status === "overdue" ? "Venció" : "Vence"} el ${formatDate(person.due_at)}`;
+/** "Vence el 12 oct 2026", "Venció el…" (in red), "Completada el…", or "Sin plazo". Learners and admins read the same. */
+export function Deadline({ journey }: { journey: Pick<PathPerson, "status" | "due_at" | "completed_at"> }) {
+  const { status, due_at, completed_at } = journey;
+  const text =
+    status === "completed"
+      ? `Completada el ${formatDate(completed_at)}`
+      : !due_at
+        ? "Sin plazo"
+        : `${status === "overdue" ? "Venció" : "Vence"} el ${formatDate(due_at)}`;
+  return <span className={cn("text-xs", status === "overdue" ? "font-semibold text-destructive" : "text-muted-foreground")}>{text}</span>;
 }
 
 const STEP_STYLE: Record<StepStatus, { label: string; className: string }> = {

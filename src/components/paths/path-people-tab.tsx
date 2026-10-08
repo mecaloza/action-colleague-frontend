@@ -20,7 +20,7 @@ import { useOpening } from "@/lib/hooks/use-opening";
 import { usePathCache } from "@/lib/hooks/use-path-cache";
 import { toastError } from "@/lib/notify";
 import { cn } from "@/lib/utils";
-import { JourneyBadge, SourceBadge, StepChips, StepLegend, deadlineText } from "./path-badges";
+import { Deadline, JourneyBadge, SourceBadge, StepChips, StepLegend } from "./path-badges";
 
 /** The path comes with their profile: taking it away by hand would not last (the server answers the same). */
 function profileReason(person: PathPerson): string {
@@ -42,43 +42,22 @@ function assignedNote(path: PathDetail): string {
   return `La verán en «Mis cursos» de inmediato y quedarán inscritas en ${courses === 1 ? "su curso" : `sus ${courses} cursos`}.`;
 }
 
-/** "Vence el…" in red once it is past. */
-function Deadline({ person }: { person: PathPerson }) {
-  return (
-    <span className={cn("text-xs", person.status === "overdue" ? "font-semibold text-destructive" : "text-muted-foreground")}>
-      {deadlineText(person)}
-    </span>
-  );
-}
-
 /**
  * "Quitar": only someone whose profile doesn't give them the path can lose it by hand. For the others it stays
  * tappable (dimmed) and says why, as a locked module does.
  */
 function RemoveButton({ person, onRemove, compact }: Omit<PersonViewProps, "titles"> & { compact?: boolean }) {
-  const label = `Quitar la ruta a ${person.user.name}`;
-  const onClick = () => (person.removable ? onRemove() : toast(profileReason(person), { id: `path-person-${person.user.id}` }));
-  return compact ? (
+  return (
     <Button
       variant="ghost"
-      size="icon-sm"
-      aria-label={label}
+      size={compact ? "icon-sm" : "sm"}
+      className={cn(!compact && "-mr-2 ml-auto", !person.removable && "opacity-45")}
+      aria-label={`Quitar la ruta a ${person.user.name}`}
       aria-disabled={!person.removable || undefined}
-      className={cn(!person.removable && "opacity-45")}
-      onClick={onClick}
+      onClick={() => (person.removable ? onRemove() : toast(profileReason(person), { id: `path-person-${person.user.id}` }))}
     >
       <UserMinus />
-    </Button>
-  ) : (
-    <Button
-      variant="ghost"
-      size="sm"
-      className={cn("-mr-2 ml-auto", !person.removable && "opacity-45")}
-      aria-label={label}
-      aria-disabled={!person.removable || undefined}
-      onClick={onClick}
-    >
-      <UserMinus /> Quitar
+      {!compact && " Quitar"}
     </Button>
   );
 }
@@ -109,7 +88,7 @@ function PersonCard({ person, titles, onRemove }: PersonViewProps) {
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="flex flex-wrap items-center gap-2">
           <SourceBadge source={person.source} />
-          <Deadline person={person} />
+          <Deadline journey={person} />
         </span>
         <RemoveButton person={person} onRemove={onRemove} />
       </div>
@@ -128,7 +107,7 @@ function PersonRow({ person, titles, onRemove }: PersonViewProps) {
       <TableCell>
         <div className="flex flex-col items-start gap-1.5">
           <JourneyBadge status={person.status} />
-          <Deadline person={person} />
+          <Deadline journey={person} />
         </div>
       </TableCell>
       <TableCell>
