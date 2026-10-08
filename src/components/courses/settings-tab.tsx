@@ -23,20 +23,20 @@ const choiceOf = (value: boolean | null | undefined): CertificateChoice =>
   value === true ? "yes" : value === false ? "no" : "platform";
 const CHOICE_VALUES: Record<CertificateChoice, boolean | null> = { platform: null, yes: true, no: false };
 
+function ruleOf(choice: CertificateChoice, platformEnabled: boolean | undefined): string {
+  if (choice === "no") return "Quien lo complete no recibe certificado (se le puede emitir a mano).";
+  if (choice === "yes") return "Quien lo complete recibe certificado, aunque la emisión automática esté apagada en Parámetros.";
+  if (platformEnabled === undefined) return "Sigue lo que digan los Parámetros.";
+  return platformEnabled
+    ? "Hoy los Parámetros emiten certificados al completar un curso."
+    : "Hoy los Parámetros no emiten certificados automáticamente.";
+}
+
 /** What "Usar el parámetro general" does today (nothing until the parameters load). */
 function PlatformCertificateHint({ choice }: { choice: CertificateChoice }) {
   const settings = useQuery({ queryKey: settingsKeys.all, queryFn: settingsApi.get });
   const certificates = settings.data?.certificates;
-  const rule =
-    choice === "no"
-      ? "Quien lo complete no recibe certificado (se le puede emitir a mano)."
-      : choice === "yes"
-        ? "Quien lo complete recibe certificado, aunque la emisión automática esté apagada en Parámetros."
-        : certificates
-          ? certificates.enabled
-            ? "Hoy los Parámetros emiten certificados al completar un curso."
-            : "Hoy los Parámetros no emiten certificados automáticamente."
-          : "Sigue lo que digan los Parámetros.";
+  const rule = ruleOf(choice, certificates?.enabled);
   const minimum =
     choice !== "no" && certificates?.min_score != null
       ? ` Necesita una nota promedio de al menos ${certificates.min_score}% en sus evaluaciones.`

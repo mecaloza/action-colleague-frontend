@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
 /** The zones of the region (and a few more), by the city people know them by. */
-export const COMMON_ZONES: { value: string; city: string }[] = [
+const COMMON_ZONES: { value: string; city: string }[] = [
   { value: "America/Mexico_City", city: "Ciudad de México" },
   { value: "America/Monterrey", city: "Monterrey" },
   { value: "America/Cancun", city: "Cancún" },

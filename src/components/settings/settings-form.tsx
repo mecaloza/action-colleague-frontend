@@ -207,6 +207,8 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
 
   const values = valuesOf(fields);
   // A wrong value is said as it is typed; a required one left empty, once saving was tried.
+  const requiredError = (value: number | null | undefined, message: string) =>
+    value === undefined || (value === null && attempted) ? message : null;
   const errors = {
     timezone:
       values.timezone !== null
@@ -216,9 +218,8 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
           : attempted
             ? MESSAGES.timezoneEmpty
             : null,
-    passingScore:
-      values.passingScore === undefined || (values.passingScore === null && attempted) ? MESSAGES.passingScore : null,
-    maxAttempts: values.maxAttempts === undefined || (values.maxAttempts === null && attempted) ? MESSAGES.maxAttempts : null,
+    passingScore: requiredError(values.passingScore, MESSAGES.passingScore),
+    maxAttempts: requiredError(values.maxAttempts, MESSAGES.maxAttempts),
     validityMonths: values.validityMonths === undefined ? MESSAGES.validityMonths : null,
     minScore: values.minScore === undefined ? MESSAGES.minScore : null,
   };
@@ -256,7 +257,6 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
   });
   // Nothing to save, or a save on its way: "Guardar cambios" waits.
   const waiting = !dirty || save.isPending;
-  const validity = values.validityMonths ?? null;
 
   return (
     <form
@@ -395,7 +395,7 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
           companyName={fields.companyName}
           signerName={fields.signerName}
           signerTitle={fields.signerTitle}
-          validityMonths={validity}
+          validityMonths={values.validityMonths ?? null}
           timezone={values.timezone}
           enabled={fields.enabled}
         />

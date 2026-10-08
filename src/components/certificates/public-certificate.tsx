@@ -4,14 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { CertificateKind, CertificateStatus, PublicCertificate } from "@/lib/api/types";
 import { formatLongDate } from "@/lib/format";
-import { safeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
-import { CertificateStatusBadge } from "./certificate-badges";
+import { CertificateStatusBadge, servedPdfUrl } from "./certificate-badges";
 
 const decimal = new Intl.NumberFormat("es", { maximumFractionDigits: 1 });
 
 /** "45 minutos", "1 hora", "3,5 horas", as the PDF says it; null without videos (readings and documents). */
-export function hoursText(hours: number): string | null {
+function hoursText(hours: number): string | null {
   if (hours <= 0) return null;
   if (hours < 1) {
     const minutes = Math.max(1, Math.round(hours * 60));
@@ -22,9 +21,9 @@ export function hoursText(hours: number): string | null {
 }
 
 /** "92 %", "86,7 %". */
-export const scoreText = (score: number) => `${decimal.format(score)} %`;
+const scoreText = (score: number) => `${decimal.format(score)} %`;
 
-export const KIND_TEXTS: Record<CertificateKind, { eyebrow: string; lead: string }> = {
+const KIND_TEXTS: Record<CertificateKind, { eyebrow: string; lead: string }> = {
   course: { eyebrow: "Certificado de finalización", lead: "completó el curso" },
   path: { eyebrow: "Certificado de ruta completada", lead: "completó la ruta de aprendizaje" },
 };
@@ -111,7 +110,7 @@ export function PublicCertificateView({ certificate }: { certificate: PublicCert
   const zone = details.timezone;
   const hours = hoursText(details.hours);
   const signer = [details.signer_name, details.signer_title].filter(Boolean).join(", ");
-  const pdf = status === "revoked" ? undefined : safeHttpUrl(certificate.pdf_url);
+  const pdf = servedPdfUrl(certificate);
   const courses = certificate.kind === "path" ? details.courses : [];
 
   return (

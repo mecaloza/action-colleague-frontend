@@ -9,11 +9,10 @@ import { learnApi, learnKeys } from "@/lib/api/learn";
 import type { LearnerCertificate } from "@/lib/api/types";
 import { formatPercent } from "@/lib/format";
 import { safeHttpUrl } from "@/lib/safe-url";
-import { CERTIFICATE_KIND, CertificateStatusBadge, certificateDates } from "./certificate-badges";
+import { CERTIFICATE_KIND, CertificateStatusBadge, certificateDates, servedPdfUrl } from "./certificate-badges";
 
 function CertificateCard({ certificate }: { certificate: LearnerCertificate }) {
-  const revoked = certificate.status === "revoked";
-  const pdf = revoked ? undefined : safeHttpUrl(certificate.pdf_url); // a revoked one's PDF is no longer served
+  const pdf = servedPdfUrl(certificate);
   const verify = safeHttpUrl(certificate.verify_url);
   // Every card has the same two links: screen readers hear which certificate each one is for.
   const of = <span className="sr-only"> «{certificate.title}»</span>;
@@ -33,7 +32,7 @@ function CertificateCard({ certificate }: { certificate: LearnerCertificate }) {
       <p className="mt-1 break-all text-sm">
         Código <span className="font-semibold">{certificate.code}</span>
       </p>
-      {revoked && (
+      {certificate.status === "revoked" && (
         <p className="mt-2 text-sm text-muted-foreground">Ya no es válido. Si crees que es un error, habla con tu administrador.</p>
       )}
       <div className="mt-auto flex flex-wrap gap-2 pt-4">

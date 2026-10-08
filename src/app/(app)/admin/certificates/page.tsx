@@ -5,7 +5,7 @@ import Link from "next/link";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Award, Ban, ChevronLeft, ChevronRight, Download, MoreHorizontal, Plus, RefreshCw, Search, ShieldCheck } from "lucide-react";
-import { CERTIFICATE_KIND, CertificateStatusBadge } from "@/components/certificates/certificate-badges";
+import { CERTIFICATE_KIND, CertificateStatusBadge, expiryText, servedPdfUrl } from "@/components/certificates/certificate-badges";
 import { IssueCertificateDialog } from "@/components/certificates/issue-certificate-dialog";
 import { RevokeCertificateDialog } from "@/components/certificates/revoke-certificate-dialog";
 import { useConfirm } from "@/components/layout/confirm-dialog";
@@ -100,9 +100,7 @@ function ScopeFilter({ value, onChange }: { value: string; onChange: (value: str
 
 /** "Vence el 8 oct 2027", "Venció el…", "No vence", or when and why it was revoked. */
 function validityOf(certificate: AdminCertificate): string {
-  if (certificate.status === "revoked") return `Revocado el ${formatDate(certificate.revoked_at)}`;
-  if (!certificate.expires_at) return "No vence";
-  return `${certificate.status === "expired" ? "Venció" : "Vence"} el ${formatDate(certificate.expires_at)}`;
+  return certificate.status === "revoked" ? `Revocado el ${formatDate(certificate.revoked_at)}` : expiryText(certificate);
 }
 
 interface RowActionsProps {
@@ -113,8 +111,7 @@ interface RowActionsProps {
 
 /** Download, verify, reissue and revoke, in the row's menu. */
 function CertificateActions({ certificate, onReissue, onRevoke }: RowActionsProps) {
-  const revoked = certificate.status === "revoked";
-  const pdf = revoked ? undefined : safeHttpUrl(certificate.pdf_url); // a revoked one's PDF is no longer served
+  const pdf = servedPdfUrl(certificate);
   const verify = safeHttpUrl(certificate.verify_url);
   return (
     <DropdownMenu>
@@ -142,7 +139,7 @@ function CertificateActions({ certificate, onReissue, onRevoke }: RowActionsProp
         <DropdownMenuItem onSelect={() => onReissue(certificate)}>
           <RefreshCw /> Reemitir
         </DropdownMenuItem>
-        {!revoked && (
+        {certificate.status !== "revoked" && (
           <DropdownMenuItem destructive onSelect={() => onRevoke(certificate)}>
             <Ban /> Revocar
           </DropdownMenuItem>
