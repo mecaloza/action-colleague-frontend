@@ -1,6 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { courseKeys } from "@/lib/api/courses";
 import { dashboardKeys } from "@/lib/api/dashboard";
+import { pathKeys } from "@/lib/api/paths";
+import { profileKeys } from "@/lib/api/profiles";
 import { userKeys } from "@/lib/api/users";
 import type { CourseDetail, Participant } from "@/lib/api/types";
 
@@ -12,11 +14,16 @@ import type { CourseDetail, Participant } from "@/lib/api/types";
 export function useCourseCache() {
   const queryClient = useQueryClient();
 
-  /** People or their enrollments changed: refetch the team (lists, each person's courses) and the panel's counts. */
+  /**
+   * People or their enrollments changed: refetch the team (lists, each person's courses), the panel's counts, and
+   * the paths and profiles (a person's profile, role or active state decides the paths they get by profile).
+   */
   const refreshPeople = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: userKeys.all }),
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all }),
+      queryClient.invalidateQueries({ queryKey: pathKeys.all }),
+      queryClient.invalidateQueries({ queryKey: profileKeys.all }),
     ]);
 
   return {

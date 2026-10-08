@@ -95,6 +95,7 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
       setResult(graded);
       void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
       void queryClient.invalidateQueries({ queryKey: learnKeys.courses });
+      void queryClient.invalidateQueries({ queryKey: learnKeys.paths }); // the path's progress
     },
     onError: (error) => {
       // Whatever it was (the quiz changed, no attempts left, already passed elsewhere): show the course as it is.

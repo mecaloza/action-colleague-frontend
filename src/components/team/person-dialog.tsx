@@ -2,21 +2,22 @@
 
 import { useRef, useState, type RefObject } from "react";
 import { flushSync } from "react-dom";
-import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Copy, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useAuth } from "@/contexts/auth-context";
 import { ApiError } from "@/lib/api/client";
-import type { Role, UserRow } from "@/lib/api/types";
+import { profileKeys, profilesApi } from "@/lib/api/profiles";
+import type { ProfileRef, Role, UserRow } from "@/lib/api/types";
 import { type UserInput, userKeys, usersApi } from "@/lib/api/users";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { toastError } from "@/lib/notify";
-import { cn } from "@/lib/utils";
 
 const PASSWORD_CHARS = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O, 1/l/I
 const PASSWORD_LENGTH = 12;
@@ -48,6 +49,12 @@ function temporaryPassword(): string {
   return Array.from(values, (value) => PASSWORD_CHARS[value % PASSWORD_CHARS.length]).join("");
 }
 
+/** The person as the form saves them: their profile by id. */
+function savedFields(person: UserRow): PersonFields {
+  const { name, email, role, position, department, profile } = person;
+  return { name, email, role, position, department, profile_id: profile?.id ?? null };
+}
+
 /** Only what the admin changed: a stale copy of the person never overwrites newer data. */
 function changedFields<T extends object>(saved: T, edited: T): Partial<T> {
   const changes: Partial<T> = {};
@@ -55,18 +62,6 @@ function changedFields<T extends object>(saved: T, edited: T): Partial<T> {
     if (edited[key] !== saved[key]) changes[key] = edited[key];
   }
   return changes;
-}
-
-/**
- * A field's problem, linked to it with aria-describedby. Always rendered, empty when there is none:
- * as a live region it is read out even when the field already had focus (Enter from that field).
- */
-function FieldError({ id, message }: { id: string; message: string | null }) {
-  return (
-    <p id={id} aria-live="polite" className={cn("text-xs text-destructive", message && "mt-1.5")}>
-      {message}
-    </p>
-  );
 }
 
 /** Copies a password; `failureMessage` says what to do when the browser refuses (no permission, insecure page). */
@@ -141,6 +136,10 @@ function PersonForm({ open, person, mode, nameField, passwordField, onDone }: Pe
   const [role, setRole] = useState<Role>(person?.role ?? "collaborator");
   const [position, setPosition] = useState(person?.position ?? "");
   const [department, setDepartment] = useState(person?.department ?? "");
+  const [profileId, setProfileId] = useState<number | null>(person?.profile?.id ?? null);
+  const profiles = useQuery({ queryKey: profileKeys.list, queryFn: profilesApi.list, enabled: open });
+  // Their own profile shows while the list loads.
+  const profileOptions: ProfileRef[] = profiles.data ?? (person?.profile ? [person.profile] : []);
   // A new person, and "Nueva contraseña", start with a temporary password; editing the data leaves it empty.
   const [password, setPassword] = useState(() => (!editing || (mode === "password" && !isSelf) ? temporaryPassword() : ""));
   // Problems show once the field is left or a save is attempted, not while it is first typed.
@@ -156,6 +155,7 @@ function PersonForm({ open, person, mode, nameField, passwordField, onDone }: Pe
     role,
     position: position.trim(),
     department: department.trim(),
+    profile_id: profileId,
   };
   // An unchanged email isn't checked again: older accounts may have one the pattern rejects.
   const emailOk = (editing && fields.email === person.email) || EMAIL_PATTERN.test(fields.email);
@@ -171,7 +171,7 @@ function PersonForm({ open, person, mode, nameField, passwordField, onDone }: Pe
     mutationFn: (input: SaveInput) =>
       editing
         ? usersApi.update(person.id, {
-            ...changedFields<PersonFields>(person, input.fields),
+            ...changedFields(savedFields(person), input.fields),
             ...(input.password ? { password: input.password } : {}),
           })
         : usersApi.create({ ...input.fields, password: input.password }),
@@ -303,6 +303,27 @@ function PersonForm({ open, person, mode, nameField, passwordField, onDone }: Pe
               No puedes cambiar tu propio rol.
             </p>
           )}
+        </div>
+        <div>
+          <Label htmlFor="person-profile">Perfil</Label>
+          <Select
+            id="person-profile"
+            value={profileId ?? ""}
+            onChange={(event) => setProfileId(event.target.value ? Number(event.target.value) : null)}
+            aria-describedby="person-profile-hint"
+          >
+            <option value="">Sin perfil</option>
+            {profileOptions.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+          </Select>
+          <p id="person-profile-hint" className="mt-1.5 text-xs text-muted-foreground">
+            {role === "admin"
+              ? "Los administradores no reciben rutas por su perfil; se les asignan a mano."
+              : "Recibe las rutas de aprendizaje de su perfil."}
+          </p>
         </div>
         {isSelf ? (
           <p className="text-sm text-muted-foreground">Tu contraseña se cambia en «Mi perfil».</p>

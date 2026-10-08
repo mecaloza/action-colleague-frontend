@@ -272,6 +272,8 @@ export function ActivityPlayer({
         module_completed: false,
         next_module_id: null,
         course_completed: false,
+        next_course: null,
+        path_completed: null,
       });
       return;
     }

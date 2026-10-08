@@ -7,12 +7,15 @@ import type {
   CompletionResult,
   LearnerCourse,
   LearnerCourseDetail,
+  LearnerPath,
   LearnerQuiz,
   QuizAnswer,
 } from "./types";
 
 export const learnApi = {
   courses: () => http.get<LearnerCourse[]>("/learn/courses"),
+  /** My published learning paths, oldest assignment first. */
+  paths: () => http.get<LearnerPath[]>("/learn/paths"),
   course: (courseId: number) => http.get<LearnerCourseDetail>(`/learn/courses/${courseId}`),
   quiz: (moduleId: number) => http.get<LearnerQuiz>(`/learn/modules/${moduleId}/quiz`),
   submit: (moduleId: number, answers: QuizAnswer[], version: string) =>
@@ -31,6 +34,9 @@ export const learnApi = {
 export const learnKeys = {
   all: ["learn"] as const,
   courses: ["learn", "courses"] as const,
+  paths: ["learn", "paths"] as const,
+  /** Every course opened in the player. */
+  courseDetails: ["learn", "course"] as const,
   course: (courseId: number) => ["learn", "course", courseId] as const,
   quiz: (moduleId: number) => ["learn", "quiz", moduleId] as const,
 };

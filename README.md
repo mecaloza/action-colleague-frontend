@@ -22,17 +22,18 @@ El backend local se levanta como indica su README (SQLite, `USE_FAKE_PROVIDERS=t
 src/
   app/                 rutas (App Router)
     login/             inicio de sesión
-    (app)/admin/       panel, cursos (biblioteca, editor, estudio IA, vista previa) y equipo
-    (app)/learn/       mis cursos y reproductor del colaborador
+    (app)/admin/       panel, rutas de aprendizaje, cursos (biblioteca, editor, estudio IA, vista previa) y equipo (personas y perfiles)
+    (app)/learn/       mi ruta, mis cursos y reproductor del colaborador
     (app)/profile/     perfil
   components/
     ui/                primitivas (Radix + Tailwind): botón, diálogo, panel, pestañas…
     layout/            shell, héroes, estados vacíos y de error, confirmación
     courses/           biblioteca y editor de cursos
+    paths/             rutas de aprendizaje (cursos en orden, personas, ajustes)
     studio/            estudio de creación con IA
     media/, recording/ subidas directas y estudio de grabación
     learn/             experiencia del colaborador
-    team/              equipo
+    team/              equipo y perfiles
   contexts/            sesión (auth)
   lib/api/             cliente tipado del API (JSON, refresh de tokens, errores en español)
   lib/hooks/           subidas (PUT/TUS), trabajos en segundo plano, URLs firmadas estables…

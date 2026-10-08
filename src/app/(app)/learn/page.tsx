@@ -8,12 +8,13 @@ import { CourseCardSkeleton } from "@/components/courses/course-card";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHero } from "@/components/layout/page-hero";
 import { QueryError } from "@/components/layout/query-state";
-import { courseActionLabel, courseHref, LearnerCourseCard } from "@/components/learn/learner-course-card";
+import { courseActionLabel, courseHref, LearnerCourseCard, pathPlace } from "@/components/learn/learner-course-card";
+import { MyPaths } from "@/components/learn/learner-paths";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/contexts/auth-context";
 import { learnApi, learnKeys } from "@/lib/api/learn";
-import type { LearnerCourse } from "@/lib/api/types";
+import type { LearnerCourse, LearnerPath } from "@/lib/api/types";
 import { formatPercent, plural } from "@/lib/format";
 
 const GRID = "grid gap-6 sm:grid-cols-2 lg:grid-cols-3";
@@ -24,10 +25,18 @@ const SECTIONS: { status: LearnerCourse["status"]; title: string }[] = [
   { status: "completed", title: "Completados" },
 ];
 
-/** The course to pick up now: one already started (most advanced first), or else the newest assigned. */
-function nextUp(courses: LearnerCourse[]): LearnerCourse | undefined {
-  const started = courses.filter((course) => course.status === "in_progress").sort((a, b) => b.progress_pct - a.progress_pct);
-  return started[0] ?? courses.find((course) => course.status === "assigned");
+/**
+ * The course to pick up now: the current course of the oldest path still under way (the order the company set), or
+ * else one already started (most advanced first), or else the newest assigned. Never one its path keeps locked.
+ */
+function nextUp(courses: LearnerCourse[], paths: LearnerPath[]): LearnerCourse | undefined {
+  for (const path of paths) {
+    const current = courses.find((course) => course.course_id === path.current_course_id);
+    if (current) return current;
+  }
+  const open = courses.filter((course) => !course.locked);
+  const started = open.filter((course) => course.status === "in_progress").sort((a, b) => b.progress_pct - a.progress_pct);
+  return started[0] ?? open.find((course) => course.status === "assigned");
 }
 
 /** The line under the greeting: how many courses are left. Nothing before they load, or when there are none. */
@@ -37,9 +46,12 @@ function progressSummary(pending: number, total: number): string | undefined {
 }
 
 function ContinueCard({ course }: { course: LearnerCourse }) {
+  const place = pathPlace(course);
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="max-w-2xl border border-white/15 bg-white/5 p-6">
-      <p className="eyebrow mb-3 text-white/60">{course.status === "assigned" ? "Empieza por aquí" : "Continúa donde lo dejaste"}</p>
+      <p className="eyebrow mb-3 text-white/60">
+        {place ?? (course.status === "assigned" ? "Empieza por aquí" : "Continúa donde lo dejaste")}
+      </p>
       <p className="font-display text-2xl font-medium tracking-tightest text-white">{course.title}</p>
       {course.next_module_title && <p className="mt-1 text-sm text-white/70">Sigue: {course.next_module_title}</p>}
       <div className="mt-5 flex flex-wrap items-center gap-4">
@@ -60,8 +72,11 @@ function ContinueCard({ course }: { course: LearnerCourse }) {
 export default function MyCoursesPage() {
   const { user } = useAuth();
   const courses = useQuery({ queryKey: learnKeys.courses, queryFn: learnApi.courses });
+  const paths = useQuery({ queryKey: learnKeys.paths, queryFn: learnApi.paths });
   const list = courses.data ?? [];
-  const toContinue = nextUp(list);
+  const myPaths = paths.data ?? [];
+  // Once both are in: the hero never jumps from one course to the path's.
+  const toContinue = paths.isPending ? undefined : nextUp(list, myPaths);
   const pending = list.filter((course) => course.status !== "completed").length;
 
   return (
@@ -75,6 +90,8 @@ export default function MyCoursesPage() {
       </PageHero>
 
       <section className="container space-y-14 py-12">
+        {myPaths.length > 0 && <MyPaths paths={myPaths} courses={list} />}
+        {paths.error && !paths.data && <QueryError query={paths} />}
         {courses.isPending ? (
           <div className={GRID}>
             {Array.from({ length: 3 }).map((_, index) => (

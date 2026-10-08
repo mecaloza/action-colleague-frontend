@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Clock, Layers } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock, Layers, Lock } from "lucide-react";
 import { CoverArt } from "@/components/courses/course-card";
 import { EnrollmentBadge } from "@/components/courses/status-badge";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { LearnerCourse } from "@/lib/api/types";
 import { formatLength, formatPercent, plural } from "@/lib/format";
@@ -14,9 +16,64 @@ export const courseHref = (course: Pick<LearnerCourse, "course_id" | "next_modul
 export const courseActionLabel = (course: Pick<LearnerCourse, "status">) =>
   course.status === "assigned" ? "Empezar" : "Continuar";
 
+/** "Ruta Asesor de flotas · curso 2 de 3": where the course sits in the learner's path. */
+export const pathPlace = ({ path }: Pick<LearnerCourse, "path">) =>
+  path ? `Ruta ${path.title} · curso ${path.step} de ${path.steps}` : null;
+
+/** A course its path keeps closed: no link (it can't be opened yet), and the course that opens it. */
+function LockedCourseCard({ course }: { course: LearnerCourse }) {
+  const cover = useStableUrl(course.cover_url);
+  const place = pathPlace(course);
+  return (
+    <div className="flex flex-col border border-border bg-white">
+      <div className="relative aspect-[16/9] overflow-hidden">
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cover} alt="" className="h-full w-full object-cover opacity-50 grayscale" />
+        ) : (
+          <CoverArt title={course.title} seed={course.course_id} className="opacity-50" />
+        )}
+        <div className="absolute inset-0 flex items-center justify-center" aria-hidden>
+          <span className="flex h-12 w-12 items-center justify-center bg-white text-ink-800 shadow-lg">
+            <Lock className="h-5 w-5" />
+          </span>
+        </div>
+        <div className="absolute left-3 top-3">
+          <Badge variant="secondary">
+            <Lock className="h-3 w-3" aria-hidden /> Bloqueado
+          </Badge>
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col p-5">
+        <h3 className="break-words font-display text-xl font-semibold leading-tight tracking-tightest text-ink-700">{course.title}</h3>
+        {course.description && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{course.description}</p>}
+        <div className="mt-auto space-y-3 pt-5">
+          {place && <p className="text-xs text-muted-foreground">{place}</p>}
+          <div className="space-y-3 border-t border-border pt-3">
+            <p className="text-sm">
+              {course.locked_by
+                ? `Se desbloquea al terminar «${course.locked_by.title}».`
+                : "Se desbloquea al terminar el curso anterior de tu ruta."}
+            </p>
+            {course.locked_by && (
+              <Button variant="outline" size="sm" className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left" asChild>
+                <Link href={`/learn/${course.locked_by.course_id}`}>
+                  Ir a «{course.locked_by.title}» <ArrowRight />
+                </Link>
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LearnerCourseCard({ course }: { course: LearnerCourse }) {
   const cover = useStableUrl(course.cover_url);
+  if (course.locked) return <LockedCourseCard course={course} />;
   const done = course.status === "completed";
+  const place = pathPlace(course);
   return (
     <Link
       href={courseHref(course)}
@@ -51,6 +108,7 @@ export function LearnerCourseCard({ course }: { course: LearnerCourse }) {
               </span>
             )}
           </p>
+          {place && <p className="text-xs text-muted-foreground">{place}</p>}
           <p className="flex items-center gap-2 border-t border-border pt-3 text-[11px] font-bold uppercase tracking-label text-ink-800 group-hover:text-accent">
             {done ? (
               <>
