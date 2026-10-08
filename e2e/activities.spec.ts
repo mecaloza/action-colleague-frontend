@@ -60,9 +60,12 @@ test("un colaborador juega la conversación con el cliente y completa el módulo
     .getByRole("link", { name: new RegExp(title) })
     .first()
     .click();
+  // The course page is a cold route under `next dev`: its first visit waits for it to compile.
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({ timeout: 20_000 });
 
   // The module completes through its activity: no "mark as done" button.
-  await expect(page.getByRole("heading", { name: "Actividades" })).toBeVisible();
+  // Exact: the course title heading ("Llantas con actividades…") also holds the word.
+  await expect(page.getByRole("heading", { name: "Actividades", exact: true })).toBeVisible();
   await expect(page.getByText("Te falta 1 actividad")).toBeVisible();
   await expect(page.getByRole("button", { name: /Marcar como completado/ })).toHaveCount(0);
 
@@ -125,6 +128,8 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
     .getByRole("link", { name: new RegExp(title) })
     .first()
     .click();
+  // The course page is a cold route under `next dev`: its first visit waits for it to compile.
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Te faltan 3 actividades")).toBeVisible();
   const game = page.getByRole("dialog");
 
@@ -169,6 +174,7 @@ test("inspección, simulador y reto rápido: se juegan y cuentan", async ({ page
   await page.getByRole("button", { name: "Jugar: Revisión en patio" }).click();
   await game.getByLabel(/sin límite de tiempo/).check();
   await game.getByRole("button", { name: /Empezar/ }).click();
+  await expect(game.getByRole("button", { name: "Leer el DOT" })).toBeVisible(); // on screen, with its clock if any
   await expect(game.getByRole("timer")).toHaveCount(0);
   await game.getByRole("button", { name: "Leer el DOT" }).click(); // not the first step
   await expect(game.getByText("Racha 0")).toBeVisible();
