@@ -1,10 +1,11 @@
 import { test, expect, type Locator, type Page, type Request } from "@playwright/test";
 import { SIMULATOR } from "./fixtures/activities";
-import { adminApi } from "./fixtures/api";
+import { adminApi, API } from "./fixtures/api";
 import {
   ACTIVITY_INTRO,
   ACTIVITY_TITLE,
   activityCourse,
+  addActivity,
   MODULE_TITLE,
   publishedWithLearner,
   QUESTIONS,
@@ -12,6 +13,7 @@ import {
   savedActivity,
   savedQuestions,
 } from "./fixtures/revisions";
+import { scriptedCourse } from "./fixtures/scripts";
 
 // "Pedir un cambio" to a module's quiz (all of it or some questions) and to one of its activities, against a backend
 // with fake providers: the AI's change is deterministic (see fixtures/revisions.ts).
@@ -111,11 +113,21 @@ test("un cambio a la pregunta 2 se revisa campo por campo, se aplica y se deshac
   await expect(sheet.getByRole("region", { name: "Para el video" })).toHaveCount(0);
   await expect(sheet.getByRole("button", { name: "Aplicar y volver a producir" })).toHaveCount(0);
 
-  // Applied: the open quiz shows it at once, and a toast offers to undo it.
+  // Applied: the open quiz shows it at once, and a toast offers to undo it. The quiz is drawn again (here its new copy
+  // takes a while to arrive, and the panel waits for it): the focus is back on question 2's button, where it was.
+  await page.route(
+    `${API}/modules/${moduleId}/evaluation`,
+    async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await route.continue();
+    },
+    { times: 1 },
+  );
   await apply(page, sheet);
   const toast = toastWith(page, "Cambio aplicado");
   await expect(toast).toBeVisible();
   await expect(page.getByLabel("Enunciado")).toHaveValue("Revisado: ¿Cuándo se revisa el casco?");
+  await expect(page.getByRole("button", { name: "Pedir un cambio en la pregunta 2" })).toBeFocused();
   const changed = await savedQuestions(call, moduleId);
   expect(changed.map((question) => question.prompt)).toEqual([
     QUESTIONS[0].prompt,
@@ -192,12 +204,21 @@ test("lo editado en la evaluación no se pierde, y un cambio a toda la evaluaci�
     "El curso no está publicado: nadie ve el cambio hasta que lo publiques.",
   );
 
-  // Left for later: the quiz says a change waits. Meanwhile the admin edits it, and the change waits for that.
+  // Left for later: the quiz says a change waits. Meanwhile the admin edits it: the proposal can be reviewed (applying
+  // it waits for the edit), another change can't be asked for until the edit is saved or discarded.
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
   await expect(quizHeader(page)).toContainText("Cambio por revisar");
   await statement.fill(edited);
-  await page.getByRole("button", { name: "Revisar la propuesta" }).click();
+  const review = page.getByRole("button", { name: "Revisar la propuesta" });
+  await expect(review).toBeEnabled();
+  await expect(review).toHaveAccessibleDescription("");
+  await expect(second).toBeDisabled();
+  await expect(second).toHaveAccessibleDescription(
+    "Para pedir otro cambio, primero guarda o descarta lo que editaste: la IA trabaja sobre la evaluación guardada. " +
+      "La propuesta que espera ya puedes revisarla.",
+  );
+  await review.click();
   await expect(sheet.getByRole("heading", { name: "Propuesta de la IA" })).toBeVisible();
   const applyButton = sheet.getByRole("button", { name: "Aplicar", exact: true });
   await expect(applyButton).toBeDisabled();
@@ -207,12 +228,14 @@ test("lo editado en la evaluación no se pierde, y un cambio a toda la evaluaci�
   await page.keyboard.press("Escape");
   await expect(statement).toHaveValue(edited);
 
-  // The edit discarded, the proposal is applied: four questions, the first one with the same id.
+  // The edit discarded, the proposal is applied: four questions, the first one with the same id. The focus is back on
+  // the button that opened it, which now asks for a new change.
   await page.getByRole("button", { name: "Descartar cambios" }).click();
-  await page.getByRole("button", { name: "Revisar la propuesta" }).click();
+  await review.click();
   await apply(page, sheet);
   const toast = toastWith(page, "Cambio aplicado");
   await expect(page.getByRole("article")).toHaveCount(4);
+  await expect(ask).toBeFocused();
   const changed = await savedQuestions(call, moduleId);
   expect(changed.map((question) => question.prompt)).toEqual([
     QUESTIONS[0].prompt,
@@ -268,6 +291,7 @@ test("si la pregunta cambió desde la propuesta, no se aplica: se pide de nuevo"
   await askChange(page, sheet, moduleId, observation);
   await apply(page, sheet);
   expect((await savedQuestions(call, moduleId))[2].prompt).toBe(`Revisado: ${reworded}`);
+  await expect(page.getByRole("button", { name: "Pedir un cambio en la pregunta 3" })).toBeFocused();
 });
 
 test("un cambio a una actividad publicada se revisa parte por parte, se aplica y se deshace", async ({
@@ -319,11 +343,13 @@ test("un cambio a una actividad publicada se revisa parte por parte, se aplica y
   await expect(reach).toContainText("1 persona tiene una partida abierta: al aplicar el cambio, la empieza de nuevo.");
   await expect(reach).toContainText("Se graba de nuevo la voz de 2 líneas; las demás conservan la suya.");
 
-  // Applied: a new version of the activity, its new lines voiced.
+  // Applied: a new version of the activity, its new lines voiced. The focus is back on the row's button.
   await apply(page, sheet);
   const toast = toastWith(page, "Cambio aplicado");
   await expect(toast).toContainText("La voz de las líneas nuevas se está grabando.");
-  await expect(activityRow(page, `Revisado: ${ACTIVITY_TITLE}`)).toBeVisible();
+  const revised = activityRow(page, `Revisado: ${ACTIVITY_TITLE}`);
+  await expect(revised).toBeVisible();
+  await expect(revised.getByRole("button", { name: `Pedir un cambio a Revisado: ${ACTIVITY_TITLE}` })).toBeFocused();
   const applied = await savedActivity(call, moduleId, activityId);
   expect(applied).toMatchObject({ title: `Revisado: ${ACTIVITY_TITLE}`, version: version + 1 });
 
@@ -393,5 +419,58 @@ test("la propuesta de una actividad espera en su fila, y si la actividad cambió
   await expect(instruction.getByText(reworded, { exact: true })).toBeVisible();
   await apply(page, sheet);
   expect((await savedActivity(call, moduleId, activityId)).spec.prompt).toBe(`Revisado: ${reworded}`);
+  // «Cambio por revisar», which opened it, is gone: the focus lands on the activity's row.
   await expect(waiting).toHaveCount(0);
+  await expect(row).toBeFocused();
+});
+
+test("lo que espera en la evaluación o una actividad no marca el guion; quitar la evaluación retira lo suyo", async ({
+  page,
+  request,
+}) => {
+  const call = await adminApi(request);
+  // An AI module with a script, a quiz and an activity: a change waits for the quiz and another for the activity.
+  const { courseId, moduleId } = await scriptedCourse(call, "Cambios que no son del guion");
+  await call("put", `/modules/${moduleId}/evaluation`, { questions: QUESTIONS, max_attempts: 3, passing_score: 70 });
+  const activity = await addActivity(call, moduleId);
+  await call("post", `/modules/${moduleId}/revisions`, {
+    target: "quiz",
+    observation: "Que la explicación sea más clara.",
+  });
+  await call("post", `/modules/${moduleId}/revisions`, {
+    target: "activity",
+    activity_id: activity.id,
+    observation: "Que las consecuencias hablen del costo.",
+  });
+
+  await page.goto(`/admin/courses/${courseId}?tab=evaluations`);
+  await expect(quizHeader(page)).toContainText("Cambio por revisar");
+
+  // The script has none waiting: neither the module's row nor its panel say so.
+  await page.getByRole("tab", { name: "Contenido" }).click();
+  await expect(page.getByRole("button", { name: `Pedir un cambio al guion de ${MODULE_TITLE}` })).toBeVisible();
+  const scriptWaiting = page.getByRole("button", { name: `Cambio por revisar: abrir la propuesta de ${MODULE_TITLE}` });
+  await expect(scriptWaiting).toHaveCount(0);
+  await page.getByRole("button", { name: `Editar ${MODULE_TITLE}` }).click();
+  const modulePanel = page.getByRole("dialog", { name: MODULE_TITLE });
+  await expect(modulePanel).toContainText("Pide a la IA un ajuste puntual");
+  await expect(modulePanel).not.toContainText("Hay un cambio de la IA esperando tu revisión.");
+  await page.keyboard.press("Escape");
+  await expect(modulePanel).toBeHidden();
+
+  // The activity's row does.
+  await page.getByRole("tab", { name: "Actividades" }).click();
+  await expect(
+    activityRow(page, ACTIVITY_TITLE).getByRole("button", {
+      name: `Cambio por revisar: abrir la propuesta de ${ACTIVITY_TITLE}`,
+    }),
+  ).toBeVisible();
+
+  // The quiz removed takes its proposal with it; the activity's still waits, so the module still says one does.
+  await page.getByRole("tab", { name: "Evaluaciones" }).click();
+  await page.getByRole("button", { name: "Quitar evaluación" }).click();
+  const confirmation = page.getByRole("dialog", { name: "¿Eliminar la evaluación?" });
+  await confirmation.getByRole("button", { name: "Eliminar" }).click();
+  await expect(quizHeader(page)).toContainText("Sin evaluación");
+  await expect(quizHeader(page)).not.toContainText("Cambio por revisar");
 });

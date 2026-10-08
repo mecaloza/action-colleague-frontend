@@ -288,6 +288,12 @@ interface RevisionSheetProps {
   unsaved?: boolean;
   /** The course's active jobs, where the page has them: what a busy module is doing (otherwise it is guessed). */
   jobs?: Job[];
+  /**
+   * The id of where the focus goes as the panel closes if what opened it is gone: what the change is about on the
+   * page. Applying or undoing a change draws a quiz's editor again, and takes away the «Cambio por revisar» that may
+   * have opened it.
+   */
+  focusFallbackId?: (request: RevisionRequest) => string | undefined;
 }
 
 /**
@@ -304,11 +310,16 @@ export function RevisionSheet({
   onClose,
   unsaved = false,
   jobs = [],
+  focusFallbackId,
 }: RevisionSheetProps) {
   const revised = course.modules.find((each) => each.id === request?.moduleId) ?? null;
+  const fallbackId = request && focusFallbackId?.(request);
   return (
     <Sheet open={open && revised !== null} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="w-full sm:max-w-3xl">
+      <SheetContent
+        className="w-full sm:max-w-3xl"
+        fallbackFocus={fallbackId ? () => document.getElementById(fallbackId) : undefined}
+      >
         {revised && request && (
           <RevisionPanel
             key={openingKey}
@@ -976,11 +987,15 @@ function ProposalView(props: ViewProps) {
 
   const apply = useMutation({
     mutationFn: (render: boolean) => revisionsApi.apply(revision.id, render),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       const { revision: applied, render_job: renderJob } = result;
-      queryClient.setQueryData(revisionKeys.detail(applied.id), applied);
       if (renderJob) trackJobs(course.id, [renderJob]);
-      void cache.refreshContent(course.id, ref);
+      const refreshed = cache.refreshContent(course.id, ref);
+      // A quiz's editor starts over with the new questions, and «Cambio por revisar» goes away: the panel closes once
+      // the page shows them, so the focus goes back to what opened it or to what took its place. (A script's copy is
+      // slow to load, its slides are drawn: the panel doesn't wait for it.)
+      if (!script) await refreshed;
+      queryClient.setQueryData(revisionKeys.detail(applied.id), applied);
       const notes = [
         applied.changes?.rebased && "Se aplicó sobre las ediciones hechas después de la propuesta.",
         ...appliedNotes(subject, result, hasVideo),

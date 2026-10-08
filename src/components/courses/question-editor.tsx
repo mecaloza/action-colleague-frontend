@@ -306,6 +306,8 @@ interface QuestionEditorProps {
   onRequestChange?: () => void;
   /** The id of why the AI can't be asked now (edits not saved yet: it starts from the saved quiz). */
   requestBlockedBy?: string;
+  /** The id of its «Pedir un cambio». */
+  requestButtonId?: string;
 }
 
 export function QuestionEditor({
@@ -317,6 +319,7 @@ export function QuestionEditor({
   onMove,
   onRequestChange,
   requestBlockedBy,
+  requestButtonId,
 }: QuestionEditorProps) {
   const fieldId = `question-${useId()}`;
   const problem = questionProblem(question);
@@ -333,6 +336,7 @@ export function QuestionEditor({
           {onRequestChange && (
             // Only the icon on a phone, where the header is short of room; its name says what it does.
             <Button
+              id={requestButtonId}
               type="button"
               variant="ghost"
               size="sm"

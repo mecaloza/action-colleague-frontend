@@ -67,6 +67,9 @@ function AddQuestionMenu({ onAdd }: { onAdd: (type: QuestionType) => void }) {
 /** Opens "Cambios a la evaluación" of the module: a new change (to some questions, or all of them) or its history. */
 type RequestQuizChange = (options?: { questionIds?: string[]; tab?: RevisionTab }) => void;
 
+/** The heading of the module's «Cambios con IA»: the focus lands there when what opened its panel is gone. */
+const quizChangesId = (moduleId: number) => `quiz-changes-${moduleId}`;
+
 interface QuizChangesProps {
   module: ModuleAdmin;
   /** The draft has edits not saved: the AI works on the saved quiz. */
@@ -79,12 +82,16 @@ interface QuizChangesProps {
 /** A change to the saved quiz to ask the AI for (or one waiting for review), and its history. */
 function QuizChanges({ module, dirty, hintId, onRequestChange }: QuizChangesProps) {
   const pending = usePendingRevision(module, "quiz");
-  const headingId = `quiz-changes-${module.id}`;
+  const headingId = quizChangesId(module.id);
   // A proposal waiting can be reviewed anytime (applying it waits for the draft to be saved or discarded).
   const blocked = dirty && !pending;
   return (
     <section aria-labelledby={headingId} className="space-y-3 border-l-2 border-accent bg-accent-soft/50 px-4 py-3">
-      <h3 id={headingId} className="text-[11px] font-bold uppercase tracking-label text-ink-700">
+      <h3
+        id={headingId}
+        tabIndex={-1}
+        className="text-[11px] font-bold uppercase tracking-label text-ink-700 focus-visible:ring-0"
+      >
         Cambios con IA
       </h3>
       <p className="text-sm text-muted-foreground">
@@ -106,10 +113,14 @@ function QuizChanges({ module, dirty, hintId, onRequestChange }: QuizChangesProp
           <History /> Historial de cambios
         </Button>
       </div>
+      {/* Also with a proposal waiting: a question's own button asks for a new change, which waits for the draft. */}
       {dirty && (
         <p id={hintId} className="text-sm text-muted-foreground">
-          Para pedirle un cambio a la IA, primero guarda o descarta lo que editaste: la IA trabaja sobre la evaluación
-          guardada.
+          {pending
+            ? "Para pedir otro cambio, primero guarda o descarta lo que editaste: la IA trabaja sobre la evaluación " +
+              "guardada. La propuesta que espera ya puedes revisarla."
+            : "Para pedirle un cambio a la IA, primero guarda o descarta lo que editaste: la IA trabaja sobre la " +
+              "evaluación guardada."}
         </p>
       )}
     </section>
@@ -126,10 +137,20 @@ interface EvaluationFormProps {
   onDirtyChange: (dirty: boolean) => void;
   /** Asks the AI for a change to the saved quiz (left out: not offered). */
   onRequestChange?: RequestQuizChange;
+  /** The id of why the AI can't be asked while the draft has edits (it starts from the saved quiz). */
+  requestHintId: string;
 }
 
 /** Editable draft of a module's evaluation, started from what the server has saved. */
-function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange, onRequestChange }: EvaluationFormProps) {
+function EvaluationForm({
+  module,
+  courseId,
+  evaluation,
+  defaults,
+  onDirtyChange,
+  onRequestChange,
+  requestHintId,
+}: EvaluationFormProps) {
   const confirm = useConfirm();
   const { refreshEvaluation } = useCourseCache();
   const [questions, setQuestions] = useState<Question[]>(evaluation?.questions ?? []);
@@ -159,8 +180,6 @@ function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange,
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   // A change asked of the AI starts from the saved quiz, and applying (or undoing) one replaces this draft.
   useUnsavedEdits({ target: "quiz", moduleId: module.id }, dirty);
-  const requestHintId = `quiz-request-${module.id}-hint`;
-  const requestChange = evaluation ? onRequestChange : undefined;
   const discard = () => {
     setQuestions(evaluation?.questions ?? []);
     setMaxAttempts(savedAttempts);
@@ -197,9 +216,6 @@ function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange,
 
   return (
     <div className="space-y-4">
-      {requestChange && (
-        <QuizChanges module={module} dirty={dirty} hintId={requestHintId} onRequestChange={requestChange} />
-      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor={`attempts-${module.id}`}>Intentos permitidos</Label>
@@ -236,8 +252,11 @@ function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange,
           onChange={(next) => setQuestions((list) => replaceAt(list, index, next))}
           onRemove={() => setQuestions((list) => removeAt(list, index))}
           onMove={(direction) => setQuestions((list) => moveItem(list, index, index + direction))}
-          onRequestChange={requestChange && (() => requestChange({ questionIds: [question.id] }))}
+          onRequestChange={onRequestChange && (() => onRequestChange({ questionIds: [question.id] }))}
           requestBlockedBy={dirty ? requestHintId : undefined}
+          // By its place, not by the question's id (a change can give it a new one): once a change is applied and the
+          // draft starts over, the focus comes back to the button in the same place.
+          requestButtonId={`quiz-${module.id}-question-${index + 1}-change`}
         />
       ))}
 
@@ -294,11 +313,14 @@ function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange,
 function ModuleEvaluation({
   module,
   courseId,
+  dirty,
   onDirtyChange,
   onRequestChange,
 }: {
   module: ModuleAdmin;
   courseId: number;
+  /** Its draft has edits not saved. */
+  dirty: boolean;
   onDirtyChange: (dirty: boolean) => void;
   onRequestChange: RequestQuizChange;
 }) {
@@ -316,18 +338,24 @@ function ModuleEvaluation({
   // Unreadable, it says so: never values made up here, which saving would keep as the evaluation's own.
   if (isNew && !defaults.data) return <QueryError query={defaults} />;
 
-  // Keyed by what is saved: the draft starts over whenever the saved evaluation changes (saved, removed...).
   const saved = evaluation.data ?? null;
+  const requestHintId = `quiz-request-${module.id}-hint`;
   return (
-    <EvaluationForm
-      key={JSON.stringify(saved)}
-      module={module}
-      courseId={courseId}
-      evaluation={saved}
-      defaults={defaults.data?.evaluations}
-      onDirtyChange={onDirtyChange}
-      onRequestChange={onRequestChange}
-    />
+    <div className="space-y-4">
+      {/* Outside the form: its buttons stay as the draft starts over (a change applied), and get the focus back. */}
+      {saved && <QuizChanges module={module} dirty={dirty} hintId={requestHintId} onRequestChange={onRequestChange} />}
+      {/* Keyed by what is saved: the draft starts over whenever the saved evaluation changes (saved, removed...). */}
+      <EvaluationForm
+        key={JSON.stringify(saved)}
+        module={module}
+        courseId={courseId}
+        evaluation={saved}
+        defaults={defaults.data?.evaluations}
+        onDirtyChange={onDirtyChange}
+        onRequestChange={saved ? onRequestChange : undefined}
+        requestHintId={requestHintId}
+      />
+    </div>
   );
 }
 
@@ -398,6 +426,7 @@ export function EvaluationsTab({ course }: { course: CourseDetail }) {
                 <ModuleEvaluation
                   module={module}
                   courseId={course.id}
+                  dirty={dirty}
                   onDirtyChange={setDirty}
                   onRequestChange={(options) => revisions.show({ moduleId: module.id, target: "quiz", ...options })}
                 />
@@ -408,7 +437,12 @@ export function EvaluationsTab({ course }: { course: CourseDetail }) {
       })}
 
       {/* Applying a change replaces the open quiz's draft: not while it has edits not saved. */}
-      <RevisionSheet course={course} {...revisions.sheet} unsaved={dirty && openId === revisions.moduleId} />
+      <RevisionSheet
+        course={course}
+        {...revisions.sheet}
+        unsaved={dirty && openId === revisions.moduleId}
+        focusFallbackId={({ moduleId }) => quizChangesId(moduleId)}
+      />
     </div>
   );
 }

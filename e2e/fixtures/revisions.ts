@@ -90,12 +90,20 @@ export async function activityCourse(call: Call, title: string, seed: ActivitySe
   return { courseId: course.id, moduleId: module.id, activityId: activity.id };
 }
 
+interface SavedActivity {
+  id: number;
+  title: string;
+  intro: string;
+  version: number;
+  spec: Record<string, unknown>;
+}
+
 /** The activity as saved. */
-export function savedActivity(call: Call, moduleId: number, activityId: number) {
-  return call<{ id: number; title: string; intro: string; version: number; spec: Record<string, unknown> }[]>(
-    "get",
-    `/modules/${moduleId}/activities`,
-  ).then((activities) => activities.find((activity) => activity.id === activityId)!);
+export async function savedActivity(call: Call, moduleId: number, activityId: number) {
+  const activities = await call<SavedActivity[]>("get", `/modules/${moduleId}/activities`);
+  const activity = activities.find((each) => each.id === activityId);
+  if (!activity) throw new Error(`La actividad ${activityId} no está en el módulo ${moduleId}`);
+  return activity;
 }
 
 /** The course published, with a person of its own taking it: their calls (as that person). */

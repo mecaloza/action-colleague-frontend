@@ -13,8 +13,11 @@ const SheetClose = DialogPrimitive.Close;
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /** Where the focus goes as it closes when what opened it is gone (see `useReturnFocus`). */
+    fallbackFocus?: () => HTMLElement | null;
+  }
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, fallbackFocus, ...props }, ref) => {
   const focus = useReturnFocus({
     onOpenAutoFocus: (event) => {
       onOpenAutoFocus?.(event);
@@ -26,6 +29,7 @@ const SheetContent = React.forwardRef<
       }
     },
     onCloseAutoFocus,
+    fallback: fallbackFocus,
   });
   return (
     <DialogPrimitive.Portal>
