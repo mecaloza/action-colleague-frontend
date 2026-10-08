@@ -11,7 +11,6 @@ import { QueryError } from "@/components/layout/query-state";
 import { ACTIVITY_LABELS } from "@/components/learn/activities/activity-player";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { PersonActivity, PersonCourse, PersonModule, QuizSummary } from "@/lib/api/types";
@@ -21,6 +20,7 @@ import { safeHttpUrl } from "@/lib/safe-url";
 import { toastError } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { AttemptCard } from "./attempt-card";
+import { ProgressLine } from "./progress-line";
 
 /** Who the course card is about: their id (for the requests) and their name (for what it says). */
 interface Person {
@@ -236,10 +236,7 @@ export function PersonCourseCard({ course, person, focused = false }: PersonCour
           </div>
         )}
         <div>
-          <div className="flex items-center gap-3">
-            <Progress value={course.progress_pct} className="flex-1" aria-label={`Avance en ${course.title}`} />
-            <span className="w-10 text-right text-xs font-semibold">{formatPercent(course.progress_pct)}</span>
-          </div>
+          <ProgressLine value={course.progress_pct} label={`Avance en ${course.title}`} />
           <p className="mt-2 text-xs text-muted-foreground">
             {completed} de {plural(course.modules.length, "módulo")}
             {course.completed_at

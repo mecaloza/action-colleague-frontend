@@ -6,10 +6,10 @@ import { Lock } from "lucide-react";
 import { EnrollmentBadge } from "@/components/courses/status-badge";
 import { QueryError } from "@/components/layout/query-state";
 import { pathPlace } from "@/components/learn/learner-course-card";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { userKeys, usersApi } from "@/lib/api/users";
-import { formatDate, formatPercent, plural } from "@/lib/format";
+import { formatDate, plural } from "@/lib/format";
+import { ProgressLine } from "./progress-line";
 
 /** Every course a person was assigned, with their progress, the path it belongs to and whether it is still locked. */
 export function PersonCourses({ userId }: { userId: number }) {
@@ -34,10 +34,7 @@ export function PersonCourses({ userId }: { userId: number }) {
             </Link>
             <EnrollmentBadge status={course.status} />
           </div>
-          <div className="flex items-center gap-3">
-            <Progress value={course.progress_pct} className="flex-1" />
-            <span className="w-10 text-right text-xs font-semibold">{formatPercent(course.progress_pct)}</span>
-          </div>
+          <ProgressLine value={course.progress_pct} />
           <p className="mt-2 text-xs text-muted-foreground">
             {course.completed_modules} de {plural(course.total_modules, "módulo")}
             {course.completed_at ? ` · terminado el ${formatDate(course.completed_at)}` : ""}

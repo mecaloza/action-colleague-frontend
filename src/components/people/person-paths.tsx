@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Check, Lock } from "lucide-react";
 import { Deadline, JourneyBadge, SourceBadge } from "@/components/paths/path-badges";
-import { Progress } from "@/components/ui/progress";
 import type { LearnerPathStep, PersonPath } from "@/lib/api/types";
-import { formatPercent, plural } from "@/lib/format";
+import { plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ProgressLine } from "./progress-line";
 
 /** What a step says under its title: how the person goes in it, or what unlocks it. */
 function stepNote(step: LearnerPathStep, current: boolean): string {
@@ -68,10 +68,7 @@ function PathCard({ path }: { path: PersonPath }) {
           </Link>
         </h3>
         <div>
-          <div className="flex items-center gap-3">
-            <Progress value={path.progress_pct} className="flex-1" aria-label={`Avance en ${path.title}`} />
-            <span className="w-10 text-right text-xs font-semibold">{formatPercent(path.progress_pct)}</span>
-          </div>
+          <ProgressLine value={path.progress_pct} label={`Avance en ${path.title}`} />
           <p className="mt-2 text-xs text-muted-foreground">
             {completed} de {plural(path.steps.length, "curso")} completado{path.steps.length === 1 ? "" : "s"}
           </p>
