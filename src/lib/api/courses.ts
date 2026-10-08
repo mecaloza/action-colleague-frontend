@@ -42,8 +42,9 @@ export type ModuleUpdate = Partial<Omit<ModuleInput, "source">>;
 
 export interface EvaluationInput {
   questions: Question[];
-  max_attempts: number;
-  passing_score: number;
+  /** Left out: a new evaluation takes the platform's defaults (Parámetros), an existing one keeps its own. */
+  max_attempts?: number;
+  passing_score?: number;
 }
 
 export interface CourseListParams {

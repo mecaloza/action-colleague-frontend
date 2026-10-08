@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Clock, Layers, Lock } from "lucide-react";
+import { ArrowRight, Award, CheckCircle2, Clock, Layers, Lock } from "lucide-react";
 import { CoverArt } from "@/components/courses/course-card";
 import { EnrollmentBadge } from "@/components/courses/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import type { LearnerCourse } from "@/lib/api/types";
 import { formatLength, formatPercent, plural } from "@/lib/format";
 import { useStableUrl } from "@/lib/hooks/use-stable-url";
+import { safeHttpUrl } from "@/lib/safe-url";
 
 export const courseHref = (course: Pick<LearnerCourse, "course_id" | "next_module_id">) =>
   `/learn/${course.course_id}${course.next_module_id ? `?m=${course.next_module_id}` : ""}`;
@@ -77,11 +78,11 @@ export function LearnerCourseCard({ course }: { course: LearnerCourse }) {
   if (course.locked) return <LockedCourseCard course={course} />;
   const done = course.status === "completed";
   const place = pathPlace(course);
+  const certificate = safeHttpUrl(course.certificate?.pdf_url);
   return (
-    <Link
-      href={courseHref(course)}
-      className="group flex flex-col border border-border bg-white transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-ink-800 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.45)]"
-    >
+    // The whole card opens the course: its title's link covers it (`after:`), so the certificate's own link sits
+    // beside it, never inside another link.
+    <div className="group relative flex flex-col border border-border bg-white transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-ink-800 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.45)]">
       <div className="relative aspect-[16/9] overflow-hidden">
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -94,7 +95,14 @@ export function LearnerCourseCard({ course }: { course: LearnerCourse }) {
         </div>
       </div>
       <div className="flex flex-1 flex-col p-5">
-        <h3 className="font-display text-xl font-semibold leading-tight tracking-tightest group-hover:text-accent">{course.title}</h3>
+        <h3 className="font-display text-xl font-semibold leading-tight tracking-tightest group-hover:text-accent">
+          <Link
+            href={courseHref(course)}
+            className="after:absolute after:inset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:after:ring-2 focus-visible:after:ring-accent focus-visible:after:ring-offset-2"
+          >
+            {course.title}
+          </Link>
+        </h3>
         {course.description && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{course.description}</p>}
         <div className="mt-auto space-y-3 pt-5">
           <div className="flex items-center gap-3">
@@ -112,19 +120,32 @@ export function LearnerCourseCard({ course }: { course: LearnerCourse }) {
             )}
           </p>
           {place && <p className="text-xs text-muted-foreground">{place}</p>}
-          <p className="flex items-center gap-2 border-t border-border pt-3 text-[11px] font-bold uppercase tracking-label text-ink-800 group-hover:text-accent">
-            {done ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-success" /> Repasar el curso
-              </>
-            ) : (
-              <>
-                {courseActionLabel(course)} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border pt-3">
+            <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-label text-ink-800 group-hover:text-accent" aria-hidden>
+              {done ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-success" /> Repasar el curso
+                </>
+              ) : (
+                <>
+                  {courseActionLabel(course)} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </>
+              )}
+            </p>
+            {certificate && (
+              <a
+                href={certificate}
+                target="_blank"
+                rel="noopener"
+                className="relative z-10 -my-2 inline-flex min-h-10 items-center gap-1.5 text-[11px] font-bold uppercase tracking-label text-accent-strong hover:underline"
+              >
+                <Award className="h-4 w-4" aria-hidden /> Certificado
+                <span className="sr-only"> de «{course.title}»</span>
+              </a>
             )}
-          </p>
+          </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 }

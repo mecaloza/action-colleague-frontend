@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { Check, Lock, PlayCircle, Trophy } from "lucide-react";
+import { Check, Download, Lock, PlayCircle, ShieldCheck, Trophy } from "lucide-react";
 import { Deadline, JourneyBadge } from "@/components/paths/path-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import type { LearnerCourse, LearnerPath, LearnerPathStep } from "@/lib/api/types";
+import type { CertificateRef, LearnerCourse, LearnerPath, LearnerPathStep } from "@/lib/api/types";
 import { formatPercent, plural } from "@/lib/format";
+import { safeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 import { courseHref } from "./learner-course-card";
 
@@ -68,6 +69,31 @@ function JourneyStep({ step, index, last, current }: { step: LearnerPathStep; in
   );
 }
 
+/** The certificate of a completed path: its PDF and its public verification, each in a new tab. */
+function PathCertificate({ certificate, title }: { certificate: CertificateRef; title: string }) {
+  const pdf = safeHttpUrl(certificate.pdf_url);
+  const verify = safeHttpUrl(certificate.verify_url);
+  const of = <span className="sr-only"> de la ruta «{title}»</span>;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {pdf && (
+        <Button variant="outline" size="sm" asChild>
+          <a href={pdf} target="_blank" rel="noopener">
+            <Download aria-hidden /> Descargar certificado{of}
+          </a>
+        </Button>
+      )}
+      {verify && (
+        <Button variant="ghost" size="sm" asChild>
+          <a href={verify} target="_blank" rel="noopener">
+            <ShieldCheck aria-hidden /> Ver verificación{of}
+          </a>
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /** One of the learner's paths: progress, deadline, its courses in order and the course to go on with. */
 function PathJourney({ path, courses }: { path: LearnerPath; courses: LearnerCourse[] }) {
   const current = path.steps.find((step) => step.course_id === path.current_course_id) ?? null;
@@ -123,9 +149,12 @@ function PathJourney({ path, courses }: { path: LearnerPath; courses: LearnerCou
               </Link>
             </Button>
           ) : (
-            <p className="flex items-center gap-2 font-semibold text-success">
-              <Trophy className="h-5 w-5" aria-hidden /> ¡Completaste la ruta!
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="flex items-center gap-2 font-semibold text-success">
+                <Trophy className="h-5 w-5" aria-hidden /> ¡Completaste la ruta!
+              </p>
+              {path.certificate && <PathCertificate certificate={path.certificate} title={path.title} />}
+            </div>
           )}
         </div>
       )}

@@ -5,6 +5,7 @@ import type {
   ActivityPlay,
   AttemptResult,
   CompletionResult,
+  LearnerCertificate,
   LearnerCourse,
   LearnerCourseDetail,
   LearnerPath,
@@ -16,6 +17,8 @@ export const learnApi = {
   courses: () => http.get<LearnerCourse[]>("/learn/courses"),
   /** My published learning paths, oldest assignment first. */
   paths: () => http.get<LearnerPath[]>("/learn/paths"),
+  /** Every certificate I earned, newest first: valid, expired or revoked. */
+  certificates: () => http.get<LearnerCertificate[]>("/learn/certificates"),
   course: (courseId: number) => http.get<LearnerCourseDetail>(`/learn/courses/${courseId}`),
   quiz: (moduleId: number) => http.get<LearnerQuiz>(`/learn/modules/${moduleId}/quiz`),
   submit: (moduleId: number, answers: QuizAnswer[], version: string) =>
@@ -35,6 +38,7 @@ export const learnKeys = {
   all: ["learn"] as const,
   courses: ["learn", "courses"] as const,
   paths: ["learn", "paths"] as const,
+  certificates: ["learn", "certificates"] as const,
   /** Every course opened in the player. */
   courseDetails: ["learn", "course"] as const,
   course: (courseId: number) => ["learn", "course", courseId] as const,

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Lock } from "lucide-react";
+import { ArrowLeft, ArrowRight, Award, Lock } from "lucide-react";
 import { BackLink } from "@/components/layout/back-link";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageError, PageLoading } from "@/components/layout/query-state";
@@ -30,8 +30,9 @@ import type {
 import { formatPercent, plural } from "@/lib/format";
 import { useUnmountSignal } from "@/lib/hooks/use-unmount-signal";
 import { toastError } from "@/lib/notify";
+import { safeHttpUrl } from "@/lib/safe-url";
 
-const NO_OUTCOME: PathOutcome = { next_course: null, path_completed: null };
+const NO_OUTCOME: PathOutcome = { certificate: null, next_course: null, path_completed: null };
 
 /** A course the learner can't open (not assigned, removed or locked): what happened, and the way back. */
 function CourseUnavailable({ message }: { message: string }) {
@@ -167,14 +168,15 @@ function CoursePlayer() {
     void queryClient.invalidateQueries({ queryKey: learnKeys.courses });
     void queryClient.invalidateQueries({ queryKey: learnKeys.paths });
     // A completed course may open the next one of its path: other courses seen before load afresh (never shown locked
-    // for a moment from the cache).
+    // for a moment from the cache). It may also have earned certificates (theirs, and their path's).
     if (result.course_completed) {
       queryClient.removeQueries({ queryKey: learnKeys.courseDetails, predicate: (query) => query.queryKey[2] !== courseId });
+      void queryClient.invalidateQueries({ queryKey: learnKeys.certificates });
     }
     // Done after the learner left the course (a play recorded late, a slow answer): it never brings them back.
     if (unmounted().aborted) return;
     if (result.course_completed) {
-      setOutcome({ next_course: result.next_course, path_completed: result.path_completed });
+      setOutcome({ certificate: result.certificate, next_course: result.next_course, path_completed: result.path_completed });
       setCelebrating(true);
     } else if (result.next_module_id) show(result.next_module_id);
   };
@@ -203,7 +205,9 @@ function CoursePlayer() {
   // Its path keeps it closed until the course before it is completed: nothing to study yet.
   if (detail.data.locked) return <CourseLocked detail={detail.data} />;
 
-  const { course, enrollment } = detail.data;
+  const { course, enrollment, certificate } = detail.data;
+  // Earned by completing it: its PDF, whenever the learner comes back.
+  const pdf = safeHttpUrl(certificate?.pdf_url);
   const completedCount = modules.filter((module) => module.completed).length;
   const progress = enrollment?.progress_pct ?? 0;
 
@@ -218,6 +222,16 @@ function CoursePlayer() {
             <span className="font-semibold text-white">{formatPercent(progress)}</span>
           </div>
           <Progress value={progress} className="bg-white/15" />
+          {pdf && (
+            <a
+              href={pdf}
+              target="_blank"
+              rel="noopener"
+              className="mt-3 inline-flex min-h-10 items-center gap-2 text-[11px] font-bold uppercase tracking-label text-accent hover:underline"
+            >
+              <Award className="h-4 w-4" aria-hidden /> Descargar certificado
+            </a>
+          )}
         </div>
       </CourseBand>
 

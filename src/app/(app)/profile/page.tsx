@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye, EyeOff, KeyRound, UserRound } from "lucide-react";
+import { Award, Eye, EyeOff, KeyRound, UserRound } from "lucide-react";
+import { MyCertificates } from "@/components/certificates/my-certificates";
 import { PageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,16 +15,25 @@ import { toastError } from "@/lib/notify";
 
 const MIN_PASSWORD = 8;
 
-function Section({ icon, title, hint, children }: { icon: React.ReactNode; title: string; hint: string; children: React.ReactNode }) {
+interface SectionProps {
+  icon: React.ReactNode;
+  title: string;
+  hint: string;
+  /** Lists take the whole column; forms stay narrow. */
+  wide?: boolean;
+  children: React.ReactNode;
+}
+
+function Section({ icon, title, hint, wide = false, children }: SectionProps) {
   return (
     <section className="grid gap-6 border-t border-border py-10 md:grid-cols-[280px_1fr]">
       <div>
-        <p className="flex items-center gap-2 font-display text-xl font-medium tracking-tightest">
+        <h2 className="flex items-center gap-2 font-display text-xl font-medium tracking-tightest">
           {icon} {title}
-        </p>
+        </h2>
         <p className="mt-2 text-sm text-muted-foreground">{hint}</p>
       </div>
-      <div className="max-w-md">{children}</div>
+      <div className={wide ? "min-w-0" : "max-w-md"}>{children}</div>
     </section>
   );
 }
@@ -148,6 +158,14 @@ export default function ProfilePage() {
     <>
       <PageHero eyebrow="Mi perfil" title={user.name} description={user.email} />
       <div className="container py-4">
+        <Section
+          icon={<Award className="h-5 w-5 text-accent" />}
+          title="Mis certificados"
+          hint="Los recibes al completar un curso o una ruta. Cualquiera puede comprobarlos con su código."
+          wide
+        >
+          <MyCertificates />
+        </Section>
         <Section icon={<UserRound className="h-5 w-5 text-accent" />} title="Tus datos" hint="Así te ven los administradores en los reportes.">
           <NameForm key={user.name} user={user} />
         </Section>

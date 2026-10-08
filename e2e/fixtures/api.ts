@@ -1,7 +1,7 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 
-// What the learning path specs prepare through the API, as the admin, before opening the browser.
-const API = process.env.E2E_API_URL ?? "http://localhost:8001/api/v1";
+// What the specs prepare through the API (as the admin, or as a learner of their own) before opening the browser.
+export const API = process.env.E2E_API_URL ?? "http://localhost:8001/api/v1";
 const admin = { email: process.env.E2E_ADMIN_EMAIL ?? "", password: process.env.E2E_ADMIN_PASSWORD ?? "" };
 
 /** The password of the people created here. */
@@ -21,8 +21,8 @@ export interface Person {
   email: string;
 }
 
-export async function adminApi(request: APIRequestContext): Promise<Call> {
-  const login = await request.post(`${API}/auth/login`, { data: admin });
+async function session(request: APIRequestContext, credentials: { email: string; password: string }): Promise<Call> {
+  const login = await request.post(`${API}/auth/login`, { data: credentials });
   expect(login.ok()).toBeTruthy();
   const headers = { Authorization: `Bearer ${(await login.json()).access_token}` };
   return async <T = unknown>(method: "post" | "put" | "patch" | "get", path: string, data?: unknown): Promise<T> => {
@@ -30,6 +30,15 @@ export async function adminApi(request: APIRequestContext): Promise<Call> {
     expect(response.ok(), `${method} ${path}: ${await response.text()}`).toBeTruthy();
     return (await response.json()) as T;
   };
+}
+
+export function adminApi(request: APIRequestContext): Promise<Call> {
+  return session(request, admin);
+}
+
+/** An API call as one of the people created here (`newLearner`). */
+export function learnerApi(request: APIRequestContext, email: string): Promise<Call> {
+  return session(request, { email, password: PASSWORD });
 }
 
 /** A published course with one reading, completed with "Marcar como completado". */

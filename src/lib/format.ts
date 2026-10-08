@@ -22,6 +22,19 @@ export function formatDate(value: string | Date | null | undefined, withTime = f
   return (withTime ? dateTimeFormat : dateFormat).format(date);
 }
 
+const LONG_DATE: Intl.DateTimeFormatOptions = { day: "numeric", month: "long", year: "numeric" };
+
+/** "8 de octubre de 2026", the day it is in `timeZone` (the browser's when left out or unknown). As certificates say. */
+export function formatLongDate(value: string | Date | null | undefined, timeZone?: string | null): string {
+  const date = toDate(value);
+  if (!date) return "—";
+  try {
+    return new Intl.DateTimeFormat("es", { ...LONG_DATE, timeZone: timeZone || undefined }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat("es", LONG_DATE).format(date); // a zone this browser doesn't know
+  }
+}
+
 const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["year", 365 * 24 * 3600],
   ["month", 30 * 24 * 3600],

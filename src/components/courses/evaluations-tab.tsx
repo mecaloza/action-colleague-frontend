@@ -19,7 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api/client";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
-import type { CourseDetail, EvaluationAdmin, ModuleAdmin, Question, QuestionType } from "@/lib/api/types";
+import { settingsApi, settingsKeys } from "@/lib/api/settings";
+import type { CourseDetail, EvaluationAdmin, EvaluationDefaults, ModuleAdmin, Question, QuestionType } from "@/lib/api/types";
 import { moveItem, removeAt, replaceAt } from "@/lib/array";
 import { plural, twoDigits } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
@@ -30,8 +31,6 @@ import { QuestionEditor } from "./question-editor";
 import { QUESTION_TYPES, blankQuestion, questionProblem } from "./question-model";
 import { SuggestQuestionsButton } from "./suggest-questions-button";
 
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_PASSING_SCORE = 70;
 const MAX_QUESTIONS = 30; // EvaluationPut.questions max_length
 
 /** Whole number typed in a field, or null while it is empty, fractional or outside [min, max]. */
@@ -67,11 +66,13 @@ interface EvaluationFormProps {
   courseId: number;
   /** Null while the module has no evaluation yet. */
   evaluation: EvaluationAdmin | null;
+  /** What a new one starts with (the platform's, from Parámetros): only needed while there is none. */
+  defaults?: EvaluationDefaults;
   onDirtyChange: (dirty: boolean) => void;
 }
 
 /** Editable draft of a module's evaluation, started from what the server has saved. */
-function EvaluationForm({ module, courseId, evaluation, onDirtyChange }: EvaluationFormProps) {
+function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange }: EvaluationFormProps) {
   const confirm = useConfirm();
   const { refreshEvaluation } = useCourseCache();
   const [questions, setQuestions] = useState<Question[]>(evaluation?.questions ?? []);
@@ -83,8 +84,8 @@ function EvaluationForm({ module, courseId, evaluation, onDirtyChange }: Evaluat
     );
   }, []);
   // Raw text while typing; validated below instead of clamped on every keystroke.
-  const [maxAttempts, setMaxAttempts] = useState(String(evaluation?.max_attempts ?? DEFAULT_MAX_ATTEMPTS));
-  const [passingScore, setPassingScore] = useState(String(evaluation?.passing_score ?? DEFAULT_PASSING_SCORE));
+  const [maxAttempts, setMaxAttempts] = useState(String(evaluation?.max_attempts ?? defaults?.max_attempts ?? ""));
+  const [passingScore, setPassingScore] = useState(String(evaluation?.passing_score ?? defaults?.passing_score ?? ""));
   const attempts = wholeNumberIn(maxAttempts, 1, 20);
   const score = wholeNumberIn(passingScore, 1, 100);
   const problems = questions
@@ -233,8 +234,14 @@ function ModuleEvaluation({
     },
   });
 
-  if (evaluation.isLoading) return <Skeleton className="h-40" />;
+  // A new one starts with the platform's defaults: the form waits for them.
+  const isNew = evaluation.data === null;
+  const defaults = useQuery({ queryKey: settingsKeys.all, queryFn: settingsApi.get, enabled: isNew });
+
+  if (evaluation.isLoading || (isNew && defaults.isPending)) return <Skeleton className="h-40" />;
   if (evaluation.error) return <QueryError query={evaluation} />;
+  // Unreadable, it says so: never values made up here, which saving would keep as the evaluation's own.
+  if (isNew && !defaults.data) return <QueryError query={defaults} />;
 
   // Keyed by what is saved: the draft starts over whenever the saved evaluation changes (saved, removed...).
   const saved = evaluation.data ?? null;
@@ -244,6 +251,7 @@ function ModuleEvaluation({
       module={module}
       courseId={courseId}
       evaluation={saved}
+      defaults={defaults.data?.evaluations}
       onDirtyChange={onDirtyChange}
     />
   );

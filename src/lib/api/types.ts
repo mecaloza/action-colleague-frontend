@@ -38,6 +38,8 @@ export interface CourseSettings {
   animation?: Animation;
   presenter: boolean;
   theme: SlideTheme;
+  /** A certificate on completion: true or false whatever the platform's parameter, null follows it. */
+  certificate?: boolean | null;
 }
 
 export type AvatarEngine = "" | "avatar_iii" | "avatar_iv";
@@ -328,14 +330,129 @@ export interface LearnerPath {
   current_course_id: number | null;
   /** Its published courses, in order. */
   steps: LearnerPathStep[];
+  /** Earned by completing it (valid or expired; null once revoked). */
+  certificate: CertificateRef | null;
 }
 
-/** What completing a course opened in the learner's paths (both null until the course is completed). */
+// Certificates: earned by completing a course or a path; anyone with the code can verify them.
+export type CertificateKind = "course" | "path";
+export type CertificateStatus = "valid" | "expired" | "revoked";
+
+/** A learner's certificate, as the course and path views link it. */
+export interface CertificateRef {
+  id: number;
+  /** "RC-XXXX-XXXX". */
+  code: string;
+  /** Absolute: the PDF opens without a session. */
+  pdf_url: string;
+  /** The app's public verification page. */
+  verify_url: string;
+}
+
+export interface LearnerCertificate {
+  id: number;
+  code: string;
+  kind: CertificateKind;
+  title: string;
+  issued_at: string;
+  expires_at: string | null;
+  status: CertificateStatus;
+  /** Null once the course (or path) is deleted: the certificate stays. */
+  course_id: number | null;
+  path_id: number | null;
+  /** Average best quiz score (null: no quiz taken). */
+  score: number | null;
+  /** A revoked one keeps it, but the PDF is no longer served (410). */
+  pdf_url: string;
+  verify_url: string;
+}
+
+export interface AdminCertificate extends LearnerCertificate {
+  recipient_name: string;
+  user_id: number;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+}
+
+export interface AdminCertificatePage {
+  items: AdminCertificate[];
+  total: number;
+}
+
+/** The snapshot taken when it was issued: later edits never change it. */
+export interface CertificateDetails {
+  /** Of the course's (or path's) videos. */
+  hours: number;
+  modules: number;
+  /** The course, or the path's published courses in order. */
+  courses: { title: string; completed_at: string | null }[];
+  average_score: number | null;
+  company_name: string;
+  signer_name: string;
+  signer_title: string;
+  /** Where its dates are written (null: the platform's current one). */
+  timezone: string | null;
+}
+
+/** What anyone with the code sees, signed in or not. */
+export interface PublicCertificate {
+  code: string;
+  status: CertificateStatus;
+  kind: CertificateKind;
+  recipient_name: string;
+  title: string;
+  issued_at: string;
+  expires_at: string | null;
+  /** The company's name, or "Rubinstein Colleague". */
+  issuer_name: string;
+  details: CertificateDetails;
+  pdf_url: string;
+}
+
+export interface CompletedPath extends PathRef {
+  /** The path's certificate, when it gives one. */
+  certificate: CertificateRef | null;
+}
+
+/** What completing a course earned and opened in the learner's paths (all null until the course is completed). */
 export interface PathOutcome {
+  /** The course's certificate (issued now or before; null when it gives none). */
+  certificate: CertificateRef | null;
   /** The next course of its path, now available. */
   next_course: CourseRef | null;
   /** The path this course completed. */
-  path_completed: PathRef | null;
+  path_completed: CompletedPath | null;
+}
+
+// The platform's parameters ("Parámetros"): every key has a default.
+export interface GeneralSettings {
+  /** The issuer of the certificates ("" = Rubinstein Colleague). */
+  company_name: string;
+  /** An IANA zone, spelled exactly ("America/Bogota"): where dates are written. */
+  timezone: string;
+}
+
+/** What a new evaluation starts with (by hand or drafted by the AI). */
+export interface EvaluationDefaults {
+  passing_score: number;
+  max_attempts: number;
+}
+
+export interface CertificateSettings {
+  /** Issued by themselves on completion (a course can opt in or out). */
+  enabled: boolean;
+  /** Null: they never expire. */
+  validity_months: number | null;
+  /** Average best quiz score a course certificate needs (null: any). */
+  min_score: number | null;
+  signer_name: string;
+  signer_title: string;
+}
+
+export interface PlatformSettings {
+  general: GeneralSettings;
+  evaluations: EvaluationDefaults;
+  certificates: CertificateSettings;
 }
 
 export interface Dashboard {
@@ -376,6 +493,8 @@ export interface LearnerCourse {
   locked_by: CourseRef | null;
   /** The first of the learner's paths with this course. */
   path: CoursePath | null;
+  /** Earned by completing it (valid or expired; null once revoked). */
+  certificate: CertificateRef | null;
 }
 
 export interface QuizSummary {
@@ -616,6 +735,7 @@ export interface LearnerCourseDetail {
   locked: boolean;
   locked_by: CourseRef | null;
   path: CoursePath | null;
+  certificate: CertificateRef | null;
 }
 
 export interface Choice {
