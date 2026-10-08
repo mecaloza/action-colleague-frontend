@@ -249,6 +249,7 @@ interface SlideFieldsProps {
 function SlideFields({ id, slide, onChange, warnings }: SlideFieldsProps) {
   const textField = (field: SlideTextField, label: string, max = 300) => {
     const fieldId = `${id}-${field}`;
+    const fieldWarnings = warnings.of(field);
     return (
       <div>
         <Label htmlFor={fieldId}>{label}</Label>
@@ -257,28 +258,33 @@ function SlideFields({ id, slide, onChange, warnings }: SlideFieldsProps) {
           value={slide[field]}
           onChange={(event) => onChange({ [field]: event.target.value })}
           maxLength={max}
-          {...warnedField(fieldId, warnings.of(field))}
+          {...warnedField(fieldId, fieldWarnings)}
         />
-        <FieldWarnings fieldId={fieldId} warnings={warnings.of(field)} />
+        <FieldWarnings fieldId={fieldId} warnings={fieldWarnings} />
       </div>
     );
   };
   const pointsLabel = POINTS_LABEL[slide.layout];
   const pointWarnings = (index: number) => warnings.of(`points.${index}`);
-  const iconField = (label: string) => (
-    <div>
-      <div className="flex items-center gap-3">
-        <IconPicker
-          value={slide.icon ?? ""}
-          onChange={(icon) => onChange({ icon })}
-          label={label}
-          describedBy={warnedField(`${id}-icon`, warnings.of("icon"))["aria-describedby"]}
-        />
-        <span className="text-sm text-muted-foreground">Ícono (opcional)</span>
+  const titleWarnings = warnings.of("title");
+  const iconField = (label: string) => {
+    const iconId = `${id}-icon`;
+    const iconWarnings = warnings.of("icon");
+    return (
+      <div>
+        <div className="flex items-center gap-3">
+          <IconPicker
+            value={slide.icon ?? ""}
+            onChange={(icon) => onChange({ icon })}
+            label={label}
+            describedBy={warnedField(iconId, iconWarnings)["aria-describedby"]}
+          />
+          <span className="text-sm text-muted-foreground">Ícono (opcional)</span>
+        </div>
+        <FieldWarnings fieldId={iconId} warnings={iconWarnings} />
       </div>
-      <FieldWarnings fieldId={`${id}-icon`} warnings={warnings.of("icon")} />
-    </div>
-  );
+    );
+  };
 
   return (
     <>
@@ -330,9 +336,9 @@ function SlideFields({ id, slide, onChange, warnings }: SlideFieldsProps) {
               onChange={(event) => onChange({ title: event.target.value })}
               maxLength={300}
               className="min-h-[72px]"
-              {...warnedField(`${id}-title`, warnings.of("title"))}
+              {...warnedField(`${id}-title`, titleWarnings)}
             />
-            <FieldWarnings fieldId={`${id}-title`} warnings={warnings.of("title")} />
+            <FieldWarnings fieldId={`${id}-title`} warnings={titleWarnings} />
           </div>
           {textField("quote_author", "Autor o fuente (opcional)", 60)}
           {iconField("la frase")}
@@ -364,31 +370,35 @@ function SlideFields({ id, slide, onChange, warnings }: SlideFieldsProps) {
       )}
       {slide.layout === "comparison" && (
         <div className="grid gap-4 sm:grid-cols-2">
-          {SIDES.map(({ side, heading, placeholder, column }) => (
-            <div key={side} className="space-y-2">
-              <div>
-                <Input
-                  id={`${id}-${side}-heading`}
-                  aria-label={heading}
-                  value={slide[side].heading}
-                  onChange={(event) => onChange({ [side]: { ...slide[side], heading: event.target.value } })}
-                  placeholder={placeholder}
-                  maxLength={80}
-                  {...warnedField(`${id}-${side}-heading`, warnings.of(`${side}.heading`))}
+          {SIDES.map(({ side, heading, placeholder, column }) => {
+            const headingId = `${id}-${side}-heading`;
+            const headingWarnings = warnings.of(`${side}.heading`);
+            return (
+              <div key={side} className="space-y-2">
+                <div>
+                  <Input
+                    id={headingId}
+                    aria-label={heading}
+                    value={slide[side].heading}
+                    onChange={(event) => onChange({ [side]: { ...slide[side], heading: event.target.value } })}
+                    placeholder={placeholder}
+                    maxLength={80}
+                    {...warnedField(headingId, headingWarnings)}
+                  />
+                  <FieldWarnings fieldId={headingId} warnings={headingWarnings} />
+                </div>
+                <ListEditor
+                  label={column}
+                  values={slide[side].points}
+                  onChange={(points) => onChange({ [side]: { ...slide[side], points } })}
+                  placeholder="Punto"
+                  max={4}
+                  maxLength={120}
+                  warnings={(index) => warnings.of(`${side}.points.${index}`)}
                 />
-                <FieldWarnings fieldId={`${id}-${side}-heading`} warnings={warnings.of(`${side}.heading`)} />
               </div>
-              <ListEditor
-                label={column}
-                values={slide[side].points}
-                onChange={(points) => onChange({ [side]: { ...slide[side], points } })}
-                placeholder="Punto"
-                max={4}
-                maxLength={120}
-                warnings={(index) => warnings.of(`${side}.points.${index}`)}
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>

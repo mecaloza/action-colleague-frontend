@@ -9,10 +9,14 @@ import { cn } from "@/lib/utils";
 
 export const isError = (warning: LayoutWarning) => warning.severity === "error";
 
+function addTo(groups: Map<string, LayoutWarning[]>, key: string, warning: LayoutWarning) {
+  groups.set(key, [...(groups.get(key) ?? []), warning]);
+}
+
 /** Each scene's warnings, by scene id. */
 export function warningsByScene(warnings: LayoutWarning[]): Map<string, LayoutWarning[]> {
   const byScene = new Map<string, LayoutWarning[]>();
-  for (const warning of warnings) byScene.set(warning.scene_id, [...(byScene.get(warning.scene_id) ?? []), warning]);
+  for (const warning of warnings) addTo(byScene, warning.scene_id, warning);
   return byScene;
 }
 
@@ -46,7 +50,7 @@ export function sceneWarnings(layout: SlideLayout, warnings: LayoutWarning[]): S
     // A figure without its meaning shows the title in its place: the admin fixes it by writing the meaning.
     const field = layout === "stat" && warning.field === "title" ? "stat_label" : warning.field;
     if (field === null || !EDITOR_FIELDS[layout].test(field)) general.push(warning);
-    else byField.set(field, [...(byField.get(field) ?? []), warning]);
+    else addTo(byField, field, warning);
   }
   return { of: (field) => byField.get(field) ?? [], general };
 }
