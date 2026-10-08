@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 /** Keeps the app shell (navigation) alive when a page crashes, and offers a way out. */
 export default function AppError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <div className="container flex min-h-[60vh] flex-col items-start justify-center gap-6 py-16">
+    <div className="container flex min-h-[60dvh] flex-col items-start justify-center gap-6 py-16">
       <p className="eyebrow">Algo salió mal</p>
       <h1 className="display-md max-w-2xl">No pudimos mostrar esta página.</h1>
       <p className="max-w-xl text-muted-foreground">

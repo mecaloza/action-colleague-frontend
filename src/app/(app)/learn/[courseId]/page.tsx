@@ -1,10 +1,13 @@
 "use client";
 
 import { Suspense, useCallback, useRef, useState } from "react";
+import Link from "next/link";
 import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, Lock } from "lucide-react";
 import { BackLink } from "@/components/layout/back-link";
+import { EmptyState } from "@/components/layout/empty-state";
 import { PageError, PageLoading } from "@/components/layout/query-state";
 import { SplashScreen } from "@/components/layout/splash-screen";
 import { ActivityPlayer } from "@/components/learn/activities/activity-player";
@@ -12,11 +15,34 @@ import { CourseCompleteDialog } from "@/components/learn/course-complete-dialog"
 import { ModuleNav } from "@/components/learn/module-nav";
 import { ModuleView } from "@/components/learn/module-view";
 import { QuizDialog } from "@/components/learn/quiz/quiz-dialog";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { ApiError } from "@/lib/api/client";
 import { learnApi, learnKeys } from "@/lib/api/learn";
 import type { ActivityFinish, CompletionResult, LearnerActivitySummary } from "@/lib/api/types";
 import { formatPercent, plural } from "@/lib/format";
+import { useUnmountSignal } from "@/lib/hooks/use-unmount-signal";
 import { toastError } from "@/lib/notify";
+
+/** A course the learner can't open (not assigned, removed or locked): what happened, and the way back. */
+function CourseUnavailable({ message }: { message: string }) {
+  return (
+    <div className="container py-12">
+      <EmptyState
+        icon={<Lock />}
+        title="No puedes abrir este curso"
+        description={`${message.replace(/[.\s]*$/, ".")} Si crees que es un error, habla con tu administrador.`}
+        action={
+          <Button variant="outline" asChild>
+            <Link href="/learn">
+              <ArrowLeft /> Volver a mis cursos
+            </Link>
+          </Button>
+        }
+      />
+    </div>
+  );
+}
 
 function CoursePlayer() {
   const params = useParams<{ courseId: string }>();
@@ -38,6 +64,9 @@ function CoursePlayer() {
   );
   // The last play's result: when it completed the module, closing the activity moves on.
   const finishedPlay = useRef<ActivityFinish | null>(null);
+  // Whether an activity is on screen: a play recorded once its player closed moves on by itself.
+  const playerOpen = useRef(false);
+  const unmounted = useUnmountSignal();
 
   const detail = useQuery({ queryKey: learnKeys.course(courseId), queryFn: () => learnApi.course(courseId), enabled: validId });
   const modules = detail.data?.modules ?? [];
@@ -69,6 +98,8 @@ function CoursePlayer() {
   const advance = async (outcome: Pick<CompletionResult, "course_completed" | "next_module_id">) => {
     await queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
     void queryClient.invalidateQueries({ queryKey: learnKeys.courses });
+    // Done after the learner left the course (a play recorded late, a slow answer): it never brings them back.
+    if (unmounted().aborted) return;
     if (outcome.course_completed) setCelebrating(true);
     else if (outcome.next_module_id) show(outcome.next_module_id);
   };
@@ -85,7 +116,14 @@ function CoursePlayer() {
 
   if (!validId) notFound();
   if (detail.isPending) return <PageLoading bodyClassName="aspect-video" />;
-  if (!detail.data) return <PageError query={detail} />;
+  if (!detail.data) {
+    const { error } = detail;
+    // Not theirs, removed or locked: retrying won't help, the way back does.
+    if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+      return <CourseUnavailable message={error.message} />;
+    }
+    return <PageError query={detail} />;
+  }
 
   const { course, enrollment } = detail.data;
   const completedCount = modules.filter((module) => module.completed).length;
@@ -133,6 +171,7 @@ function CoursePlayer() {
                 onNext={() => nextModule && show(nextModule.id)}
                 onPlayActivity={(activity) => {
                   finishedPlay.current = null;
+                  playerOpen.current = true;
                   setPlaying((last) => ({ activity, session: (last?.session ?? 0) + 1, wasCompleted: current.completed }));
                 }}
               />
@@ -145,6 +184,7 @@ function CoursePlayer() {
         <ActivityPlayer
           key={playing.session}
           activity={playing.activity}
+          language={course.language}
           open
           api={{
             start: (untimed) => learnApi.startActivity(playing.activity.id, untimed),
@@ -152,15 +192,24 @@ function CoursePlayer() {
             finish: learnApi.finishActivity,
           }}
           onFinished={(result) => {
-            if (!playing.wasCompleted) finishedPlay.current = result; // this play completed the module
             void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
+            // Playing again for a better score moves nothing on; the play that completed the module does: as the
+            // activity on screen closes (this one, or another opened meanwhile), or right away if none is open.
+            if (playing.wasCompleted || !result.module_completed) return;
+            if (playerOpen.current) finishedPlay.current = result;
+            else void advance(result);
           }}
+          // Its save as it closed failed: the module shows what the server kept (the last move counted the play).
+          onRecordFailed={() => void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) })}
           onOpenChange={(open) => {
             if (open) return;
+            playerOpen.current = false;
             setPlaying(null);
             const result = finishedPlay.current;
             finishedPlay.current = null;
-            if (result?.module_completed) void advance(result);
+            if (result) void advance(result);
+            // A play left open is resumed from its card ("Continuar"); one that ended shows once it is recorded.
+            else void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
           }}
         />
       )}

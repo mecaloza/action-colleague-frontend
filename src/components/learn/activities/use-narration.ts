@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const MUTED_KEY = "activity-voice-muted";
+// 10 ms of silence (8 kHz, 8-bit mono WAV): what `unlock` plays inside the learner's tap.
+const SILENCE =
+  "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
 
 function readMuted(): boolean {
   try {
@@ -14,9 +17,10 @@ function readMuted(): boolean {
 
 /**
  * The narrator of an activity: plays its voice clips one after the other (a consequence, then the next
- * situation), cutting the previous line when a new one starts. Browsers only allow sound after a gesture: the
- * first clip plays from the learner's "Empezar". The text is always on screen, so a muted (or failed) voice
- * loses nothing.
+ * situation), cutting the previous line when a new one starts. Browsers only allow sound after a gesture, and
+ * iOS only lets an audio element play after a network call if it already played inside a tap: `unlock()` runs
+ * in the learner's "Empezar" and every line reuses that element. The text is always on screen, so a muted (or
+ * failed) voice loses nothing.
  */
 export function useNarration() {
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -24,6 +28,7 @@ export function useNarration() {
   const [muted, setMuted] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const mutedRef = useRef(false);
+  const unlocked = useRef(false);
   const alive = useRef(true);
   // Each say() starts a new generation: a play() of an earlier one that fails late never skips the new lines.
   const generation = useRef(0);
@@ -72,6 +77,24 @@ export function useNarration() {
     [next],
   );
 
+  /** Call synchronously inside a tap: plays a moment of silence so the lines said later (after a request) can play. */
+  const unlock = useCallback(() => {
+    if (unlocked.current) return;
+    unlocked.current = true;
+    const element = audio.current ?? new Audio();
+    audio.current = element;
+    const mine = generation.current;
+    element.src = SILENCE;
+    element.play().then(
+      () => {
+        if (mine === generation.current) element.pause(); // a line said meanwhile keeps playing
+      },
+      () => {
+        unlocked.current = false; // refused: the next tap tries again
+      },
+    );
+  }, []);
+
   const toggleMuted = useCallback(() => {
     mutedRef.current = !mutedRef.current;
     setMuted(mutedRef.current);
@@ -87,7 +110,7 @@ export function useNarration() {
     }
   }, []);
 
-  return { say, muted, speaking, toggleMuted };
+  return { say, unlock, muted, speaking, toggleMuted };
 }
 
 export type Narration = ReturnType<typeof useNarration>;

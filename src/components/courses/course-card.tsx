@@ -7,10 +7,14 @@ import { formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "./status-badge";
 
+// Any letter or digit, accented ones too (a constructor: the `u` flag is past the compiler's target).
+const NOT_A_LETTER = new RegExp("[^\\p{L}\\p{N}]", "gu");
+
 /** Generated cover for courses without an image: black field, brand diamonds and the initials. */
 export function CoverArt({ title, seed, className }: { title: string; seed: number; className?: string }) {
   const initials = title
     .split(/\s+/)
+    .map((word) => word.replace(NOT_A_LETTER, "")) // "(Juegos)" -> "Juegos": no "(" for an initial
     .filter((word) => word.length > 2)
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase())

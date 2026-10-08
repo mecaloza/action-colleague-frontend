@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
-    <div className="band-dark flex min-h-screen flex-col">
+    <div className="band-dark flex min-h-dvh flex-col">
       <div className="container relative z-10 py-8">
         <Logo inverse />
       </div>

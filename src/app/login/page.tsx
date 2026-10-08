@@ -87,7 +87,7 @@ function LoginForm() {
           <button
             type="button"
             onClick={() => setShowPassword((value) => !value)}
-            className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-ink-800"
+            className="absolute right-0.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-ink-800"
             aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
             aria-pressed={showPassword}
           >
@@ -123,7 +123,7 @@ function LoginScreen() {
   if (status !== "anonymous") return <SplashScreen />;
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
+    <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       <section className="band-dark hidden flex-col justify-between p-12 lg:flex xl:p-16">
         <Logo inverse />
         <DiamondMotif className="absolute right-12 top-10 h-[210px] w-[140px] xl:right-16" />

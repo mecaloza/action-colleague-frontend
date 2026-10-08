@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckCircle2, CircleX, Flame, Heart, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { InspectionItem, InspectionView } from "@/lib/api/types";
+import { plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PlayerProps } from "./activity-player";
 import { LOOK_LABELS, TireTread } from "./tire-tread";
 
 /** Both scenes are two columns wide: a truck's left and right tires, or two columns of cards. */
 const COLUMNS = 2;
+// How tall a phone's sheet (facts and decisions) may grow: tiles scrolled to stop above it.
+const SHEET = { "--sheet": "55dvh" } as CSSProperties;
 const DIRECTIONS: Record<string, [number, number]> = {
   arrowleft: [-1, 0],
   a: [-1, 0],
@@ -43,7 +46,8 @@ function stepFrom(index: number, [dx, dy]: [number, number], count: number): num
 /**
  * Inspect each item (a tire on a truck, or a case on a card), read its facts and decide what to do with it. A
  * right decision scores (more in a row); a wrong one costs a life. Played with the mouse, a finger or the keyboard:
- * arrows or WASD to move, 1-4 to decide.
+ * arrows or WASD to move, 1-4 to decide. On a phone the selected item's facts and decisions are a sheet at the
+ * bottom of the screen, over the diagram, so deciding never needs a scroll.
  */
 export function InspectionPlayer({
   view,
@@ -63,7 +67,7 @@ export function InspectionPlayer({
   const root = useRef<HTMLDivElement>(null);
   const tiles = useRef<(HTMLButtonElement | null)[]>([]);
   const nextButton = useRef<HTMLButtonElement>(null);
-  const ending = useRef<HTMLParagraphElement>(null);
+  const outcomeBox = useRef<HTMLDivElement>(null);
   const justDecided = useRef(false);
   const over = view.done;
   const truck = view.scene === "truck";
@@ -80,7 +84,10 @@ export function InspectionPlayer({
 
   const select = (index: number) => {
     setSelected(index);
-    tiles.current[index]?.focus();
+    const tile = tiles.current[index];
+    // Into sight above a phone's sheet (the tiles' bottom scroll margin); the keyboard goes on with it.
+    tile?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+    tile?.focus({ preventScroll: true });
   };
 
   const decide = async (verdict: string) => {
@@ -96,8 +103,8 @@ export function InspectionPlayer({
     setGain({ key: Date.now(), points: result.points, correct: result.correct });
     setAnnouncement(
       result.correct
-        ? `Correcto: +${result.points} puntos.`
-        : `Incorrecto: era ${result.item.outcome?.answer_label}. Te quedan ${result.lives} vidas.`,
+        ? `Correcto: +${plural(result.points, "punto")}.`
+        : `Incorrecto: era ${result.item.outcome?.answer_label}. Te quedan ${plural(result.lives, "vida")}.`,
     );
     justDecided.current = true;
     narration.say([result.item.outcome ? outcome.narration[result.item.outcome.line] : undefined]);
@@ -109,12 +116,14 @@ export function InspectionPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the game appears
   }, []);
 
-  // Right after a decision the focus goes to "Siguiente" (Enter moves on), or to the ending when it was the last.
+  // Right after a decision its outcome comes into sight (inside a phone's sheet too) and "Siguiente" takes the
+  // focus (Enter moves on). After the last one, the game's "Ver resultado" takes it.
   useEffect(() => {
     if (!justDecided.current || !item?.outcome) return;
     justDecided.current = false;
-    (over ? ending.current : nextButton.current)?.focus();
-  }, [item?.outcome, over]);
+    outcomeBox.current?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+    if (!over) nextButton.current?.focus();
+  }, [item?.outcome, over, reduce]);
 
   // The keyboard plays from anywhere in the game (the latest handler: no stale state).
   const onKey = useRef<(event: KeyboardEvent) => void>(() => {});
@@ -148,6 +157,7 @@ export function InspectionPlayer({
     const active = selected === index;
     const state = !other.outcome ? "pendiente" : other.outcome.correct ? "acertada" : "fallada";
     const waiting = !other.outcome && !active && !over && !reduce; // its badge beats, to call for a look
+    const truckLook = other.look === "none" ? "even" : other.look; // a tire on the truck always has a tread
     return (
       <button
         key={other.id}
@@ -157,19 +167,22 @@ export function InspectionPlayer({
         type="button"
         onClick={() => select(index)}
         aria-pressed={active}
-        aria-label={`${other.label}: ${state}${truck ? ` · ${LOOK_LABELS[other.look === "none" ? "even" : other.look]}` : ""}`}
+        aria-label={`${other.label}: ${state}${truck ? ` · ${LOOK_LABELS[truckLook]}` : ""}`}
         className={cn(
-          "relative flex items-center justify-center border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-          truck ? "h-24 w-16 rounded-md p-1" : "min-h-24 w-full gap-3 px-4 py-3 text-left",
+          // A tile scrolled to stops below the status bar, and above the sheet that covers a phone's lower half.
+          "relative flex scroll-mb-[calc(var(--sheet)+1rem)] scroll-mt-14 items-center justify-center border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:scroll-mb-0",
+          truck
+            ? "h-16 w-11 rounded-md p-1 sm:h-24 sm:w-16"
+            : "min-h-20 w-full min-w-0 gap-2 px-3 py-2.5 text-left sm:min-h-24 sm:gap-3 sm:px-4 sm:py-3",
           active ? "border-accent bg-accent/15" : "border-white/15 hover:border-white/50",
         )}
       >
         {truck ? (
-          <TireTread look={other.look === "none" ? "even" : other.look} />
+          <TireTread look={truckLook} />
         ) : (
           <>
-            {other.look !== "none" && <TireTread look={other.look} className="h-16 shrink-0" />}
-            <span className="flex-1 font-semibold text-white">{other.label}</span>
+            {other.look !== "none" && <TireTread look={other.look} className="h-12 shrink-0 sm:h-16" />}
+            <span className="min-w-0 flex-1 break-words font-semibold text-white">{other.label}</span>
           </>
         )}
         <motion.span
@@ -186,7 +199,7 @@ export function InspectionPlayer({
           {!other.outcome ? "?" : other.outcome.correct ? "✓" : "✗"}
         </motion.span>
         {truck && (
-          <span className="absolute -bottom-5 text-[11px] font-semibold text-white/60" aria-hidden>
+          <span className="absolute -bottom-5 text-xs font-semibold text-white/60" aria-hidden>
             {index + 1}
           </span>
         )}
@@ -197,46 +210,45 @@ export function InspectionPlayer({
   const rows = Array.from({ length: Math.ceil(items.length / COLUMNS) }, (_, row) => row);
 
   return (
-    <div ref={root} className="flex flex-col gap-5">
+    <div ref={root} className="flex flex-col gap-4 sm:gap-5" style={SHEET}>
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-lg text-white">{view.prompt}</p>
-        <div className="relative flex items-center gap-4 text-sm">
-          <span className="flex items-center gap-0.5" aria-label={`${lives} de ${view.max_lives} vidas`} role="img">
-            {Array.from({ length: view.max_lives }, (_, n) => (
-              <motion.span key={n} animate={{ scale: n < lives ? 1 : 0.75, opacity: n < lives ? 1 : 0.35 }}>
-                <Heart className={cn("h-5 w-5", n < lives ? "fill-destructive text-destructive" : "text-white/40")} />
-              </motion.span>
-            ))}
-          </span>
-          <span className="flex items-center gap-1 text-accent">
-            <Flame className="h-4 w-4" /> Racha {streak}
-          </span>
-          <span className="tabular-nums text-white/70">
-            {decided}/{items.length}
-          </span>
-          <AnimatePresence>
-            {gain && (
-              <motion.span
-                key={gain.key}
-                initial={{ opacity: 1, y: 0 }}
-                animate={{ opacity: 0, y: -28 }}
-                transition={{ duration: reduce ? 0 : 1.2 }}
-                className={cn(
-                  "pointer-events-none absolute -top-2 right-0 font-display text-xl font-bold",
-                  gain.correct ? "text-accent" : "text-destructive",
-                )}
-                aria-hidden
-              >
-                {gain.correct ? `+${gain.points}` : "−1 vida"}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
+      <p className="text-lg text-white">{view.prompt}</p>
+      {/* Lives, streak and progress stay in sight under the header while the learner scrolls the diagram. */}
+      <div className="sticky top-[var(--game-header,0px)] z-10 -mx-4 flex items-center gap-4 bg-ink-950/95 px-4 py-2 text-sm backdrop-blur sm:-mx-6 sm:px-6">
+        <span className="flex items-center gap-0.5" aria-label={`${lives} de ${view.max_lives} vidas`} role="img">
+          {Array.from({ length: view.max_lives }, (_, n) => (
+            <motion.span key={n} animate={{ scale: n < lives ? 1 : 0.75, opacity: n < lives ? 1 : 0.35 }}>
+              <Heart className={cn("h-5 w-5", n < lives ? "fill-destructive text-destructive" : "text-white/40")} />
+            </motion.span>
+          ))}
+        </span>
+        <span className="flex items-center gap-1 text-accent">
+          <Flame className="h-4 w-4" /> Racha {streak}
+        </span>
+        <span className="tabular-nums text-white/70">
+          {decided}/{items.length}
+        </span>
+        <AnimatePresence>
+          {gain && (
+            <motion.span
+              key={gain.key}
+              initial={{ opacity: 1, y: 0 }}
+              animate={{ opacity: 0, y: -8 }}
+              transition={{ duration: reduce ? 0 : 1.2 }}
+              className={cn(
+                "pointer-events-none absolute right-4 top-1.5 font-display text-xl font-bold sm:right-6",
+                gain.correct ? "text-accent" : "text-destructive",
+              )}
+              aria-hidden
+            >
+              {gain.correct ? `+${gain.points}` : "−1 vida"}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
-      <p className="hidden items-center gap-2 text-xs text-white/50 sm:flex">
+      <p className="flex items-center gap-2 text-xs text-white/50 touch:hidden">
         <Keyboard className="h-4 w-4" /> Flechas o WASD: elegir · 1–{view.verdicts.length}: decidir · Enter: siguiente
       </p>
       {imageUrl && (
@@ -247,8 +259,11 @@ export function InspectionPlayer({
       <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         {truck ? (
           <div className="mx-auto w-full max-w-xs" role="group" aria-label="Llantas de la unidad">
-            <div className="mx-auto h-16 w-3/5 rounded-t-[2rem] border border-white/20 bg-white/10 pt-3" aria-hidden>
-              <div className="mx-auto h-5 w-4/5 rounded-t-xl bg-sky-300/30" />
+            <div
+              className="mx-auto h-12 w-3/5 rounded-t-[2rem] border border-white/20 bg-white/10 pt-2.5 sm:h-16 sm:pt-3"
+              aria-hidden
+            >
+              <div className="mx-auto h-4 w-4/5 rounded-t-xl bg-sky-300/30 sm:h-5" />
             </div>
             <div className="relative pb-4">
               <div
@@ -256,10 +271,10 @@ export function InspectionPlayer({
                 aria-hidden
               />
               {rows.map((row) => (
-                <div key={row} className="relative grid grid-cols-[auto_1fr_auto] items-center gap-2 py-4">
+                <div key={row} className="relative grid grid-cols-[auto_1fr_auto] items-center gap-2 py-3 sm:py-4">
                   {tile(row * COLUMNS)}
                   <div className="relative h-1.5 bg-white/25" aria-hidden>
-                    <span className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold uppercase tracking-label text-white/50">
+                    <span className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] font-bold uppercase tracking-label text-white/50">
                       {row === 0 ? "Dirección" : `Eje ${row + 1}`}
                     </span>
                   </div>
@@ -274,42 +289,50 @@ export function InspectionPlayer({
           </div>
         )}
 
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           {item && (
             <motion.section
               key={item.id}
               initial={reduce ? false : { opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
               exit={reduce ? undefined : { opacity: 0, x: -12 }}
-              className="flex flex-col gap-4 self-start border border-white/15 bg-white/5 p-5"
+              className={cn(
+                // Phones: a sheet stuck to the bottom of the game (above "Ver resultado" once it is over).
+                "sticky bottom-[var(--action-bar,0px)] z-10 -mx-4 flex max-h-[var(--sheet)] flex-col border-t border-white/15 bg-ink-900 shadow-[0_-16px_32px_-12px_rgba(0,0,0,0.8)] sm:-mx-6",
+                "md:static md:mx-0 md:max-h-none md:self-start md:border md:bg-white/5 md:shadow-none",
+              )}
               aria-label={item.label}
             >
-              <div className="flex items-start gap-4">
-                {item.look !== "none" && <TireTread look={item.look} className="h-32 shrink-0" />}
-                <div className="min-w-0">
-                  <p className="eyebrow text-white/50">
-                    {selected + 1} de {items.length}
-                  </p>
-                  <h3 className="font-display text-xl text-white">{item.label}</h3>
-                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
-                    {item.facts.map((fact, index) => (
-                      <div key={index}>
-                        <dt className="text-[11px] font-bold uppercase tracking-label text-white/50">{fact.label}</dt>
-                        <dd className="font-semibold tabular-nums text-white">{fact.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
+              {/* The facts and the outcome scroll inside the sheet; the decisions below them never do. */}
+              <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pt-4 sm:px-6 md:overflow-visible md:px-5 md:pt-5">
+                <div className="flex items-start gap-4">
+                  {item.look !== "none" && <TireTread look={item.look} className="h-20 shrink-0 md:h-32" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="eyebrow text-white/50">
+                      {selected + 1} de {items.length}
+                    </p>
+                    <h3 className="break-words font-display text-lg text-white md:text-xl">{item.label}</h3>
+                    <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 md:mt-3">
+                      {item.facts.map((fact, index) => (
+                        <div key={index} className="min-w-0">
+                          <dt className="break-words text-xs font-bold uppercase tracking-label text-white/50">
+                            {fact.label}
+                          </dt>
+                          <dd className="break-words font-semibold tabular-nums text-white">{fact.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
                 </div>
-              </div>
 
-              {item.outcome ? (
-                <>
+                {item.outcome && (
                   <motion.div
+                    ref={outcomeBox}
                     initial={reduce ? false : { scale: 0.96 }}
                     animate={{ scale: 1, x: !item.outcome.correct && !reduce ? [0, -6, 6, -4, 4, 0] : 0 }}
                     role="status"
                     className={cn(
-                      "border-l-2 px-4 py-3",
+                      "mt-4 border-l-2 px-4 py-3",
                       item.outcome.correct ? "border-success bg-success/10" : "border-destructive bg-destructive/10",
                     )}
                   >
@@ -327,48 +350,61 @@ export function InspectionPlayer({
                     </p>
                     <p className="mt-1 text-white/80">{item.outcome.explanation}</p>
                   </motion.div>
-                  {!over && pending >= 0 && (
-                    <Button ref={nextButton} variant="accent" className="self-end" onClick={() => select(pending)}>
-                      Siguiente <ArrowRight />
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <p className="eyebrow text-white/50">¿Qué haces?</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {view.verdicts.map((verdict, index) => (
-                      <button
-                        key={verdict.id}
-                        type="button"
-                        onClick={() => decide(verdict.id)}
-                        aria-keyshortcuts={String(index + 1)}
-                        disabled={sending || over}
-                        className="flex items-center gap-3 border border-white/25 px-4 py-3 text-left text-white transition-colors hover:border-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
-                      >
-                        <kbd
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-white/30 bg-white/10 text-sm font-bold"
-                          aria-hidden
+                )}
+              </div>
+
+              <div
+                className={cn(
+                  "shrink-0 px-4 pt-3 sm:px-6 md:px-5 md:pb-5",
+                  // The bar under the sheet keeps clear of the home indicator once the game is over.
+                  over ? "pb-4" : "pb-[max(1rem,env(safe-area-inset-bottom))]",
+                )}
+              >
+                {/* Once the game is over the bar says how it ended, on any item (one never decided too). */}
+                {over ? (
+                  <p className="text-center font-semibold text-white" role="status">
+                    {lives === 0 ? "Te quedaste sin vidas. " : "¡Inspección terminada! "}
+                    Acertaste {right} de {items.length}: toca cada {truck ? "llanta" : "caso"} para repasar por qué.
+                  </p>
+                ) : item.outcome ? (
+                  pending >= 0 && (
+                    <div className="flex justify-end">
+                      <Button ref={nextButton} variant="accent" onClick={() => select(pending)}>
+                        Siguiente <ArrowRight />
+                      </Button>
+                    </div>
+                  )
+                ) : (
+                  <>
+                    <p className="eyebrow mb-2 text-white/50">¿Qué haces?</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {view.verdicts.map((verdict, index) => (
+                        <button
+                          key={verdict.id}
+                          type="button"
+                          onClick={() => decide(verdict.id)}
+                          aria-keyshortcuts={String(index + 1)}
+                          disabled={sending}
+                          className="flex min-h-12 items-center gap-3 border border-white/25 px-3 py-2 text-left text-white transition-colors hover:border-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 sm:px-4"
                         >
-                          {index + 1}
-                        </kbd>
-                        {verdict.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+                          {/* The key that decides it: only where there is a keyboard. */}
+                          <kbd
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-white/30 bg-white/10 text-sm font-bold touch:hidden"
+                            aria-hidden
+                          >
+                            {index + 1}
+                          </kbd>
+                          <span className="min-w-0 break-words">{verdict.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </motion.section>
           )}
         </AnimatePresence>
       </div>
-
-      {over && (
-        <p ref={ending} tabIndex={-1} className="text-center font-semibold text-white outline-none" role="status">
-          {lives === 0 ? "Te quedaste sin vidas. " : "¡Inspección terminada! "}
-          Acertaste {right} de {items.length}: toca cada una para repasar por qué.
-        </p>
-      )}
     </div>
   );
 }

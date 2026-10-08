@@ -154,7 +154,11 @@ export function ModuleView({
         </p>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
-          <p className="text-sm text-muted-foreground">¿Terminaste? Márcalo para seguir con el siguiente módulo.</p>
+          <p className="text-sm text-muted-foreground">
+            {nextModule
+              ? "¿Terminaste? Márcalo para seguir con el siguiente módulo."
+              : "¿Terminaste? Márcalo para terminar el curso."}
+          </p>
           <Button variant="accent" onClick={onComplete} loading={completing}>
             <CheckCircle2 /> Marcar como completado
           </Button>

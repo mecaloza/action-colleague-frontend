@@ -276,6 +276,8 @@ export interface LearnerActivitySummary {
   finished: boolean;
   best_score: number | null;
   max_score: number;
+  /** An open play that can go on: starting the activity picks it up where it was left. */
+  resumable: boolean;
 }
 
 interface ActivityViewBase {
@@ -297,9 +299,13 @@ export interface DecisionNode {
 
 export interface DecisionStep {
   situation: string;
+  /** Who said the situation (missing in steps played before it was recorded). */
+  speaker?: string;
   choice: string;
   feedback: string;
   points: number;
+  /** The best answer's points at that step, told after choosing (missing in steps played before it was). */
+  best_points?: number;
   line: string;
 }
 
@@ -417,12 +423,18 @@ export interface ActivityPlay {
   narration: Record<string, string>;
   /** A reference photo shown during the play, if the activity has one. */
   image_url: string | null;
+  /** The open play, picked up where it was left (a new play otherwise; an admin's preview always starts anew). */
+  resumed: boolean;
 }
 
 export interface ActivityMoveResult {
   result: Record<string, unknown> & { score: number; done: boolean };
   done: boolean;
   narration: Record<string, string>;
+  /** What `finish` tells, told by the move that ends the game (null for any other move and in an admin's preview). */
+  module_completed: boolean | null;
+  next_module_id: number | null;
+  course_completed: boolean | null;
 }
 
 /** An activity as the admin edits it: its whole spec (answers included). */

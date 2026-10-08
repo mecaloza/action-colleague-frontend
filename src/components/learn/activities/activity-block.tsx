@@ -22,7 +22,9 @@ const ICONS: Record<ActivityType, typeof Play> = {
   quick: Timer,
 };
 
-const playLabel = (activity: LearnerActivitySummary) => (activity.finished ? "Jugar de nuevo" : "Jugar");
+/** A play left open is picked up where it was; otherwise a new one starts. */
+const playLabel = (activity: LearnerActivitySummary) =>
+  activity.resumable ? "Continuar" : activity.finished ? "Jugar de nuevo" : "Jugar";
 
 interface ActivityBlockProps {
   activities: LearnerActivitySummary[];
@@ -53,6 +55,8 @@ export function ActivityBlock({ activities, onPlay }: ActivityBlockProps) {
       <ul className="grid gap-3 md:grid-cols-2">
         {activities.map((activity) => {
           const Icon = ICONS[activity.type];
+          const replay = activity.finished && !activity.resumable;
+          const label = playLabel(activity);
           return (
             <li key={activity.id} className="flex flex-col gap-4 border border-border bg-white p-5">
               <div className="flex items-start gap-3">
@@ -76,15 +80,17 @@ export function ActivityBlock({ activities, onPlay }: ActivityBlockProps) {
                     <CheckCircle2 className="h-4 w-4" /> {activity.best_score} de {activity.max_score} puntos
                   </p>
                 ) : (
-                  <p className="text-sm text-muted-foreground">Pendiente · hasta {activity.max_score} puntos</p>
+                  <p className="text-sm text-muted-foreground">
+                    {activity.resumable ? "Partida sin terminar" : "Pendiente"} · hasta {activity.max_score} puntos
+                  </p>
                 )}
                 <Button
-                  variant={activity.finished ? "outline" : "accent"}
-                  size="sm"
+                  variant={replay ? "outline" : "accent"}
+                  className="shrink-0"
                   onClick={() => onPlay(activity)}
-                  aria-label={`${playLabel(activity)}: ${activity.title}`}
+                  aria-label={`${label}: ${activity.title}`}
                 >
-                  {activity.finished ? <RotateCcw /> : <Play />} {playLabel(activity)}
+                  {replay ? <RotateCcw /> : <Play />} {label}
                 </Button>
               </div>
             </li>

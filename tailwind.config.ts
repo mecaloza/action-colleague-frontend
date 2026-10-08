@@ -1,8 +1,11 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 const config: Config = {
   // Single light theme; "class" keeps stray `dark:` utilities inert (the class is never set).
   darkMode: ["class"],
+  // Hover styles only where a pointer hovers: on a phone a tapped button never stays "hovered".
+  future: { hoverOnlyWhenSupported: true },
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -101,6 +104,10 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    // `touch:` styles a device with only a finger (no mouse, no hover): keyboard hints hide there.
+    plugin(({ addVariant }) => addVariant("touch", "@media (hover: none) and (pointer: coarse)")),
+  ],
 };
 export default config;
