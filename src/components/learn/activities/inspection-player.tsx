@@ -157,6 +157,7 @@ export function InspectionPlayer({
     const active = selected === index;
     const state = !other.outcome ? "pendiente" : other.outcome.correct ? "acertada" : "fallada";
     const waiting = !other.outcome && !active && !over && !reduce; // its badge beats, to call for a look
+    const truckLook = other.look === "none" ? "even" : other.look; // a tire on the truck always has a tread
     return (
       <button
         key={other.id}
@@ -166,7 +167,7 @@ export function InspectionPlayer({
         type="button"
         onClick={() => select(index)}
         aria-pressed={active}
-        aria-label={`${other.label}: ${state}${truck ? ` · ${LOOK_LABELS[other.look === "none" ? "even" : other.look]}` : ""}`}
+        aria-label={`${other.label}: ${state}${truck ? ` · ${LOOK_LABELS[truckLook]}` : ""}`}
         className={cn(
           // A tile scrolled to stops below the status bar, and above the sheet that covers a phone's lower half.
           "relative flex scroll-mb-[calc(var(--sheet)+1rem)] scroll-mt-14 items-center justify-center border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:scroll-mb-0",
@@ -177,7 +178,7 @@ export function InspectionPlayer({
         )}
       >
         {truck ? (
-          <TireTread look={other.look === "none" ? "even" : other.look} />
+          <TireTread look={truckLook} />
         ) : (
           <>
             {other.look !== "none" && <TireTread look={other.look} className="h-12 shrink-0 sm:h-16" />}

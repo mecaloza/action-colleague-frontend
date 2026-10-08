@@ -40,6 +40,7 @@ interface QuizDialogProps {
 
 // A result action: full width on a phone (its label may wrap there), its own width from `sm` up.
 const RESULT_ACTION = "h-auto min-h-12 w-full whitespace-normal py-3 sm:w-auto";
+const NO_ATTEMPTS_LEFT = "Usaste todos los intentos. Habla con tu administrador si necesitas otro.";
 
 /** Where the "passed" button leads. */
 function passedLabel(result: AttemptResult): string {
@@ -137,13 +138,11 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
 
   const attemptsLeft = result?.attempts_remaining ?? (quiz.data ? quiz.data.max_attempts - quiz.data.attempts_used : 0);
   // Passed, or out of attempts, on another device or tab meanwhile: nothing to answer here.
-  const closedReason = !result && quiz.data
-    ? quiz.data.passed
-      ? "Ya aprobaste esta evaluación."
-      : attemptsLeft <= 0
-        ? "Usaste todos los intentos. Habla con tu administrador si necesitas otro."
-        : null
-    : null;
+  let closedReason: string | null = null;
+  if (!result && quiz.data) {
+    if (quiz.data.passed) closedReason = "Ya aprobaste esta evaluación.";
+    else if (attemptsLeft <= 0) closedReason = NO_ATTEMPTS_LEFT;
+  }
 
   // Passed or out of attempts on another device or tab: the page behind shows it too (next module unlocked...).
   useEffect(() => {
@@ -217,7 +216,7 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
                       </Button>
                     ) : (
                       <p className="border-l-2 border-white/40 bg-white/5 px-4 py-3 text-sm text-white/80">
-                        Usaste todos los intentos. Habla con tu administrador si necesitas otro.
+                        {NO_ATTEMPTS_LEFT}
                       </p>
                     )}
                     <Button variant="outline-inverse" size="lg" className={RESULT_ACTION} onClick={() => void close()}>

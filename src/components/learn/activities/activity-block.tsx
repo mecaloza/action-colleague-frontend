@@ -56,6 +56,7 @@ export function ActivityBlock({ activities, onPlay }: ActivityBlockProps) {
         {activities.map((activity) => {
           const Icon = ICONS[activity.type];
           const replay = activity.finished && !activity.resumable;
+          const label = playLabel(activity);
           return (
             <li key={activity.id} className="flex flex-col gap-4 border border-border bg-white p-5">
               <div className="flex items-start gap-3">
@@ -87,9 +88,9 @@ export function ActivityBlock({ activities, onPlay }: ActivityBlockProps) {
                   variant={replay ? "outline" : "accent"}
                   className="shrink-0"
                   onClick={() => onPlay(activity)}
-                  aria-label={`${playLabel(activity)}: ${activity.title}`}
+                  aria-label={`${label}: ${activity.title}`}
                 >
-                  {replay ? <RotateCcw /> : <Play />} {playLabel(activity)}
+                  {replay ? <RotateCcw /> : <Play />} {label}
                 </Button>
               </div>
             </li>
