@@ -5,12 +5,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowUp,
   Eye,
   EyeOff,
   Gamepad2,
   ImageUp,
+  MoreHorizontal,
   Pencil,
   Play,
   Plus,
@@ -21,7 +20,7 @@ import {
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { SectionHeader } from "@/components/layout/section-header";
-import { ACTIVITY_LABELS, ActivityPlayer } from "@/components/learn/activities/activity-player";
+import { ACTIVITY_LABELS } from "@/components/learn/activities/activity-player";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,12 +43,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { activitiesApi, activityKeys } from "@/lib/api/activities";
 import { ApiError } from "@/lib/api/client";
+import { courseKeys } from "@/lib/api/courses";
 import { studioApi } from "@/lib/api/studio";
 import type { ActivityAdmin, ActivityType, CourseDetail, Language, ModuleAdmin } from "@/lib/api/types";
 import { twoDigits } from "@/lib/format";
+import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { useUpload } from "@/lib/hooks/use-upload";
 import { toastError } from "@/lib/notify";
 import { ActivityForm, TEMPLATES, type AnySpec } from "./activities/activity-form";
+import { ActivityPreview } from "./activity-preview";
+import { focusMoveButton, MoveButtons } from "./move-buttons";
 
 const TYPES: ActivityType[] = ["decision", "inspection", "simulator", "quick"];
 const VOICE = { none: "Sin voz", pending: "Grabando la voz…", ready: "Con voz", failed: "La voz falló" } as const;
@@ -82,6 +85,7 @@ export function ActivitiesTab({ course }: { course: CourseDetail }) {
 function ModuleActivities({ courseId, language, module }: { courseId: number; language: Language; module: ModuleAdmin }) {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const { refreshCourse, refreshPeople } = useCourseCache();
   const key = activityKeys.module(module.id);
   const [jobId, setJobId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ActivityAdmin | null>(null);
@@ -102,7 +106,16 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
         ? false
         : JOB_POLL_MS,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: key });
+  // The course's preview shows the published activities too.
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: key }),
+      queryClient.invalidateQueries({ queryKey: courseKeys.preview(courseId) }),
+    ]);
+  // Unpublished or deleted: whoever only had it pending completed the module, so the course's progress changed
+  // (participants, results, the course's counts; each person's courses in Equipo, and the panel).
+  const refreshProgress = () =>
+    Promise.all([queryClient.invalidateQueries({ queryKey: key }), refreshCourse(courseId), refreshPeople()]);
 
   useEffect(() => {
     const status = job.data?.status;
@@ -140,12 +153,19 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
   const change = useMutation({
     mutationFn: ({ id, changes }: { id: number; changes: Parameters<typeof activitiesApi.update>[1] }) =>
       activitiesApi.update(id, changes),
-    onSuccess: () => refresh(),
+    onSuccess: (_saved, { changes }) => (changes.status === "draft" ? refreshProgress() : refresh()),
     onError: toastError,
   });
+  // Where a moved activity landed, for screen readers (the list shows it once the new order is saved).
+  const [moved, setMoved] = useState("");
   const order = useMutation({
-    mutationFn: (ids: number[]) => activitiesApi.order(module.id, ids),
-    onSuccess: (saved) => queryClient.setQueryData(key, saved),
+    mutationFn: ({ ids }: { ids: number[]; movedId: number }) => activitiesApi.order(module.id, ids),
+    onSuccess: (saved, { movedId }) => {
+      queryClient.setQueryData(key, saved);
+      void queryClient.invalidateQueries({ queryKey: courseKeys.preview(courseId) });
+      const at = saved.findIndex((activity) => activity.id === movedId);
+      if (at >= 0) setMoved(`«${saved[at].title}» quedó en la posición ${at + 1} de ${saved.length}.`);
+    },
     onError: toastError,
   });
   const remove = async (activity: ActivityAdmin) => {
@@ -158,18 +178,42 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
     if (!ok) return;
     try {
       await activitiesApi.remove(activity.id);
-      await refresh();
+      await refreshProgress();
     } catch (error) {
       toastError(error);
     }
   };
+  /** Publishing is immediate; unpublishing asks first: it may complete the module for people waiting only on it. */
+  const toggleStatus = async (activity: ActivityAdmin) => {
+    if (activity.status === "ready") {
+      const ok = await confirm({
+        title: `¿Despublicar «${activity.title}»?`,
+        description:
+          "Las personas dejan de verla. Quien solo tenía pendiente esta actividad completa el módulo, y eso no cambia si la vuelves a publicar.",
+        confirmLabel: "Despublicar",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    change.mutate({ id: activity.id, changes: { status: activity.status === "ready" ? "draft" : "ready" } });
+  };
 
   const activities = list.data ?? [];
-  const move = (index: number, to: number) => {
+  // After a move the arrow pressed takes the focus back, once the new order is on screen (the arrows wait meanwhile).
+  const refocus = useRef<{ id: number; direction: -1 | 1 } | null>(null);
+  const move = (index: number, direction: -1 | 1) => {
     const ids = activities.map((activity) => activity.id);
-    [ids[index], ids[to]] = [ids[to], ids[index]];
-    order.mutate(ids);
+    const movedId = ids[index];
+    [ids[index], ids[index + direction]] = [ids[index + direction], ids[index]];
+    refocus.current = { id: movedId, direction };
+    order.mutate({ ids, movedId });
   };
+  useEffect(() => {
+    const target = refocus.current;
+    if (!target || order.isPending) return;
+    refocus.current = null;
+    focusMoveButton(`activity-${target.id}`, target.direction);
+  }, [list.data, order.isPending]);
   const generating = Boolean(jobId) || generate.isPending;
 
   return (
@@ -227,95 +271,114 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
         <p className="text-sm text-muted-foreground">Sin actividades: genera una propuesta con IA o agrega una.</p>
       ) : (
         <ol className="space-y-2" aria-label={`Actividades de ${module.title}`}>
-          {activities.map((activity, index) => (
-            <li key={activity.id} className="flex flex-wrap items-center gap-3 border border-border bg-white px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-bold uppercase tracking-label text-muted-foreground">
-                  {ACTIVITY_LABELS[activity.type]} ·{" "}
-                  <span className={activity.status === "ready" ? "text-success" : "text-warning"}>
-                    {activity.status === "ready" ? "Publicada" : "Borrador"}
-                  </span>
-                  {activity.status === "ready" && (
-                    <>
-                      {" · "}
-                      <Volume2 className="inline h-3 w-3" /> {VOICE[activity.voice_status]}
-                      {activity.voice_status === "failed" && (
-                        <button
-                          type="button"
-                          className="ml-1 underline"
-                          onClick={() => void activitiesApi.voice(activity.id).then(refresh, toastError)}
-                        >
-                          Reintentar
-                        </button>
-                      )}
-                    </>
-                  )}
-                </p>
-                <p className="font-semibold">{activity.title}</p>
-                {activity.problems.length > 0 && (
-                  <p className="mt-1 flex items-start gap-1 text-xs text-warning">
-                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" /> {activity.problems.join(" ")}
+          {activities.map((activity, index) => {
+            const ready = activity.status === "ready";
+            const cannotPublish = !ready && activity.problems.length > 0;
+            const PublishIcon = ready ? EyeOff : Eye;
+            const publishLabel = ready ? "Despublicar" : "Publicar";
+            return (
+              <li key={activity.id} className="flex flex-wrap items-center gap-3 border border-border bg-white px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-bold uppercase tracking-label text-muted-foreground">
+                    {ACTIVITY_LABELS[activity.type]} ·{" "}
+                    <span className={ready ? "text-success" : "text-warning"}>{ready ? "Publicada" : "Borrador"}</span>
+                    {ready && (
+                      <>
+                        {" · "}
+                        <Volume2 className="inline h-3 w-3" /> {VOICE[activity.voice_status]}
+                        {activity.voice_status === "failed" && (
+                          <button
+                            type="button"
+                            className="-my-3 ml-1 inline-flex min-h-10 items-center underline"
+                            onClick={() => void activitiesApi.voice(activity.id).then(refresh, toastError)}
+                          >
+                            Reintentar
+                          </button>
+                        )}
+                      </>
+                    )}
                   </p>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Subir ${activity.title}`}
-                  disabled={index === 0 || order.isPending}
-                  onClick={() => move(index, index - 1)}
-                >
-                  <ArrowUp />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Bajar ${activity.title}`}
-                  disabled={index === activities.length - 1 || order.isPending}
-                  onClick={() => move(index, index + 1)}
-                >
-                  <ArrowDown />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setTrying({ activity, session: Date.now() })}>
-                  <Play /> Probar
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditing(activity)}
-                  aria-label={`Editar ${activity.title}`}
-                >
-                  <Pencil /> Editar
-                </Button>
-                <Button
-                  variant={activity.status === "ready" ? "ghost" : "accent"}
-                  size="sm"
-                  disabled={activity.status === "draft" && activity.problems.length > 0}
-                  onClick={() =>
-                    change.mutate({
-                      id: activity.id,
-                      changes: { status: activity.status === "ready" ? "draft" : "ready" },
-                    })
-                  }
-                  aria-label={`${activity.status === "ready" ? "Despublicar" : "Publicar"} ${activity.title}`}
-                >
-                  {activity.status === "ready" ? <EyeOff /> : <Eye />}{" "}
-                  {activity.status === "ready" ? "Despublicar" : "Publicar"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Eliminar ${activity.title}`}
-                  onClick={() => remove(activity)}
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-            </li>
-          ))}
+                  <p className="font-semibold">{activity.title}</p>
+                  {activity.problems.length > 0 && (
+                    <p className="mt-1 flex items-start gap-1 text-xs text-warning">
+                      <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" /> {activity.problems.join(" ")}
+                    </p>
+                  )}
+                </div>
+                {/* On a phone: the arrows, "Probar" and a menu with the rest (unpublishing and deleting never sit
+                    right under a finger trying the game). */}
+                <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto">
+                  <MoveButtons
+                    id={`activity-${activity.id}`}
+                    label={activity.title}
+                    index={index}
+                    total={activities.length}
+                    busy={order.isPending}
+                    onMove={(direction) => move(index, direction)}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto sm:ml-0"
+                    onClick={() => setTrying({ activity, session: Date.now() })}
+                  >
+                    <Play /> Probar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hidden sm:inline-flex"
+                    onClick={() => setEditing(activity)}
+                    aria-label={`Editar ${activity.title}`}
+                  >
+                    <Pencil /> Editar
+                  </Button>
+                  <Button
+                    variant={ready ? "ghost" : "accent"}
+                    size="sm"
+                    className="hidden sm:inline-flex"
+                    disabled={cannotPublish}
+                    onClick={() => void toggleStatus(activity)}
+                    aria-label={`${publishLabel} ${activity.title}`}
+                  >
+                    <PublishIcon /> {publishLabel}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="hidden sm:inline-flex"
+                    aria-label={`Eliminar ${activity.title}`}
+                    onClick={() => remove(activity)}
+                  >
+                    <Trash2 />
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="sm:hidden" aria-label={`Más acciones para ${activity.title}`}>
+                        <MoreHorizontal />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onSelect={() => setEditing(activity)}>
+                        <Pencil /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={cannotPublish} onSelect={() => void toggleStatus(activity)}>
+                        <PublishIcon /> {publishLabel}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem destructive onSelect={() => void remove(activity)}>
+                        <Trash2 /> Eliminar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </li>
+            );
+          })}
         </ol>
       )}
+      <p aria-live="polite" className="sr-only">
+        {moved}
+      </p>
 
       {editing && (
         <ActivityEditor
@@ -330,14 +393,11 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
         />
       )}
       {trying && (
-        <ActivityPlayer
+        <ActivityPreview
           key={trying.session}
           activity={trying.activity}
-          open
-          onOpenChange={(open) => !open && setTrying(null)}
-          allowUntimed={false}
           language={language}
-          api={{ start: () => activitiesApi.preview(trying.activity.id), move: activitiesApi.previewMove }}
+          onClose={() => setTrying(null)}
         />
       )}
     </section>

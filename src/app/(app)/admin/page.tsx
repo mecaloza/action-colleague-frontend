@@ -15,8 +15,9 @@ import type { Dashboard } from "@/lib/api/types";
 import { formatPercent, formatRelative, plural, twoDigits } from "@/lib/format";
 
 function Kpi({ value, label, hint }: { value: string; label: string; hint?: string }) {
+  // A divider before every figure but the first of its row: two rows of two on phones, one row of four from md.
   return (
-    <div className="border-l border-white/15 pl-6 first:border-l-0 first:pl-0">
+    <div className="border-white/15 even:border-l even:pl-6 md:border-l md:pl-6 md:first:border-l-0 md:first:pl-0">
       <p className="font-display text-5xl font-medium tracking-tightest text-white">{value}</p>
       <p className="mt-2 text-[10.5px] font-bold uppercase tracking-label text-white/60">{label}</p>
       {hint && <p className="mt-1 text-xs text-white/60">{hint}</p>}

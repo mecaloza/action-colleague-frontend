@@ -31,7 +31,11 @@ export function PendingAsset({ assetId, label, onReady, onDismiss }: PendingAsse
     return (
       <div role="alert" className="border-l-2 border-destructive bg-red-50 p-4 text-sm">
         <p>{asset.error ?? "No pudimos procesar el archivo."}</p>
-        <button type="button" onClick={onDismiss} className="mt-2 text-[11px] font-bold uppercase tracking-label text-accent">
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-1 inline-flex min-h-10 items-center text-[11px] font-bold uppercase tracking-label text-accent"
+        >
           Elegir otro archivo
         </button>
       </div>

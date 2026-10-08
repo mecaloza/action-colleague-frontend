@@ -59,7 +59,7 @@ function RoleFilter({ value, onChange }: { value: RoleFilterValue; onChange: (va
           aria-pressed={value === filter.value}
           onClick={() => onChange(filter.value)}
           className={cn(
-            "h-9 border px-3.5 text-[12px] font-semibold transition-colors",
+            "h-10 border px-3.5 text-[12px] font-semibold transition-colors",
             value === filter.value ? "border-ink-800 bg-ink-800 text-white" : "border-input bg-white hover:border-ink-800",
           )}
         >
@@ -87,8 +87,21 @@ function PersonBadges({ person }: { person: UserRow }) {
   );
 }
 
+/** "Asesor de flotas · Ventas" (empty when neither is known). */
+function jobOf(person: UserRow): string {
+  return [person.position, person.department].filter(Boolean).join(" · ");
+}
+
+/** "2 de 3 cursos terminados", or "Sin cursos". */
+function coursesOf(person: UserRow): string {
+  return person.enrolled_count
+    ? `${person.completed_count} de ${plural(person.enrolled_count, "curso")} terminado${person.enrolled_count === 1 ? "" : "s"}`
+    : "Sin cursos";
+}
+
 function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActive }: RowActions & { person: UserRow; isSelf: boolean }) {
   const ToggleIcon = person.is_active ? UserX : UserCheck;
+  const job = jobOf(person);
   return (
     <TableRow className={cn("cursor-pointer", !person.is_active && "opacity-60")} onClick={() => onOpen(person)}>
       <TableCell>
@@ -97,7 +110,7 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActi
           <div className="min-w-0">
             <button
               type="button"
-              className="block max-w-[40vw] truncate text-left font-semibold hover:text-accent sm:max-w-[220px]"
+              className="-my-2.5 block max-w-[40vw] truncate py-2.5 text-left font-semibold hover:text-accent sm:max-w-[220px]"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpen(person);
@@ -107,7 +120,9 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActi
               {isSelf && <span className="ml-2 text-xs font-normal text-muted-foreground">(tú)</span>}
             </button>
             <p className="max-w-[40vw] truncate text-xs text-muted-foreground sm:max-w-[240px]">{person.email}</p>
-            {/* Small screens hide the role column: its badges go here. */}
+            {/* Smaller screens hide the other columns: what they say goes here, under the name. */}
+            {job && <p className="max-w-[40vw] truncate text-xs text-muted-foreground md:hidden">{job}</p>}
+            <p className="text-xs text-muted-foreground lg:hidden">{coursesOf(person)}</p>
             <div className="mt-1 flex flex-wrap gap-1.5 sm:hidden">
               <PersonBadges person={person} />
             </div>
@@ -265,7 +280,7 @@ export default function TeamPage() {
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <RoleFilter value={role} onChange={setRole} />
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex min-h-10 items-center gap-2 text-sm">
               <Switch checked={showInactive} onCheckedChange={setShowInactive} aria-label="Mostrar inactivos" />
               Mostrar inactivos
             </label>

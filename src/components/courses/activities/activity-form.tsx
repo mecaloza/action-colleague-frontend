@@ -1,11 +1,12 @@
 "use client";
 
+import { useId } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { GrowingTextarea, Textarea } from "@/components/ui/textarea";
 import { LOOK_LABELS, TireTread } from "@/components/learn/activities/tire-tread";
 import type { ActivityType, InspectionVerdict, TireLook } from "@/lib/api/types";
 import { removeAt, replaceAt } from "@/lib/array";
@@ -201,6 +202,31 @@ interface FormProps<S> {
   onChange: (spec: S) => void;
 }
 
+interface RemoveButtonProps {
+  label: string;
+  disabled?: boolean;
+  /** The text on the page that says why it is off: a disabled button shows no tooltip, and a finger has no hover. */
+  describedBy?: string;
+  onClick: () => void;
+}
+
+/** The trash can at the end of a row of a list. */
+function RemoveButton({ label, disabled, describedBy, onClick }: RemoveButtonProps) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={label}
+      aria-describedby={describedBy}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <Trash2 />
+    </Button>
+  );
+}
+
 function DecisionForm({ spec, onChange }: FormProps<DecisionSpec>) {
   const setNode = (index: number, changes: Partial<NodeSpec>) =>
     onChange({ nodes: replaceAt(spec.nodes, index, { ...spec.nodes[index], ...changes }) });
@@ -236,7 +262,7 @@ function DecisionForm({ spec, onChange }: FormProps<DecisionSpec>) {
             return (
               <div key={choice.id} className="space-y-2 border-l-2 border-accent pl-3">
                 <div className="grid gap-2 sm:grid-cols-[1fr_90px]">
-                  <Input
+                  <GrowingTextarea
                     aria-label={`Opción ${at + 1} de la situación ${index + 1}`}
                     value={choice.text}
                     maxLength={200}
@@ -336,14 +362,11 @@ function DecisionForm({ spec, onChange }: FormProps<DecisionSpec>) {
           type="button"
           variant="outline"
           onClick={() => {
-            const ids = new Set(spec.nodes.map((node) => node.id));
-            let number = spec.nodes.length + 1;
-            while (ids.has(`s${number}`)) number += 1;
             onChange({
               nodes: [
                 ...spec.nodes,
                 {
-                  id: `s${number}`,
+                  id: freeId("s", spec.nodes),
                   speaker: "Cliente",
                   situation: "Lo que dice o pasa después.",
                   choices: [
@@ -374,11 +397,15 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
   const setItem = (index: number, changes: Partial<InspectionItemSpec>) =>
     onChange({ ...spec, items: replaceAt(spec.items, index, { ...spec.items[index], ...changes }) });
   const hasPairs = spec.scene !== "truck" || spec.items.length % 2 === 0;
+  // A decision stays while the game needs two, or while some item has it as its answer.
+  const keeps = (verdict: InspectionVerdict) =>
+    spec.verdicts.length <= 2 || spec.items.some((item) => item.answer === verdict.id);
+  const keepsHint = useId();
   return (
     <div className="space-y-5">
       <div>
         <Label htmlFor="inspection-prompt">Misión</Label>
-        <Input
+        <GrowingTextarea
           id="inspection-prompt"
           value={spec.prompt}
           maxLength={200}
@@ -414,7 +441,9 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
       )}
 
       <fieldset className="space-y-2 border border-border p-4">
-        <legend className="px-1 text-sm font-semibold">Decisiones (teclas 1 a {spec.verdicts.length})</legend>
+        <legend className="px-1 text-sm font-semibold">
+          Decisiones<span className="touch:hidden"> (teclas 1 a {spec.verdicts.length})</span>
+        </legend>
         {spec.verdicts.map((verdict, index) => (
           <div key={verdict.id} className="flex gap-2">
             <Input
@@ -425,19 +454,20 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
                 onChange({ ...spec, verdicts: replaceAt(spec.verdicts, index, { ...verdict, label: event.target.value }) })
               }
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Quitar decisión ${index + 1}`}
-              disabled={spec.verdicts.length <= 2 || spec.items.some((item) => item.answer === verdict.id)}
-              title="Solo se quita una decisión que no es la respuesta de ningún elemento"
+            <RemoveButton
+              label={`Quitar decisión ${index + 1}`}
+              disabled={keeps(verdict)}
+              describedBy={keeps(verdict) ? keepsHint : undefined}
               onClick={() => onChange({ ...spec, verdicts: removeAt(spec.verdicts, index) })}
-            >
-              <Trash2 />
-            </Button>
+            />
           </div>
         ))}
+        {spec.verdicts.some(keeps) && (
+          <p id={keepsHint} className="text-xs text-muted-foreground">
+            Mínimo dos decisiones. Para quitar una, cambia antes la «Respuesta correcta» de{" "}
+            {spec.scene === "truck" ? "las llantas" : "los casos"} que la tienen.
+          </p>
+        )}
         {spec.verdicts.length < 4 && (
           <Button
             type="button"
@@ -519,16 +549,11 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
                     setItem(index, { facts: replaceAt(item.facts, at, { ...fact, value: event.target.value }) })
                   }
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Quitar dato ${at + 1} de ${item.label}`}
+                <RemoveButton
+                  label={`Quitar dato ${at + 1} de ${item.label}`}
                   disabled={item.facts.length <= 1}
                   onClick={() => setItem(index, { facts: removeAt(item.facts, at) })}
-                >
-                  <Trash2 />
-                </Button>
+                />
               </div>
             ))}
             {item.facts.length < 5 && (
@@ -608,7 +633,7 @@ function SimulatorForm({ spec, onChange }: FormProps<SimulatorSpec>) {
     <div className="space-y-4">
       <div>
         <Label htmlFor="sim-prompt">Reto</Label>
-        <Input
+        <GrowingTextarea
           id="sim-prompt"
           value={spec.prompt}
           maxLength={200}
@@ -772,7 +797,7 @@ function SimulatorForm({ spec, onChange }: FormProps<SimulatorSpec>) {
         maxLength={600}
         onChange={(event) => onChange({ ...spec, fail_text: event.target.value })}
       />
-      <Input
+      <GrowingTextarea
         aria-label="Pista"
         value={spec.hint}
         maxLength={600}
@@ -786,7 +811,7 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
   return (
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-[1fr_200px_120px]">
-        <Input
+        <GrowingTextarea
           aria-label="Instrucción"
           value={spec.prompt}
           maxLength={200}
@@ -829,16 +854,11 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
                 maxLength={80}
                 onChange={(event) => onChange({ ...spec, items: replaceAt(spec.items, index, event.target.value) })}
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Quitar paso ${index + 1}`}
+              <RemoveButton
+                label={`Quitar paso ${index + 1}`}
                 disabled={spec.items.length <= 4}
                 onClick={() => onChange({ ...spec, items: removeAt(spec.items, index) })}
-              >
-                <Trash2 />
-              </Button>
+              />
             </div>
           ))}
           {spec.items.length < 8 && (
@@ -864,7 +884,7 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
                   onChange({ ...spec, pairs: replaceAt(spec.pairs, index, { ...pair, left: event.target.value }) })
                 }
               />
-              <Input
+              <GrowingTextarea
                 aria-label={`Pareja ${index + 1}`}
                 value={pair.right}
                 maxLength={200}
@@ -872,16 +892,11 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
                   onChange({ ...spec, pairs: replaceAt(spec.pairs, index, { ...pair, right: event.target.value }) })
                 }
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Quitar pareja ${index + 1}`}
+              <RemoveButton
+                label={`Quitar pareja ${index + 1}`}
                 disabled={spec.pairs.length <= 4}
                 onClick={() => onChange({ ...spec, pairs: removeAt(spec.pairs, index) })}
-              >
-                <Trash2 />
-              </Button>
+              />
             </div>
           ))}
           {spec.pairs.length < 8 && (

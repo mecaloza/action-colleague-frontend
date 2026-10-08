@@ -37,7 +37,12 @@ function MaterialRow({ name, detail, state, onRemove }: MaterialRowProps) {
         </span>
       </span>
       {onRemove && (
-        <button type="button" onClick={onRemove} aria-label={`Quitar ${name}`} className="text-muted-foreground hover:text-ink-800">
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Quitar ${name}`}
+          className="-my-2 -mr-2.5 flex h-10 w-10 shrink-0 items-center justify-center text-muted-foreground hover:text-ink-800"
+        >
           <X className="h-4 w-4" />
         </button>
       )}

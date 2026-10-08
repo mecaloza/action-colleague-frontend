@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -24,6 +24,7 @@ import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { toastError } from "@/lib/notify";
 import { ModuleRow } from "./module-row";
 import { ModuleSheet } from "./module-sheet";
+import { focusMoveButton } from "./move-buttons";
 import { NewModuleDialog } from "./new-module-dialog";
 
 export function ModulesTab({ course }: { course: CourseDetail }) {
@@ -52,14 +53,36 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
     if (!reorder.isPending) setModules(course.modules);
   }, [course.modules, reorder.isPending]);
 
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id || reorder.isPending) return;
-    const from = modules.findIndex((m) => m.id === active.id);
-    const to = modules.findIndex((m) => m.id === over.id);
+  const save = (from: number, to: number) => {
     const next = arrayMove(modules, from, to).map((m, index) => ({ ...m, order: index + 1 }));
     setModules(next);
     reorder.mutate(next.map((m) => m.id));
   };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id || reorder.isPending) return;
+    save(
+      modules.findIndex((m) => m.id === active.id),
+      modules.findIndex((m) => m.id === over.id),
+    );
+  };
+
+  // The arrows move a module without dragging (a finger, a keyboard): the focus follows it to its new place, and
+  // screen readers hear where it landed. While a move is saved they wait (dimmed, still focusable).
+  const [moved, setMoved] = useState("");
+  const refocus = useRef<{ id: number; direction: -1 | 1 } | null>(null);
+  const move = (index: number, direction: -1 | 1) => {
+    const { id, title } = modules[index];
+    refocus.current = { id, direction };
+    save(index, index + direction);
+    setMoved(`«${title}» quedó en la posición ${index + direction + 1} de ${modules.length}.`);
+  };
+  useEffect(() => {
+    const target = refocus.current;
+    if (!target) return;
+    refocus.current = null;
+    focusMoveButton(`module-${target.id}`, target.direction);
+  }, [modules]);
 
   const openModule = modules.find((m) => m.id === opened?.id) ?? null;
 
@@ -87,7 +110,7 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
     <div>
       <SectionHeader
         title="Módulos"
-        description="Arrastra para reordenar. Cada persona avanza en este orden y desbloquea el siguiente al completar el anterior."
+        description="Arrastra o usa las flechas para reordenar. Cada persona avanza en este orden y desbloquea el siguiente al completar el anterior."
         action={
           <div className="flex items-center gap-2">
             {reorder.isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
@@ -112,13 +135,24 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
         >
           <SortableContext items={modules.map((m) => m.id)} strategy={verticalListSortingStrategy}>
             <ol className="space-y-2">
-              {modules.map((module) => (
-                <ModuleRow key={module.id} module={module} onOpen={() => setOpened({ id: module.id, startRecording: false })} />
+              {modules.map((module, index) => (
+                <ModuleRow
+                  key={module.id}
+                  module={module}
+                  index={index}
+                  total={modules.length}
+                  onMove={(direction) => move(index, direction)}
+                  moving={reorder.isPending}
+                  onOpen={() => setOpened({ id: module.id, startRecording: false })}
+                />
               ))}
             </ol>
           </SortableContext>
         </DndContext>
       )}
+      <p aria-live="polite" className="sr-only">
+        {moved}
+      </p>
 
       <NewModuleDialog
         courseId={course.id}
