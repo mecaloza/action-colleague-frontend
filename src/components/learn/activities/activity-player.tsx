@@ -135,6 +135,8 @@ interface ActivityPlayerProps {
   onOpenChange: (open: boolean) => void;
   /** A play's result. Also after the player closed: a game over whose result wasn't asked for is recorded then. */
   onFinished?: (result: ActivityFinish) => void;
+  /** Recording that game over as the player closed failed (the learner was told): what shows the play may be stale. */
+  onRecordFailed?: () => void;
   /** Offer playing a quick challenge without its clock (the admin's preview always plays it timed). */
   allowUntimed?: boolean;
   /** The course's language: the simulator writes its numbers (and money) as its readers do. */
@@ -148,6 +150,7 @@ export function ActivityPlayer({
   open,
   onOpenChange,
   onFinished,
+  onRecordFailed,
   allowUntimed = true,
   language = "es",
 }: ActivityPlayerProps) {
@@ -286,8 +289,13 @@ export function ActivityPlayer({
   const close = () => {
     narration.say([]);
     // A game over whose result wasn't asked for still counts: recorded as it closes (its module and course follow).
-    // If that fails the learner hears it; the server still counts the play when the activity starts again.
-    if (over && moved.current) void record()?.catch(toastError);
+    // If that fails the learner hears it, and whoever shows the play refreshes it: the server may have counted it.
+    if (over && moved.current) {
+      void record()?.catch((error: unknown) => {
+        toastError(error);
+        onRecordFailed?.();
+      });
+    }
     onOpenChange(false);
   };
 
@@ -343,7 +351,8 @@ export function ActivityPlayer({
             </DialogPrimitive.Close>
           </header>
 
-          <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-5 sm:px-6 sm:py-8">
+          {/* On a phone the game runs under the home indicator: the last choice or card stays above it. */}
+          <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:py-8">
             <AnimatePresence mode="wait">
               {result ? (
                 <Result key="result" result={result} onAgain={restart} onClose={close} />

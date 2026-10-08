@@ -194,6 +194,45 @@ async function scrollDialogToBottom(dialog: Locator) {
   await dialog.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
 }
 
+/** Holds the next request that finishes a play until `release()`: then it reaches the server, or fails with `status`. */
+async function holdFinish(page: Page, status?: number) {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(
+    "**/activity-attempts/*/finish",
+    async (route) => {
+      await held;
+      if (!status) return route.continue();
+      await route.fulfill({ status, headers: { "access-control-allow-origin": "*" }, json: { detail: "Falló" } });
+    },
+    { times: 1 },
+  );
+  return release;
+}
+
+/** What the page fetched, in order: "→ url" as each request starts, "← url" as its answer arrives. */
+type Fetched = Window & { __fetches: string[] };
+
+/**
+ * Logs the page's fetches from its next load on and returns a reader of that log. Kept by the page itself, so it is
+ * in the order things happened there (the API calls and the router's requests for a page alike).
+ */
+async function logFetches(page: Page) {
+  await page.addInitScript(() => {
+    const log: string[] = [];
+    (window as unknown as Fetched).__fetches = log;
+    const fetch = window.fetch;
+    window.fetch = async (input, init) => {
+      const url = String(input instanceof Request ? input.url : input);
+      log.push(`→ ${url}`);
+      const response = await fetch(input, init);
+      log.push(`← ${url}`);
+      return response;
+    };
+  });
+  return () => page.evaluate(() => (window as unknown as Fetched).__fetches.slice());
+}
+
 test("conversación con toques: el cliente con su nombre y cerrar al final cuenta la partida", async ({
   page,
   request,
@@ -268,6 +307,90 @@ test("conversación con toques: el cliente con su nombre y cerrar al final cuent
   await page.getByRole("button", { name: /Ventas/ }).tap();
   await expect(page.getByText("7 de 10 puntos")).toBeVisible();
   await expect(page.getByRole("button", { name: "Jugar de nuevo: Cliente que solo pide precio por llanta" })).toBeVisible();
+});
+
+test("cerrar un juego terminado: si guardarlo falla se avisa, y un resultado tardío nunca mueve el curso a destiempo", async ({
+  page,
+  request,
+}) => {
+  const title = `Celular: cerrar al final ${Date.now()}`;
+  const course = await prepareCourse(request, title, [
+    {
+      title: "Ventas",
+      activities: [
+        { type: "decision", title: "Cliente que pide precio", spec: DECISION },
+        { type: "decision", title: "Cliente con prisa", spec: DECISION },
+      ],
+    },
+    { title: "Cierre", activities: [{ type: "decision", title: "Cliente que se despide", spec: DECISION }] },
+    { title: "Repaso" },
+  ]);
+  const fetched = await logFetches(page);
+  await openCourse(page, title);
+  const game = page.getByRole("dialog");
+  const courseAsked = new RegExp(`^→ .*/learn/courses/${course.id}$`);
+  const courseAnswered = new RegExp(`^← .*/learn/courses/${course.id}$`);
+  const listAsked = /^→ .*\/learn\/courses$/;
+  const coursePage = (entry: string) =>
+    entry.startsWith("→ ") && new URL(entry.slice(2), "http://localhost").pathname === `/learn/${course.id}`;
+  /** What the page fetched once the play's "finish" was answered (among its fetches from `from` on). */
+  const afterResult = async (from: number) => {
+    const entries = (await fetched()).slice(from);
+    const answer = entries.findIndex((entry) => /^← .*\/finish$/.test(entry));
+    return answer < 0 ? [] : entries.slice(answer + 1);
+  };
+  /** One tap ends the conversation (the cheapest answer); the game closes without asking for its result. */
+  const playAndClose = async (play: string) => {
+    await page.getByRole("button", { name: play }).tap();
+    await game.getByRole("button", { name: /Empezar/ }).tap();
+    await game.getByRole("button", { name: "Le doy la más barata." }).tap();
+    await expect(game.getByRole("button", { name: /Ver resultado/ })).toBeFocused();
+    const closing = (await fetched()).length;
+    await game.getByRole("button", { name: "Cerrar actividad" }).tap();
+    // The course is asked again as the game closes (its result still on its way).
+    await expect.poll(async () => (await fetched()).slice(closing).some((entry) => courseAnswered.test(entry))).toBe(true);
+  };
+  // The module in the address: from here the course moves on only when a play says so.
+  await page.getByRole("button", { name: /Ventas/ }).tap();
+  await expect(page).toHaveURL(/[?&]m=\d+/);
+
+  // Saving the play as the game closes fails: the learner hears it, and the course is asked again for what the
+  // server kept (the last move already counted the play).
+  const fail = await holdFinish(page, 500);
+  await playAndClose("Jugar: Cliente con prisa");
+  let mark = (await fetched()).length;
+  fail();
+  await expect(page.getByText("El servidor tuvo un problema. Intenta de nuevo en unos segundos.")).toBeVisible();
+  await expect.poll(async () => (await afterResult(mark)).some((entry) => courseAsked.test(entry))).toBe(true);
+  await expect(page.getByRole("button", { name: "Jugar de nuevo: Cliente con prisa" })).toBeVisible();
+
+  // The play that completes the module is recorded while another activity is open: the course is refreshed, but it
+  // moves on only once that activity closes.
+  const recordLate = await holdFinish(page);
+  await playAndClose("Jugar: Cliente que pide precio");
+  await page.getByRole("button", { name: "Jugar de nuevo: Cliente con prisa" }).tap();
+  mark = (await fetched()).length;
+  recordLate();
+  await expect.poll(async () => (await afterResult(mark)).some((entry) => courseAsked.test(entry))).toBe(true);
+  await game.getByRole("button", { name: /Empezar/ }).tap();
+  await expect(game.getByText("Solo quiero la llanta más barata para mi flota.")).toBeVisible();
+  expect((await afterResult(mark)).filter(coursePage)).toEqual([]);
+  await game.getByRole("button", { name: "Cerrar actividad" }).tap();
+  await expect(page.getByRole("heading", { level: 2, name: "Cierre" })).toBeVisible();
+
+  // Recorded once the learner left the course: it refreshes their courses, and never takes them back to it (that
+  // would start right as the courses are asked for, in the same step).
+  const recordAfterLeaving = await holdFinish(page);
+  await playAndClose("Jugar: Cliente que se despide");
+  await page.getByRole("link", { name: "Mis cursos" }).tap();
+  await expect(page).toHaveURL(/\/learn$/);
+  await expect(page.getByRole("link", { name: new RegExp(title) }).first()).toBeVisible();
+  mark = (await fetched()).length;
+  recordAfterLeaving();
+  await expect.poll(async () => (await afterResult(mark)).some((entry) => listAsked.test(entry))).toBe(true);
+  expect((await afterResult(mark)).filter(coursePage)).toEqual([]);
+  await expect(page).toHaveURL(/\/learn$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test.describe("a 360 px", () => {
@@ -350,6 +473,54 @@ test.describe("a 360 px", () => {
     await expectNoSidewaysScroll(page);
     await game.getByRole("button", { name: /Ver resultado/ }).tap();
     await expect(game.getByText("Completaste el módulo.")).toBeVisible();
+  });
+
+  test("inspección sin vidas: cada llanta dice cómo terminó, sin decisiones que no hacen nada", async ({
+    page,
+    request,
+  }) => {
+    const title = `Celular: sin vidas ${Date.now()}`;
+    await prepareCourse(request, title, [
+      { title: "Diagnóstico", activities: [{ type: "inspection", title: "Revisa la unidad", spec: { ...INSPECTION, lives: 1 } }] },
+    ]);
+    await openCourse(page, title);
+    const game = page.getByRole("dialog");
+    const end = game.getByText(/^Te quedaste sin vidas\. Acertaste 0 de 4/);
+    const undecided = game.getByRole("button", { name: /^Llanta 2 · direccional derecha:/ });
+
+    // The move that takes the only life comes without the other answers (as from an older server): a tire never
+    // decided still says the game is over.
+    await page.route(
+      "**/activity-attempts/*/moves",
+      async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        delete body.result.items;
+        await route.fulfill({ response, json: body });
+      },
+      { times: 1 },
+    );
+    await page.getByRole("button", { name: "Jugar: Revisa la unidad" }).tap();
+    await game.getByRole("button", { name: /Empezar/ }).tap();
+    await game.getByRole("button", { name: "Retirar", exact: true }).tap(); // tire 1 rolls on
+    await expect(game.getByText("No: lo correcto era Sigue rodando")).toBeVisible();
+    await expect(end).toBeInViewport();
+    await undecided.tap();
+    await expect(game.getByRole("heading", { name: "Llanta 2 · direccional derecha" })).toBeVisible();
+    await expect(end).toBeInViewport();
+    await expect(game.getByText("¿Qué haces?")).toHaveCount(0);
+    await expect(game.getByRole("button", { name: "Reencauchar", exact: true })).toHaveCount(0);
+
+    // Played again, the last move reveals every answer: the tire never decided shows what was right.
+    await game.getByRole("button", { name: /Ver resultado/ }).tap();
+    await game.getByRole("button", { name: /Jugar de nuevo/ }).tap();
+    await game.getByRole("button", { name: /Empezar/ }).tap();
+    await game.getByRole("button", { name: "Retirar", exact: true }).tap();
+    await expect(end).toBeInViewport();
+    await undecided.tap();
+    await expect(game.getByText("Lo correcto: Reencauchar")).toBeVisible();
+    await expect(end).toBeInViewport();
+    await expect(game.getByText("¿Qué haces?")).toHaveCount(0);
   });
 
   test("la evaluación cabe en 360 px y sus botones quedan a la mano", async ({ page, request }) => {
@@ -499,14 +670,18 @@ test("simulador y retos rápidos con toques", async ({ page, request }) => {
   expect(await top("Copas o parches")).toBe(below);
 
   // A wrong pair shakes, then settles back in its place (a shake cut short used to leave it a few px off).
-  await tile("Amortiguadores o balanceo en mal estado").tap();
+  const shaken = tile("Amortiguadores o balanceo en mal estado");
+  await shaken.tap();
   await expect(tile("Un lado gastado")).toHaveAttribute("aria-pressed", "false"); // answered: the shake is on
-  await page.waitForTimeout(800);
-  const shift = await tile("Amortiguadores o balanceo en mal estado").evaluate((element) => {
-    const transform = getComputedStyle(element).transform;
-    return transform === "none" ? 0 : new DOMMatrix(transform).m41;
-  });
-  expect(shift).toBe(0);
+  await expect(shaken).not.toHaveClass(/border-destructive/); // and over: the wrong mark outlasts the shake
+  await expect
+    .poll(() =>
+      shaken.evaluate((element) => {
+        const transform = getComputedStyle(element).transform;
+        return transform === "none" ? 0 : new DOMMatrix(transform).m41;
+      }),
+    )
+    .toBe(0);
   // The clock stays in sight under the header wherever the cards are scrolled to.
   await scrollDialogToBottom(game);
   await expect(game.getByRole("timer")).toBeInViewport({ ratio: 1 });

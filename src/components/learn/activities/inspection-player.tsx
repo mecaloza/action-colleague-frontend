@@ -360,20 +360,19 @@ export function InspectionPlayer({
                   over ? "pb-4" : "pb-[max(1rem,env(safe-area-inset-bottom))]",
                 )}
               >
-                {item.outcome ? (
-                  over ? (
-                    <p className="text-center font-semibold text-white" role="status">
-                      {lives === 0 ? "Te quedaste sin vidas. " : "¡Inspección terminada! "}
-                      Acertaste {right} de {items.length}: toca cada {truck ? "llanta" : "caso"} para repasar por qué.
-                    </p>
-                  ) : (
-                    pending >= 0 && (
-                      <div className="flex justify-end">
-                        <Button ref={nextButton} variant="accent" onClick={() => select(pending)}>
-                          Siguiente <ArrowRight />
-                        </Button>
-                      </div>
-                    )
+                {/* Once the game is over the bar says how it ended, on any item (one never decided too). */}
+                {over ? (
+                  <p className="text-center font-semibold text-white" role="status">
+                    {lives === 0 ? "Te quedaste sin vidas. " : "¡Inspección terminada! "}
+                    Acertaste {right} de {items.length}: toca cada {truck ? "llanta" : "caso"} para repasar por qué.
+                  </p>
+                ) : item.outcome ? (
+                  pending >= 0 && (
+                    <div className="flex justify-end">
+                      <Button ref={nextButton} variant="accent" onClick={() => select(pending)}>
+                        Siguiente <ArrowRight />
+                      </Button>
+                    </div>
                   )
                 ) : (
                   <>
@@ -385,7 +384,7 @@ export function InspectionPlayer({
                           type="button"
                           onClick={() => decide(verdict.id)}
                           aria-keyshortcuts={String(index + 1)}
-                          disabled={sending || over}
+                          disabled={sending}
                           className="flex min-h-12 items-center gap-3 border border-white/25 px-3 py-2 text-left text-white transition-colors hover:border-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 sm:px-4"
                         >
                           {/* The key that decides it: only where there is a keyboard. */}

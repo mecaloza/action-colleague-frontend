@@ -98,6 +98,8 @@ function CoursePlayer() {
   const advance = async (outcome: Pick<CompletionResult, "course_completed" | "next_module_id">) => {
     await queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) });
     void queryClient.invalidateQueries({ queryKey: learnKeys.courses });
+    // Done after the learner left the course (a play recorded late, a slow answer): it never brings them back.
+    if (unmounted().aborted) return;
     if (outcome.course_completed) setCelebrating(true);
     else if (outcome.next_module_id) show(outcome.next_module_id);
   };
@@ -195,8 +197,10 @@ function CoursePlayer() {
             // activity on screen closes (this one, or another opened meanwhile), or right away if none is open.
             if (playing.wasCompleted || !result.module_completed) return;
             if (playerOpen.current) finishedPlay.current = result;
-            else if (!unmounted().aborted) void advance(result); // not once the learner left the course
+            else void advance(result);
           }}
+          // Its save as it closed failed: the module shows what the server kept (the last move counted the play).
+          onRecordFailed={() => void queryClient.invalidateQueries({ queryKey: learnKeys.course(courseId) })}
           onOpenChange={(open) => {
             if (open) return;
             playerOpen.current = false;

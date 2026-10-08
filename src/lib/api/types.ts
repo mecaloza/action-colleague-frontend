@@ -431,6 +431,10 @@ export interface ActivityMoveResult {
   result: Record<string, unknown> & { score: number; done: boolean };
   done: boolean;
   narration: Record<string, string>;
+  /** What `finish` tells, told by the move that ends the game (null for any other move and in an admin's preview). */
+  module_completed: boolean | null;
+  next_module_id: number | null;
+  course_completed: boolean | null;
 }
 
 /** An activity as the admin edits it: its whole spec (answers included). */
