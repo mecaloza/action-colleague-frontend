@@ -8,42 +8,7 @@ import { studioApi } from "@/lib/api/studio";
 import type { SceneVisual, Slide, SlideContext } from "@/lib/api/types";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { cn } from "@/lib/utils";
-
-// The server renders two previews at a time and turns away (429) the ones that wait too long: a long script asks
-// for every scene at once, so this tab sends two at most and queues the rest.
-const MAX_RENDERS = 2;
-let rendering = 0;
-const waiting: (() => void)[] = [];
-
-const cancelled = () => new DOMException("Cancelado", "AbortError");
-
-/** Resolves when a render slot is free; rejects if `signal` aborts first (the slide changed or left the screen). */
-function takeSlot(signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.reject(cancelled());
-  if (rendering < MAX_RENDERS) {
-    rendering += 1;
-    return Promise.resolve();
-  }
-  return new Promise((resolve, reject) => {
-    const start = () => {
-      signal.removeEventListener("abort", cancel);
-      rendering += 1;
-      resolve();
-    };
-    const cancel = () => {
-      const index = waiting.indexOf(start);
-      if (index >= 0) waiting.splice(index, 1);
-      reject(cancelled());
-    };
-    waiting.push(start);
-    signal.addEventListener("abort", cancel, { once: true });
-  });
-}
-
-function releaseSlot() {
-  rendering -= 1;
-  waiting.shift()?.();
-}
+import { inRenderSlot } from "./render-slots";
 
 /** What the server needs to render one slide (an infographic's picture is found by its scene's visual). */
 type PreviewRequest = { slide: Slide; context: SlideContext; visual?: SceneVisual; courseId?: number };
@@ -52,14 +17,9 @@ type PreviewRequest = { slide: Slide; context: SlideContext; visual?: SceneVisua
 const PENDING_POLL_MS = 8000;
 const MAX_PENDING_POLLS = 30;
 
-async function renderPreview(request: string, signal: AbortSignal): Promise<{ image: Blob; pending: boolean }> {
-  await takeSlot(signal);
-  try {
-    const { slide, context, visual, courseId } = JSON.parse(request) as PreviewRequest;
-    return await studioApi.slidePreview(slide, context, signal, visual, courseId);
-  } finally {
-    releaseSlot();
-  }
+function renderPreview(request: string, signal: AbortSignal): Promise<{ image: Blob; pending: boolean }> {
+  const { slide, context, visual, courseId } = JSON.parse(request) as PreviewRequest;
+  return inRenderSlot(signal, () => studioApi.slidePreview(slide, context, signal, visual, courseId));
 }
 
 function useObjectUrl(blob: Blob | undefined): string | null {

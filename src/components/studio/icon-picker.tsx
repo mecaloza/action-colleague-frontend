@@ -12,6 +12,8 @@ interface IconPickerProps {
   onChange: (name: string) => void;
   /** What the icon is for, e.g. "Viñetas 2": names the button for screen readers. */
   label: string;
+  /** The id of what is said about the icon (e.g. that it overlaps something on the slide). */
+  describedBy?: string;
 }
 
 const NONE = { name: "", label: "Sin ícono", Icon: Minus };
@@ -20,7 +22,7 @@ const NONE = { name: "", label: "Sin ícono", Icon: Minus };
  * Picks the icon a slide shows for a point (or for a statement or a figure); "" shows none.
  * A list (one icon per row, with its name) so the arrows, typing a name and screen readers all work.
  */
-export function IconPicker({ value, onChange, label }: IconPickerProps) {
+export function IconPicker({ value, onChange, label, describedBy }: IconPickerProps) {
   const current = slideIcon(value);
   return (
     <DropdownMenu>
@@ -31,6 +33,7 @@ export function IconPicker({ value, onChange, label }: IconPickerProps) {
           size="icon-sm"
           className="w-14 shrink-0 gap-0.5 px-1.5"
           aria-label={`Ícono de ${label}: ${current ? current.label : "ninguno"}`}
+          aria-describedby={describedBy}
         >
           {current ? <current.Icon className="text-accent" /> : <Minus className="text-muted-foreground" />}
           <ChevronDown className="!size-3 text-muted-foreground" />
