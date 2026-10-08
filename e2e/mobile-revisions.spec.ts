@@ -1,9 +1,18 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { adminApi } from "./fixtures/api";
+import {
+  ACTIVITY_TITLE,
+  addActivity,
+  MODULE_TITLE as QUIZ_MODULE,
+  quizCourse,
+  savedActivity,
+  savedQuestions,
+} from "./fixtures/revisions";
 import { MODULE_TITLE, sceneTitles, scriptedCourse } from "./fixtures/scripts";
 
-// "Pedir un cambio" to a module's script on a phone ("mobile" project: Pixel 7, touch, no hover), at the narrowest
-// width we support. Fake providers: the AI's change is deterministic (see fixtures/scripts.ts).
+// "Pedir un cambio" to a module's script, its quiz and its activities on a phone ("mobile" project: Pixel 7, touch,
+// no hover), at the narrowest width we support. Fake providers: the AI's change is deterministic (see
+// fixtures/scripts.ts and fixtures/revisions.ts).
 test.setTimeout(120_000);
 test.use({ viewport: { width: 360, height: 740 } });
 
@@ -33,6 +42,12 @@ async function expectFits(page: Page, panel: Locator) {
       }, width),
     )
     .toEqual([]);
+}
+
+/** The page itself never scrolls sideways (its new buttons wrap instead). */
+async function expectNoSidewaysPage(page: Page) {
+  const width = page.viewportSize()!.width;
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
 }
 
 test("en el celular se pide un cambio al guion desde el panel del módulo, se revisa y se aplica", async ({
@@ -108,4 +123,92 @@ test("en el celular se pide un cambio al guion desde el panel del módulo, se re
   await undo.tap();
   await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Cambio deshecho" })).toBeVisible();
   expect(await sceneTitles(call, moduleId)).toEqual(["Seguridad en planta", "Reglas del casco", "Para recordar"]);
+});
+
+test("en el celular se pide un cambio a una pregunta y a una actividad, y se revisa sin desbordes", async ({
+  page,
+  request,
+}) => {
+  const call = await adminApi(request);
+  const { courseId, moduleId } = await quizCourse(call, "Evaluación y actividad desde el celular");
+  const activity = await addActivity(call, moduleId);
+  await page.goto(`/admin/courses/${courseId}?tab=evaluations`);
+
+  // A question's own button: only its icon on a phone, big enough for a finger.
+  const ask = page.getByRole("button", { name: "Pedir un cambio en la pregunta 2" });
+  await expectTarget(ask);
+  await expectTarget(page.getByRole("button", { name: "Pedir un cambio", exact: true }));
+  await expectNoSidewaysPage(page);
+  await ask.tap();
+  const quizSheet = page.getByRole("dialog", { name: "Cambios a la evaluación" });
+  const field = quizSheet.getByLabel("¿Qué quieres cambiar?");
+  await expect(field).toBeVisible();
+  await expect(field).not.toBeFocused(); // the keyboard doesn't pop up over the panel
+  const second = quizSheet.getByRole("button", { name: "Pregunta 02 · ¿Cuándo se revisa el casco?" });
+  await expect(second).toHaveAttribute("aria-pressed", "true");
+  await expectTarget(second);
+  await expectFits(page, quizSheet);
+  await field.fill("La pregunta no dice de qué revisión se trata.");
+  const propose = quizSheet.getByRole("button", { name: "Pedir propuesta" });
+  await expect(propose).toBeInViewport();
+  await propose.tap();
+
+  // The proposal: the question before and after, stacked; the decision always at hand at the bottom.
+  await expect(quizSheet.getByRole("heading", { name: "Propuesta de la IA" })).toBeVisible({ timeout: 60_000 });
+  await expect(
+    quizSheet.getByRole("listitem", { name: "Pregunta 2: Revisado: ¿Cuándo se revisa el casco?" }),
+  ).toBeVisible();
+  const apply = quizSheet.getByRole("button", { name: "Aplicar", exact: true });
+  for (const action of [
+    apply,
+    quizSheet.getByRole("button", { name: "Pedir otro ajuste" }),
+    quizSheet.getByRole("button", { name: "Descartar" }),
+  ]) {
+    await expect(action).toBeInViewport();
+    await expectTarget(action);
+  }
+  const reach = quizSheet.getByRole("region", { name: "Para las personas" });
+  await reach.scrollIntoViewIfNeeded();
+  await expect(reach).toBeInViewport();
+  await expectFits(page, quizSheet);
+  await apply.tap();
+  await expect(quizSheet).toBeHidden();
+  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Cambio aplicado" })).toBeVisible();
+  expect((await savedQuestions(call, moduleId))[1].prompt).toBe("Revisado: ¿Cuándo se revisa el casco?");
+
+  // An activity, from its row's menu.
+  await page.getByLabel("Sección del curso").selectOption("activities");
+  const row = page
+    .getByRole("list", { name: `Actividades de ${QUIZ_MODULE}` })
+    .getByRole("listitem")
+    .filter({ hasText: ACTIVITY_TITLE });
+  const menu = row.getByRole("button", { name: `Más acciones para ${ACTIVITY_TITLE}` });
+  await expectTarget(menu);
+  await expectNoSidewaysPage(page);
+  await menu.tap();
+  const item = page.getByRole("menuitem", { name: "Pedir un cambio" });
+  await expectTarget(item);
+  await item.tap();
+  const activitySheet = page.getByRole("dialog", { name: "Cambios a la actividad" });
+  const observation = activitySheet.getByLabel("¿Qué quieres cambiar?");
+  await expect(observation).toBeVisible();
+  await expect(observation).not.toBeFocused();
+  await expectFits(page, activitySheet);
+  await observation.fill("Que las consecuencias hablen del costo.");
+  await activitySheet.getByRole("button", { name: "Pedir propuesta" }).tap();
+  await expect(activitySheet.getByRole("heading", { name: "Propuesta de la IA" })).toBeVisible({ timeout: 60_000 });
+  const choice = activitySheet.getByRole("listitem", { name: "Opción 1 de la situación 1" });
+  await choice.scrollIntoViewIfNeeded();
+  await expect(choice).toContainText("Vendes hoy, pero el costo por kilómetro sube. Revisado.");
+  await expectFits(page, activitySheet);
+  const applyActivity = activitySheet.getByRole("button", { name: "Aplicar", exact: true });
+  await expect(applyActivity).toBeInViewport();
+  await expectTarget(applyActivity);
+  await applyActivity.tap();
+  await expect(activitySheet).toBeHidden();
+  // Its own toast (the quiz's may still be there): the activity is published, its new lines are voiced.
+  await expect(
+    page.locator("[data-sonner-toast]").filter({ hasText: "La voz de las líneas nuevas se está grabando." }),
+  ).toBeVisible();
+  expect((await savedActivity(call, moduleId, activity.id)).intro).toMatch(/^Revisado: /);
 });

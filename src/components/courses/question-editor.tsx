@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, Circle, Plus, Trash2, X, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, Circle, Plus, Sparkles, Trash2, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -295,6 +295,19 @@ function TypeFields({ question, fieldId, onChange }: FieldsProps<Question> & { f
   }
 }
 
+interface QuestionEditorProps {
+  question: Question;
+  index: number;
+  total: number;
+  onChange: (question: Question) => void;
+  onRemove: () => void;
+  onMove: (direction: -1 | 1) => void;
+  /** Asks the AI for a change to this question of the saved quiz (left out: not offered). */
+  onRequestChange?: () => void;
+  /** The id of why the AI can't be asked now (edits not saved yet: it starts from the saved quiz). */
+  requestBlockedBy?: string;
+}
+
 export function QuestionEditor({
   question,
   index,
@@ -302,14 +315,9 @@ export function QuestionEditor({
   onChange,
   onRemove,
   onMove,
-}: {
-  question: Question;
-  index: number;
-  total: number;
-  onChange: (question: Question) => void;
-  onRemove: () => void;
-  onMove: (direction: -1 | 1) => void;
-}) {
+  onRequestChange,
+  requestBlockedBy,
+}: QuestionEditorProps) {
   const fieldId = `question-${useId()}`;
   const problem = questionProblem(question);
 
@@ -322,6 +330,22 @@ export function QuestionEditor({
         </span>
         {problem && <span className="text-xs font-semibold text-warning">· {problem}</span>}
         <div className="ml-auto flex items-center">
+          {onRequestChange && (
+            // Only the icon on a phone, where the header is short of room; its name says what it does.
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onRequestChange}
+              disabled={Boolean(requestBlockedBy)}
+              aria-describedby={requestBlockedBy}
+              aria-label={`Pedir un cambio en la pregunta ${index + 1}`}
+              className="min-w-10 px-2.5 sm:px-3"
+            >
+              <Sparkles />
+              <span className="hidden sm:inline">Pedir un cambio</span>
+            </Button>
+          )}
           <IconButton icon={ArrowUp} label="Subir pregunta" disabled={index === 0} onClick={() => onMove(-1)} />
           <IconButton icon={ArrowDown} label="Bajar pregunta" disabled={index === total - 1} onClick={() => onMove(1)} />
           <IconButton icon={Trash2} label="Eliminar pregunta" onClick={onRemove} />

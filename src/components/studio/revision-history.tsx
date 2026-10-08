@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { revisionKeys, revisionsApi } from "@/lib/api/revisions";
 import type { RevisionSource, RevisionStatus, RevisionSummary } from "@/lib/api/types";
 import { formatDate, formatRelative } from "@/lib/format";
+import type { RevisionRef } from "./use-revision-cache";
 
 /** How each change came about. */
 const SOURCES: Record<RevisionSource, string> = {
@@ -33,11 +34,24 @@ const STATUSES: Record<RevisionStatus, { label: string; variant: BadgeProps["var
 export const isPendingRevision = (revision: Pick<RevisionSummary, "status">) =>
   revision.status === "proposing" || revision.status === "proposed";
 
+/** The changes to the module's script, its quiz or one of its activities, newest first. */
+export function useRevisionHistory({ target, moduleId, activityId = null }: RevisionRef, refetchOnMount?: "always") {
+  return useQuery({
+    queryKey: revisionKeys.list(moduleId, target, activityId),
+    queryFn: () => revisionsApi.list(moduleId, { target, activity_id: activityId ?? undefined }),
+    refetchOnMount,
+  });
+}
+
 interface RevisionHistoryProps {
-  moduleId: number;
+  /** Whose changes: the module's script, its quiz or one of its activities. */
+  subject: RevisionRef;
+  /** The list's name ("Cambios del guion"), and what it says while there are none. */
+  label: string;
+  empty: string;
   /**
-   * Why nothing can be undone now (the script has unsaved edits in the editor: undoing would replace them), as the
-   * id of the text that says it; undefined when it can.
+   * Why nothing can be undone now (what it changes has unsaved edits in its editor: undoing would replace them), as
+   * the id of the text that says it; undefined when it can.
    */
   blockedBy?: string;
   /** Undoes an applied change; resolves once done (or failed: the toast says why). */
@@ -46,18 +60,16 @@ interface RevisionHistoryProps {
   onShow: (revisionId: number) => void;
 }
 
-/** Every change to the module's script, newest first: who made it, how and when; applied ones can be undone. */
-export function RevisionHistory({ moduleId, blockedBy, onUndo, onShow }: RevisionHistoryProps) {
-  const history = useQuery({
-    queryKey: revisionKeys.list(moduleId),
-    queryFn: () => revisionsApi.list(moduleId, "script"),
-  });
+/**
+ * Every change to the module's script, its quiz or one of its activities, newest first: who made it, how and when;
+ * applied ones can be undone.
+ */
+export function RevisionHistory({ subject, label, empty, blockedBy, onUndo, onShow }: RevisionHistoryProps) {
+  const history = useRevisionHistory(subject);
   const [undoing, setUndoing] = useState<number | null>(null);
   if (history.isPending) return <Skeleton className="h-48" />;
   if (!history.data) return <QueryError query={history} />;
-  if (!history.data.length) {
-    return <p className="text-sm text-muted-foreground">Todavía no hay cambios en el guion de este módulo.</p>;
-  }
+  if (!history.data.length) return <p className="text-sm text-muted-foreground">{empty}</p>;
 
   const undo = async (revisionId: number) => {
     setUndoing(revisionId);
@@ -69,7 +81,7 @@ export function RevisionHistory({ moduleId, blockedBy, onUndo, onShow }: Revisio
   };
 
   return (
-    <ol className="divide-y divide-border border border-border bg-white" aria-label="Cambios del guion">
+    <ol className="divide-y divide-border border border-border bg-white" aria-label={label}>
       {history.data.map((revision) => {
         const status = STATUSES[revision.status] ?? { label: revision.status, variant: "outline" };
         const at = revision.applied_at ?? revision.created_at;

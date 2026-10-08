@@ -4,6 +4,8 @@ import { useId, type ReactNode } from "react";
 import { BookOpen } from "lucide-react";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import type {
+  ChangeAction,
+  ChangePosition,
   CourseDetail,
   IgnoredChange,
   ModuleAdmin,
@@ -11,7 +13,6 @@ import type {
   RevisionChanges,
   RevisionImpact,
   SceneChange,
-  SceneChangeAction,
   StoryboardScene,
   TextOp,
   VisualKind,
@@ -51,20 +52,28 @@ const VISUAL_LABELS: Record<VisualKind, string> = {
   infographic: "Infografía",
 };
 
-const ACTIONS: Record<SceneChangeAction, { label: string; variant: BadgeProps["variant"] }> = {
+/** How a change to a scene, a question or a part of an activity is marked: what it does to it. */
+export type ActionLook = { label: string; variant: BadgeProps["variant"] };
+
+/** A change to a scene, a question or a part of an activity, by what it does ("insert": named by each). */
+export const changeLooks = (inserted: string): Record<ChangeAction, ActionLook> => ({
   update: { label: "Cambia", variant: "accent" },
-  insert: { label: "Escena nueva", variant: "success" },
+  insert: { label: inserted, variant: "success" },
   delete: { label: "Se quita", variant: "destructive" },
   move: { label: "Cambia de lugar", variant: "secondary" },
-};
+});
 
-const NUMBER = new Intl.NumberFormat("es");
+const ACTIONS = changeLooks("Escena nueva");
+
+export const NUMBER = new Intl.NumberFormat("es");
 
 // A field's values come as the server stores them: read without trusting their shape (an old scene may lack some).
-const textOf = (value: unknown) => (typeof value === "string" ? value.trim() : "");
-const listOf = (value: unknown): string[] => (Array.isArray(value) ? value.map((item) => String(item ?? "")) : []);
-const recordOf = (value: unknown): Record<string, unknown> =>
+export const textOf = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+export const listOf = (value: unknown): string[] => (Array.isArray(value) ? value.map((item) => String(item ?? "")) : []);
+export const recordOf = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+export const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** What the admin knows a scene by: its title (or its figure, its first heading), else its layout. */
 export function sceneTitle(scene: StoryboardScene | null | undefined): string {
@@ -74,7 +83,7 @@ export function sceneTitle(scene: StoryboardScene | null | undefined): string {
   return named || LAYOUT_LABELS.get(slide.layout) || "";
 }
 
-function Blank() {
+export function Blank() {
   return <span className="italic text-muted-foreground">Vacío</span>;
 }
 
@@ -191,13 +200,84 @@ function Side({ when, children }: { when: "before" | "after"; children: ReactNod
   );
 }
 
-/** Before and after side by side (stacked on a phone); a scene added or removed has only one of them. */
-function Compare({ before, after }: { before?: ReactNode; after?: ReactNode }) {
+/** Before and after side by side (stacked on a phone); what is added or removed has only one of them. */
+export function Compare({ before, after }: { before?: ReactNode; after?: ReactNode }) {
   return (
     <div className={cn("grid gap-2", before !== undefined && after !== undefined && "sm:grid-cols-2")}>
       {before !== undefined && <Side when="before">{before}</Side>}
       {after !== undefined && <Side when="after">{after}</Side>}
     </div>
+  );
+}
+
+interface ChangeCardProps {
+  /** What leads the card: the number of the scene or question, or an icon. */
+  marker: ReactNode;
+  /** Its heading (with what screen readers hear first, e.g. "Escena 2: "). */
+  title: ReactNode;
+  look: ActionLook;
+  children: ReactNode;
+}
+
+/** One thing a change touches (a scene, a question, a part of an activity): what it is, what happens to it, how. */
+export function ChangeCard({ marker, title, look, children }: ChangeCardProps) {
+  const headingId = useId();
+  return (
+    <li aria-labelledby={headingId} className="border border-border bg-white">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-3">
+        {marker}
+        <h4 id={headingId} className="min-w-0 flex-1 basis-40 break-words font-semibold">
+          {title}
+        </h4>
+        <Badge variant={look.variant}>{look.label}</Badge>
+      </header>
+      <div className="space-y-4 p-4">{children}</div>
+    </li>
+  );
+}
+
+/** A number leading a card (a scene's, a question's). */
+export function CardNumber({ number }: { number: number }) {
+  return (
+    <span className="font-display text-xl font-medium text-accent" aria-hidden>
+      {twoDigits(number)}
+    </span>
+  );
+}
+
+/** A field that changed, by its name: its value before and after (or how it changed). */
+export function FieldDiff({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-label text-ink-700">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+/** Why the AI changed it. */
+export function ChangeReason({ reason }: { reason: string }) {
+  if (!reason) return null;
+  return (
+    <p className="text-sm text-muted-foreground">
+      <span className="font-semibold text-ink-800">Por qué: </span>
+      {reason}
+    </p>
+  );
+}
+
+/**
+ * Where a scene or question ends up when its number changes: moved, or pushed by one added or removed before it
+ * (said, without calling it a move).
+ */
+export function PositionNote({ action, position, noun }: { action: ChangeAction; position: ChangePosition; noun: string }) {
+  if (position.before === null || position.after === null || position.before === position.after) return null;
+  return (
+    <p className="text-sm">
+      {action === "move"
+        ? `Pasa de la ${noun} ${position.before} a la ${position.after}.`
+        : `Ahora es la ${noun} ${position.after} (antes, la ${position.before}).`}
+    </p>
   );
 }
 
@@ -230,10 +310,8 @@ function NarrationDiff({ parts }: { parts: TextOp[] }) {
 type ScenePreview = (scene: StoryboardScene, when: "before" | "after", number: number) => ReactNode;
 
 function SceneChangeCard({ change, preview }: { change: SceneChange; preview: ScenePreview }) {
-  const headingId = useId();
   const { action, position, fields } = change;
   const number = position.after ?? position.before ?? 0;
-  const look = ACTIONS[action] ?? ACTIONS.update;
   const names = [
     ...FIELDS.map(([name]) => name).filter((name) => name in fields),
     ...Object.keys(fields).filter((name) => !FIELD_LABELS.has(name)),
@@ -242,80 +320,58 @@ function SceneChangeCard({ change, preview }: { change: SceneChange; preview: Sc
   const after = action === "delete" ? undefined : change.after;
   // The slide is drawn when something on it changed (a narration alone looks the same).
   const slideChanged = names.some((name) => name !== "narration");
-  const elsewhere = position.before !== null && position.after !== null && position.before !== position.after;
   return (
-    <li aria-labelledby={headingId} className="border border-border bg-white">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-3">
-        <span className="font-display text-xl font-medium text-accent" aria-hidden>
-          {twoDigits(number)}
-        </span>
-        <h4 id={headingId} className="min-w-0 flex-1 basis-40 break-words font-semibold">
+    <ChangeCard
+      marker={<CardNumber number={number} />}
+      title={
+        <>
           <span className="sr-only">Escena {number}: </span>
           {sceneTitle(change.after ?? change.before) || "Escena sin título"}
-        </h4>
-        <Badge variant={look.variant}>{look.label}</Badge>
-      </header>
-      <div className="space-y-4 p-4">
-        {change.reason && (
-          <p className="text-sm text-muted-foreground">
-            <span className="font-semibold text-ink-800">Por qué: </span>
-            {change.reason}
-          </p>
-        )}
-        {/* A scene added or removed before it changes its number too: said, without calling it a move. */}
-        {elsewhere && (
-          <p className="text-sm">
-            {action === "move"
-              ? `Pasa de la escena ${position.before} a la ${position.after}.`
-              : `Ahora es la escena ${position.after} (antes, la ${position.before}).`}
-          </p>
-        )}
-        {slideChanged && (before || after) && (
-          <Compare
-            before={before ? preview(before, "before", position.before ?? number) : undefined}
-            after={after ? preview(after, "after", position.after ?? number) : undefined}
-          />
-        )}
-        {names.map((name) => {
-          const field = fields[name];
-          return (
-            <div key={name}>
-              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-label text-ink-700">
-                {FIELD_LABELS.get(name) ?? name}
-              </p>
-              {name === "narration" && action === "update" && change.narration_diff.length ? (
-                <NarrationDiff parts={change.narration_diff} />
-              ) : (
-                <Compare
-                  before={action === "insert" ? undefined : <FieldValue name={name} value={field.before} />}
-                  after={action === "delete" ? undefined : <FieldValue name={name} value={field.after} />}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </li>
+        </>
+      }
+      look={ACTIONS[action] ?? ACTIONS.update}
+    >
+      <ChangeReason reason={change.reason} />
+      <PositionNote action={action} position={position} noun="escena" />
+      {slideChanged && (before || after) && (
+        <Compare
+          before={before ? preview(before, "before", position.before ?? number) : undefined}
+          after={after ? preview(after, "after", position.after ?? number) : undefined}
+        />
+      )}
+      {names.map((name) => {
+        const field = fields[name];
+        return (
+          <FieldDiff key={name} label={FIELD_LABELS.get(name) ?? name}>
+            {name === "narration" && action === "update" && change.narration_diff.length ? (
+              <NarrationDiff parts={change.narration_diff} />
+            ) : (
+              <Compare
+                before={action === "insert" ? undefined : <FieldValue name={name} value={field.before} />}
+                after={action === "delete" ? undefined : <FieldValue name={name} value={field.after} />}
+              />
+            )}
+          </FieldDiff>
+        );
+      })}
+    </ChangeCard>
   );
 }
 
+/** A long text before and after (a reading, an intro): as written, line breaks kept. */
+export function LongText({ value }: { value: string }) {
+  return value.trim() ? <div className="whitespace-pre-wrap leading-relaxed">{value.trim()}</div> : <Blank />;
+}
+
 function ReadingCard({ reading }: { reading: ReadingChange }) {
-  const headingId = useId();
-  const text = (value: string) =>
-    value.trim() ? <div className="whitespace-pre-wrap leading-relaxed">{value.trim()}</div> : <Blank />;
   return (
-    <li aria-labelledby={headingId} className="border border-border bg-white">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-3">
-        <BookOpen className="h-5 w-5 shrink-0 text-accent" aria-hidden />
-        <h4 id={headingId} className="min-w-0 flex-1 font-semibold">
-          Lectura del módulo
-        </h4>
-        <Badge variant="accent">Cambia</Badge>
-      </header>
-      <div className="p-4">
-        <Compare before={text(reading.before)} after={text(reading.after)} />
-      </div>
-    </li>
+    <ChangeCard
+      marker={<BookOpen className="h-5 w-5 shrink-0 text-accent" aria-hidden />}
+      title="Lectura del módulo"
+      look={ACTIONS.update}
+    >
+      <Compare before={<LongText value={reading.before} />} after={<LongText value={reading.after} />} />
+    </ChangeCard>
   );
 }
 
@@ -379,20 +435,31 @@ export function RevisionDiff({ course, module, changes, sceneCount }: RevisionDi
   );
 }
 
-/** What the AI proposed that was left out (another scene than the chosen ones, one that doesn't exist...), and why. */
-export function IgnoredChanges({ ignored, numbers }: { ignored: IgnoredChange[]; numbers: Map<string, number> }) {
+interface IgnoredChangesProps {
+  ignored: IgnoredChange[];
+  /** The scenes' or questions' numbers. */
+  numbers: Map<string, number>;
+  /** What they are: "escena" (a script's), "pregunta" (a quiz's). */
+  noun?: string;
+}
+
+/**
+ * What the AI proposed that was left out (another scene or question than the chosen ones, one that doesn't exist...),
+ * and why.
+ */
+export function IgnoredChanges({ ignored, numbers, noun = "escena" }: IgnoredChangesProps) {
   if (!ignored.length) return null;
   return (
     <div className="border-l-2 border-ink-500 bg-mist px-4 py-3 text-sm">
       <p className="font-semibold">La IA también propuso cambios que quedaron fuera:</p>
       <ul className="mt-1.5 space-y-1">
         {ignored.map((item, index) => {
-          const number = numbers.get(item.scene_id);
+          const number = numbers.get(item.question_id || item.scene_id);
           const what = number
-            ? `Escena ${twoDigits(number)}`
+            ? `${capitalized(noun)} ${twoDigits(number)}`
             : item.action === "insert_after"
-              ? "Una escena nueva"
-              : "Una escena";
+              ? `Una ${noun} nueva`
+              : `Una ${noun}`;
           return (
             <li key={index} className="break-words">
               <span className="font-semibold">{what}:</span> {item.reason}
@@ -403,8 +470,6 @@ export function IgnoredChanges({ ignored, numbers }: { ignored: IgnoredChange[];
     </div>
   );
 }
-
-const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** "a, b y c". */
 function joined(parts: string[]): string {
@@ -444,17 +509,27 @@ function impactLines(impact: RevisionImpact | null, hasVideo: boolean, needsRend
   return lines;
 }
 
-/** What the change means for the module's video: what producing it again takes, or why it isn't needed. */
-export function RevisionImpactPanel({ changes, hasVideo }: { changes: RevisionChanges; hasVideo: boolean }) {
+/** What a change means past the content itself (for the video, for the people taking the course), line by line. */
+export function NotesPanel({ title, lines }: { title: string; lines: string[] }) {
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="space-y-1 border border-border bg-mist/60 px-4 py-3 text-sm">
       <h4 id={headingId} className="mb-1.5 text-[11px] font-bold uppercase tracking-label text-ink-700">
-        Para el video
+        {title}
       </h4>
-      {impactLines(changes.impact, hasVideo, leavesVideoBehind(changes, hasVideo)).map((line) => (
+      {lines.map((line) => (
         <p key={line}>{line}</p>
       ))}
     </section>
+  );
+}
+
+/** What the change means for the module's video: what producing it again takes, or why it isn't needed. */
+export function RevisionImpactPanel({ changes, hasVideo }: { changes: RevisionChanges; hasVideo: boolean }) {
+  return (
+    <NotesPanel
+      title="Para el video"
+      lines={impactLines(changes.impact, hasVideo, leavesVideoBehind(changes, hasVideo))}
+    />
   );
 }

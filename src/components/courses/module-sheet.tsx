@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { AlertTriangle, History, Sparkles, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import type { RevisionTab } from "@/components/studio/revision-sheet";
-import { StaleVideoNotice } from "@/components/studio/revision-status";
+import { StaleVideoNotice, usePendingRevision } from "@/components/studio/revision-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +43,7 @@ interface ModuleFormProps {
 
 /** An AI module's script: a change to ask the AI for (or one waiting), its history, a video that no longer matches. */
 function ScriptChanges({ module, script }: { module: ModuleAdmin; script: ScriptActions }) {
+  const pending = usePendingRevision(module, "script");
   return (
     <section aria-labelledby="module-script-changes" className="space-y-3 border-l-2 border-accent bg-accent-soft/50 px-4 py-3">
       <h3 id="module-script-changes" className="text-[11px] font-bold uppercase tracking-label text-ink-700">
@@ -54,7 +55,7 @@ function ScriptChanges({ module, script }: { module: ModuleAdmin; script: Script
         producing={script.producingId === module.id}
       />
       <p className="text-sm text-muted-foreground">
-        {module.revision_pending
+        {pending
           ? "Hay un cambio de la IA esperando tu revisión."
           : "Pide a la IA un ajuste puntual: propone solo lo que cambia y lo revisas antes de aplicarlo."}
       </p>

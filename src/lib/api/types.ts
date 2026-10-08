@@ -1161,8 +1161,8 @@ export interface StoryboardLint {
   warnings: LayoutWarning[];
 }
 
-// Changes to a module's script: proposed by the AI from an observation (reviewed before applying), or made otherwise
-// (saved by hand, rewritten, undone). Any applied one can be undone.
+// Changes to a module's script, its quiz or one of its activities: proposed by the AI from an observation (reviewed
+// before applying), or made otherwise (saved by hand, rewritten, undone). Any applied one can be undone.
 export type RevisionTarget = "script" | "quiz" | "activity";
 export type RevisionSource = "observation" | "qa" | "manual" | "regenerate" | "revert";
 export type RevisionStatus = "proposing" | "proposed" | "applied" | "discarded" | "failed" | "superseded" | "reverted";
@@ -1170,6 +1170,7 @@ export type RevisionStatus = "proposing" | "proposed" | "applied" | "discarded" 
 export interface RevisionScope {
   /** The scenes the observation is about (empty: the whole script). */
   scene_ids: string[];
+  /** The questions the observation is about (empty: the whole quiz); an undo's, the questions it restored. */
   question_ids: string[];
   /** The video review's finding it fixes. */
   qa_issue_id: string | null;
@@ -1189,14 +1190,22 @@ export interface TextOp {
   text: string;
 }
 
-export type SceneChangeAction = "update" | "insert" | "delete" | "move";
+/** "move": the same scene, question or part of an activity, in another place. */
+export type ChangeAction = "update" | "insert" | "delete" | "move";
+export type SceneChangeAction = ChangeAction;
+
+/** Where a scene or question is (1 = first) before and after the change (null: not there). */
+export interface ChangePosition {
+  before: number | null;
+  after: number | null;
+}
 
 export interface SceneChange {
   scene_id: string;
   /** "move": the same scene in another place. */
   action: SceneChangeAction;
   /** Where the scene is in the script (1 = first) before and after the change (null: not there). */
-  position: { before: number | null; after: number | null };
+  position: ChangePosition;
   /**
    * What changed, by field: "layout", "title", "subtitle", "points", "icons", "icon", "stat" ({stat_value,
    * stat_label}), "quote" (its author), "comparison" ({left, right}), "chart" ({chart_labels, chart_values,
@@ -1232,17 +1241,69 @@ export interface RevisionImpact {
   needs_render: boolean;
 }
 
+export interface QuestionChange {
+  /** The question's id before the change (a new question: its own). */
+  question_id: string;
+  action: ChangeAction;
+  position: ChangePosition;
+  /**
+   * An update's fields that changed, by the question's own keys: "prompt", "scenario", "options", "correct_index",
+   * "correct", "items", "pairs", "answers", "hint", "explanation"; and "type" when it became another kind of question.
+   */
+  fields: Record<string, FieldChange>;
+  /** Why the AI changed it (empty for other changes). */
+  reason: string;
+  /**
+   * The whole question before and after (null where it isn't). When what is answered changes, `after` has a new id:
+   * the answers given to the old wording, and its statistics, stay with the old one.
+   */
+  before: Question | null;
+  after: Question | null;
+}
+
+/**
+ * A part of an activity that changed: an element of a list of its own (a situation, a choice, a decision, an item, a
+ * control) or another field of its spec, whole.
+ */
+export interface EntityChange {
+  /** "nodes/inicio", "nodes/inicio/choices/precio", "verdicts/retirar", "items/l3", "variables/km", "prompt"... */
+  path: string;
+  action: ChangeAction;
+  /** How the admin knows it: "Situación 2", "Opción 1 de la situación 2", "Control «Precio»", "Instrucción". */
+  label: string;
+  /** An element without the elements of its own inside it (one added or removed: whole); a field, its value. */
+  before: unknown;
+  after: unknown;
+}
+
+export interface ActivityChange {
+  /** Null when it stays the same. */
+  title: ReadingChange | null;
+  intro: ReadingChange | null;
+  entities: EntityChange[];
+  /** Spoken lines it didn't say before: voiced again when it is published (the others keep their voice). */
+  lines_changed: number;
+}
+
 /** Something the AI proposed that was left out, and why (in Spanish). */
 export interface IgnoredChange {
+  /** A script's (empty for a quiz's). */
   scene_id: string;
+  /** A quiz's (empty for a script's). */
+  question_id: string;
   action: string;
   reason: string;
 }
 
 export interface RevisionChanges {
+  /** A script's. */
   scenes: SceneChange[];
   reading: ReadingChange | null;
   impact: RevisionImpact | null;
+  /** A quiz's. */
+  questions: QuestionChange[];
+  /** An activity's. */
+  activity: ActivityChange | null;
   ignored: IgnoredChange[];
   /** Quiz questions the new script may contradict. */
   affected_question_ids: string[];
@@ -1264,6 +1325,16 @@ export interface RevisionSummary {
   created_by_name: string | null;
 }
 
+/** Who a change to a quiz or an activity reaches as soon as it is applied (a script's waits for its video). */
+export interface RevisionLearners {
+  /** Learners see it at once: the course is published (an activity's: and the activity too). */
+  published: boolean;
+  /** Learners who tried the quiz without passing it and have attempts left: their next one has the change. */
+  mid_quiz: number;
+  /** Learners with a play of the activity open: they start it again. */
+  mid_play: number;
+}
+
 export interface Revision extends RevisionSummary {
   scope: RevisionScope;
   /** What the observation asked that the AI could not do, and why. */
@@ -1272,13 +1343,19 @@ export interface Revision extends RevisionSummary {
   changes: RevisionChanges | null;
   error: string | null;
   job_id: string | null;
+  /** A quiz's or an activity's change still pending (null otherwise). */
+  learners: RevisionLearners | null;
 }
 
 export interface RevisionCreate {
-  target: "script";
+  target: RevisionTarget;
   observation: string;
-  /** Null or empty: the whole script. */
+  /** A script's: null or empty, the whole script. */
   scene_ids?: string[] | null;
+  /** A quiz's: null or empty, the whole quiz. */
+  question_ids?: string[] | null;
+  /** An activity's: the one it changes (required for that target). */
+  activity_id?: number | null;
   qa_issue_id?: string | null;
 }
 
@@ -1293,12 +1370,18 @@ export interface RevisionApplied {
   render_job: Job | null;
 }
 
-/** The `detail` of a 409 when the script changed since, in the places a change touches (scenes and/or reading). */
+/**
+ * The `detail` of a 409 when what a change touches changed since: a script's scenes (and/or its reading), a quiz's
+ * questions or an activity's parts.
+ */
 export interface RevisionConflict {
   code: "revision_stale" | "revision_conflict";
   message: string;
-  scene_ids: string[];
-  reading: boolean;
+  scene_ids?: string[];
+  reading?: boolean;
+  question_ids?: string[];
+  /** An activity's parts, as `EntityChange.path`. */
+  paths?: string[];
 }
 
 export interface OutlineModule {
