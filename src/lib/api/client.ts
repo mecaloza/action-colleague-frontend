@@ -173,8 +173,11 @@ export interface RequestOptions {
   query?: Query;
   auth?: boolean;
   signal?: AbortSignal;
-  /** "blob" for binary responses (images, audio), "blobWithHeaders" when its headers matter too; JSON otherwise. */
-  as?: "json" | "blob" | "blobWithHeaders";
+  /**
+   * "blob" for binary responses (images, audio), "blobWithHeaders" when its headers matter too; JSON otherwise, and
+   * "jsonWithStatus" when the status says something too (201 created, 200 already there).
+   */
+  as?: "json" | "jsonWithStatus" | "blob" | "blobWithHeaders";
   /** Let the request finish after the page closes (e.g. saving where a video was left). */
   keepalive?: boolean;
 }
@@ -217,11 +220,17 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (!response.ok) throw await toApiError(response);
   if (as === "blob") return (await response.blob()) as T;
   if (as === "blobWithHeaders") return { blob: await response.blob(), headers: response.headers } as T;
-  if (response.status === 204) return undefined as T;
+  const data = await readJson(response);
+  return (as === "jsonWithStatus" ? { data, status: response.status } : data) as T;
+}
+
+/** The body as JSON (undefined when there is none). */
+async function readJson(response: Response): Promise<unknown> {
+  if (response.status === 204) return undefined;
   const text = await response.text();
-  if (!text) return undefined as T;
+  if (!text) return undefined;
   try {
-    return JSON.parse(text) as T;
+    return JSON.parse(text);
   } catch {
     throw new ApiError(response.status, UNEXPECTED_ERROR, text.slice(0, 200));
   }

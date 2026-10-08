@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
-import { LogOut, Menu, UserRound, X } from "lucide-react";
+import { LogOut, Menu, SlidersHorizontal, UserRound, X } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { SplashScreen } from "@/components/layout/splash-screen";
 import {
@@ -32,12 +32,14 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/paths", label: "Rutas" },
   { href: "/admin/courses", label: "Cursos" },
   { href: "/admin/team", label: "Equipo" },
+  { href: "/admin/certificates", label: "Certificados" },
 ];
 
-const LEARNER_NAV: NavItem[] = [
-  { href: "/learn", label: "Mis cursos" },
-  { href: "/profile", label: "Mi perfil" },
-];
+/** The platform's parameters: in the admin's own menu, not in the main nav (they are set once, seldom changed). */
+const SETTINGS_ITEM: NavItem = { href: "/admin/settings", label: "Parámetros" };
+const PROFILE_ITEM: NavItem = { href: "/profile", label: "Mi perfil" };
+
+const LEARNER_NAV: NavItem[] = [{ href: "/learn", label: "Mis cursos" }, PROFILE_ITEM];
 
 function matches(pathname: string, { href, exact }: NavItem): boolean {
   return pathname === href || (!exact && pathname.startsWith(`${href}/`));
@@ -71,9 +73,16 @@ function UserMenu({ user, onLogout }: { user: CurrentUser; onLogout: () => void 
           <p className="truncate text-xs text-muted-foreground">{user.email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {user.role === "admin" && (
+          <DropdownMenuItem asChild>
+            <Link href={SETTINGS_ITEM.href}>
+              <SlidersHorizontal /> {SETTINGS_ITEM.label}
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
-          <Link href="/profile">
-            <UserRound /> Mi perfil
+          <Link href={PROFILE_ITEM.href}>
+            <UserRound /> {PROFILE_ITEM.label}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onLogout}>
@@ -96,7 +105,12 @@ interface MobileMenuProps {
 /** Full-screen menu for small screens and tablets (Radix Dialog: focus trap, Escape, scroll lock). */
 function MobileMenu({ nav, pathname, user, open, onOpenChange, onLogout }: MobileMenuProps) {
   const close = () => onOpenChange(false);
-  const links = nav.some((item) => item.href === "/profile") ? nav : [...nav, { href: "/profile", label: "Mi perfil" }];
+  // What the desktop keeps in the user's menu: here, after the sections.
+  const links = [
+    ...nav,
+    ...(user.role === "admin" ? [SETTINGS_ITEM] : []),
+    ...(nav.includes(PROFILE_ITEM) ? [] : [PROFILE_ITEM]),
+  ];
   const active = activeItem(pathname, links);
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -208,7 +222,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Logo />
           </Link>
 
-          {/* Four items and the user's name only fit side by side from lg: below, the menu holds them. */}
+          {/* Five items and the user's name only fit side by side from lg: below, the menu holds them. */}
           <nav className="hidden flex-1 items-center justify-center gap-8 lg:flex" aria-label="Principal">
             {nav.map((item) => {
               const current = item === active;

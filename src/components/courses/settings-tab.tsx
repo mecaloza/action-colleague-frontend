@@ -1,18 +1,53 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { coursesApi } from "@/lib/api/courses";
+import { settingsApi, settingsKeys } from "@/lib/api/settings";
 import type { CourseDetail, Language } from "@/lib/api/types";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { toastError } from "@/lib/notify";
 import { CoverPicker } from "./cover-picker";
 import { LanguageField } from "./language-field";
+
+/** The course's certificate choice: the platform's parameter (null), always (true) or never (false). */
+type CertificateChoice = "platform" | "yes" | "no";
+
+const choiceOf = (value: boolean | null | undefined): CertificateChoice =>
+  value === true ? "yes" : value === false ? "no" : "platform";
+const CHOICE_VALUES: Record<CertificateChoice, boolean | null> = { platform: null, yes: true, no: false };
+
+/** What "Usar el parámetro general" does today (nothing until the parameters load). */
+function PlatformCertificateHint({ choice }: { choice: CertificateChoice }) {
+  const settings = useQuery({ queryKey: settingsKeys.all, queryFn: settingsApi.get });
+  const certificates = settings.data?.certificates;
+  const rule =
+    choice === "no"
+      ? "Quien lo complete no recibe certificado (se le puede emitir a mano)."
+      : choice === "yes"
+        ? "Quien lo complete recibe certificado, aunque la emisión automática esté apagada en Parámetros."
+        : certificates
+          ? certificates.enabled
+            ? "Hoy los Parámetros emiten certificados al completar un curso."
+            : "Hoy los Parámetros no emiten certificados automáticamente."
+          : "Sigue lo que digan los Parámetros.";
+  const minimum =
+    choice !== "no" && certificates?.min_score != null
+      ? ` Necesita una nota promedio de al menos ${certificates.min_score}% en sus evaluaciones.`
+      : "";
+  return (
+    <p id="course-certificate-hint" className="mt-1.5 text-xs text-muted-foreground">
+      {rule}
+      {minimum}
+    </p>
+  );
+}
 
 function SettingsForm({ course }: { course: CourseDetail }) {
   const { storeCourse } = useCourseCache();
@@ -20,9 +55,16 @@ function SettingsForm({ course }: { course: CourseDetail }) {
   const [description, setDescription] = useState(course.description);
   const [language, setLanguage] = useState<Language>(course.language);
   const [audience, setAudience] = useState(course.settings.audience);
+  const [certificate, setCertificate] = useState<CertificateChoice>(choiceOf(course.settings.certificate));
 
   const save = useMutation({
-    mutationFn: () => coursesApi.update(course.id, { title: title.trim(), description, language, settings: { audience } }),
+    mutationFn: () =>
+      coursesApi.update(course.id, {
+        title: title.trim(),
+        description,
+        language,
+        settings: { audience, certificate: CHOICE_VALUES[certificate] },
+      }),
     onSuccess: (updated) => {
       storeCourse(updated);
       toast.success("Cambios guardados");
@@ -64,6 +106,20 @@ function SettingsForm({ course }: { course: CourseDetail }) {
           />
         </div>
       </div>
+      <div className="sm:max-w-sm">
+        <Label htmlFor="course-certificate">Certificado al completar</Label>
+        <Select
+          id="course-certificate"
+          value={certificate}
+          onChange={(event) => setCertificate(event.target.value as CertificateChoice)}
+          aria-describedby="course-certificate-hint"
+        >
+          <option value="platform">Usar el parámetro general</option>
+          <option value="yes">Sí</option>
+          <option value="no">No</option>
+        </Select>
+        <PlatformCertificateHint choice={certificate} />
+      </div>
       <Button type="submit" loading={save.isPending} disabled={!title.trim()}>
         Guardar cambios
       </Button>
@@ -73,7 +129,13 @@ function SettingsForm({ course }: { course: CourseDetail }) {
 
 export function SettingsTab({ course }: { course: CourseDetail }) {
   // The form starts over whenever the saved values change (after saving, or edited elsewhere).
-  const savedValues = JSON.stringify([course.title, course.description, course.language, course.settings.audience]);
+  const savedValues = JSON.stringify([
+    course.title,
+    course.description,
+    course.language,
+    course.settings.audience,
+    course.settings.certificate ?? null,
+  ]);
   return (
     <div className="max-w-3xl space-y-10">
       <section>

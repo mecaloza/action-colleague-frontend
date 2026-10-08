@@ -12,7 +12,7 @@ import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
+import { SwitchRow } from "@/components/ui/switch-row";
 import { Textarea } from "@/components/ui/textarea";
 import { type PathUpdate, pathsApi } from "@/lib/api/paths";
 import { profileKeys, profilesApi } from "@/lib/api/profiles";
@@ -52,36 +52,6 @@ function fieldsOf(path: PathDetail) {
 type Fields = ReturnType<typeof fieldsOf>;
 
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((id) => b.includes(id));
-
-interface SwitchRowProps {
-  id: string;
-  label: string;
-  hint: string;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-}
-
-/** A setting turned on or off: the whole row is the target (a finger needs more than the switch). */
-function SwitchRow({ id, label, hint, checked, onCheckedChange }: SwitchRowProps) {
-  return (
-    <label htmlFor={id} className="flex cursor-pointer items-start justify-between gap-4 p-4">
-      <span>
-        <span className="block font-semibold">{label}</span>
-        <span id={`${id}-hint`} className="mt-0.5 block text-sm text-muted-foreground">
-          {hint}
-        </span>
-      </span>
-      <Switch
-        id={id}
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        aria-label={label}
-        aria-describedby={`${id}-hint`}
-        className="mt-0.5"
-      />
-    </label>
-  );
-}
 
 /** The path's profiles: one checkbox each, with how many people it has. */
 function ProfilesField({ selected, onToggle, published }: { selected: number[]; onToggle: (id: number) => void; published: boolean }) {
@@ -260,7 +230,7 @@ export function PathSettingsTab({ path }: { path: PathDetail }) {
         <SwitchRow
           id="path-certificate"
           label="Emitir certificado al completar la ruta"
-          hint="Cuando la persona completa todos sus cursos publicados."
+          hint="Cuando la persona completa todos sus cursos publicados, si la emisión automática está activa en Parámetros."
           checked={certificate}
           onCheckedChange={(checked) => edit({ certificate: checked })}
         />
