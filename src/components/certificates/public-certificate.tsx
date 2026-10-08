@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, Download, SearchX, XCircle, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Clock, Download, HelpCircle, SearchX, XCircle, type LucideIcon } from "lucide-react";
 import { DiamondMotif } from "@/components/brand/motif";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,12 +33,22 @@ interface Verdict {
   heading: string;
   /** The banner's edge and icon. */
   tone: string;
+  /** Its details faded: what it said, for the record, never looking like one in force. */
+  faded?: boolean;
 }
 
 const VERDICTS: Record<CertificateStatus, Verdict> = {
   valid: { icon: CheckCircle2, heading: "Certificado válido", tone: "border-success text-success" },
   expired: { icon: Clock, heading: "Certificado vencido", tone: "border-warning text-warning" },
-  revoked: { icon: XCircle, heading: "Certificado revocado", tone: "border-destructive text-destructive" },
+  revoked: { icon: XCircle, heading: "Certificado revocado", tone: "border-destructive text-destructive", faded: true },
+};
+
+// A status this release doesn't know (a newer server's): the page fails closed, never saying it is valid.
+const UNKNOWN: Verdict = {
+  icon: HelpCircle,
+  heading: "Estado desconocido",
+  tone: "border-ink-500 text-ink-500",
+  faded: true,
 };
 
 /** What a verification says, in a sentence. */
@@ -48,8 +58,28 @@ export function verdictText(certificate: Pick<PublicCertificate, "status" | "exp
       return "Es auténtico y está vigente.";
     case "expired":
       return `Es auténtico, pero venció el ${formatLongDate(certificate.expires_at, certificate.details.timezone)}.`;
-    default:
+    case "revoked":
       return "Quien lo emitió lo revocó: ya no es válido.";
+    default:
+      return "No pudimos confirmar si está vigente. Consulta con quien lo emitió.";
+  }
+}
+
+/**
+ * "Hasta el 8 de octubre de 2027", "Venció el…" or "No vence"; for a revoked one, that it isn't valid; for one of an
+ * unknown status, that it can't be confirmed.
+ */
+function validityText(certificate: Pick<PublicCertificate, "status" | "expires_at">, zone: string | null): string {
+  const { status, expires_at } = certificate;
+  switch (status) {
+    case "valid":
+      return expires_at ? `Hasta el ${formatLongDate(expires_at, zone)}` : "No vence";
+    case "expired":
+      return expires_at ? `Venció el ${formatLongDate(expires_at, zone)}` : "Vencido";
+    case "revoked":
+      return "Revocado: ya no es válido";
+    default:
+      return "Sin confirmar";
   }
 }
 
@@ -104,7 +134,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 /** A verified certificate: the verdict, then what it says (as its PDF does), and its PDF unless revoked. */
 export function PublicCertificateView({ certificate }: { certificate: PublicCertificate }) {
   const { details, status } = certificate;
-  const verdict = VERDICTS[status] ?? VERDICTS.valid;
+  const verdict = VERDICTS[status] ?? UNKNOWN;
   const texts = KIND_TEXTS[certificate.kind] ?? KIND_TEXTS.course;
   // Its dates in the time zone it was issued in (the PDF's), or the reader's for an older one without it.
   const zone = details.timezone;
@@ -128,8 +158,7 @@ export function PublicCertificateView({ certificate }: { certificate: PublicCert
         aria-label="Datos del certificado"
         className={cn(
           "mt-6 grid overflow-hidden border border-border bg-white sm:grid-cols-[88px_minmax(0,1fr)]",
-          // What it said, for the record, but never looking like one in force.
-          status === "revoked" && "opacity-60 grayscale",
+          verdict.faded && "opacity-60 grayscale",
         )}
       >
         {/* The PDF's black band with the brand's mark. */}
@@ -150,13 +179,7 @@ export function PublicCertificateView({ certificate }: { certificate: PublicCert
 
           <dl className="mt-8 grid gap-x-8 gap-y-5 border-t border-border pt-6 sm:grid-cols-2">
             <Fact label="Emitido el">{formatLongDate(certificate.issued_at, zone)}</Fact>
-            <Fact label="Vigencia">
-              {status === "revoked"
-                ? "Revocado: ya no es válido"
-                : certificate.expires_at
-                  ? `${status === "expired" ? "Venció" : "Hasta"} el ${formatLongDate(certificate.expires_at, zone)}`
-                  : "No vence"}
-            </Fact>
+            <Fact label="Vigencia">{validityText(certificate, zone)}</Fact>
             <Fact label="Emitido por">{certificate.issuer_name}</Fact>
             {signer && <Fact label="Firma">{signer}</Fact>}
             {hours && <Fact label="Duración">{hours}</Fact>}

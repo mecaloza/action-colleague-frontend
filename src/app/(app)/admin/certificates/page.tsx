@@ -25,6 +25,7 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CERTIFICATES_PAGE, type CertificateListParams, certificateKeys, certificatesApi } from "@/lib/api/certificates";
+import { errorMessage } from "@/lib/api/client";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import { pathKeys, pathsApi } from "@/lib/api/paths";
 import type { AdminCertificate, CertificateStatus } from "@/lib/api/types";
@@ -32,7 +33,6 @@ import { formatDate, plural } from "@/lib/format";
 import { useCertificateCache } from "@/lib/hooks/use-certificate-cache";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { useOpening } from "@/lib/hooks/use-opening";
-import { toastError } from "@/lib/notify";
 import { safeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 
@@ -105,14 +105,18 @@ function validityOf(certificate: AdminCertificate): string {
 
 interface RowActionsProps {
   certificate: AdminCertificate;
+  /** The certificate being reissued right now, if any. */
+  reissuingId: number | null;
   onReissue: (certificate: AdminCertificate) => void;
   onRevoke: (certificate: AdminCertificate) => void;
 }
 
 /** Download, verify, reissue and revoke, in the row's menu. */
-function CertificateActions({ certificate, onReissue, onRevoke }: RowActionsProps) {
+function CertificateActions({ certificate, reissuingId, onReissue, onRevoke }: RowActionsProps) {
   const pdf = servedPdfUrl(certificate);
   const verify = safeHttpUrl(certificate.verify_url);
+  // Until the new one is in the list: reissuing or revoking this one again would be refused (or say nothing).
+  const reissuing = reissuingId === certificate.id;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -124,7 +128,7 @@ function CertificateActions({ certificate, onReissue, onRevoke }: RowActionsProp
         {pdf && (
           <DropdownMenuItem asChild>
             <a href={pdf} target="_blank" rel="noopener">
-              <Download /> Descargar PDF
+              <Download /> Descargar certificado
             </a>
           </DropdownMenuItem>
         )}
@@ -136,11 +140,11 @@ function CertificateActions({ certificate, onReissue, onRevoke }: RowActionsProp
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => onReissue(certificate)}>
+        <DropdownMenuItem disabled={reissuing} onSelect={() => onReissue(certificate)}>
           <RefreshCw /> Reemitir
         </DropdownMenuItem>
         {certificate.status !== "revoked" && (
-          <DropdownMenuItem destructive onSelect={() => onRevoke(certificate)}>
+          <DropdownMenuItem destructive disabled={reissuing} onSelect={() => onRevoke(certificate)}>
             <Ban /> Revocar
           </DropdownMenuItem>
         )}
@@ -268,6 +272,10 @@ export default function CertificatesPage() {
   });
   const data = certificates.data;
   const filtered = Boolean(term) || status !== "all" || Boolean(scope);
+  const emptyTitle = filtered ? "Ningún certificado coincide" : "Aún no hay certificados";
+  // What a search or filter found, read out each time, none included: by a region that is always there (one that
+  // comes and goes with the list is never read).
+  const found = data ? (data.items.length || data.total ? plural(data.total, "certificado") : emptyTitle) : "";
 
   // The last page emptied (its certificates revoked away from a filter, say): the one before it.
   const emptiedPage = Boolean(data && !certificates.isPlaceholderData && !data.items.length && page > 0);
@@ -277,16 +285,22 @@ export default function CertificatesPage() {
 
   const reissue = useMutation({
     mutationFn: (certificate: AdminCertificate) => certificatesApi.reissue(certificate.id),
-    onSuccess: (fresh, old) => {
-      void refreshCertificates();
+    // Said at once: the confirmation is gone, and the row shows the old one until the list comes back.
+    onMutate: () => toast.loading("Reemitiendo el certificado…"),
+    onSuccess: async (fresh, old, toastId) => {
+      // Still under way until the list shows the new one: meanwhile the old one can't be reissued again.
+      await refreshCertificates();
       toast.success(
         old.status === "revoked"
           ? `Certificado reemitido: ${fresh.code}`
           : `Certificado reemitido: ${fresh.code}. El ${old.code} quedó revocado.`,
+        { id: toastId },
       );
     },
     // E.g. the person no longer has the course completed: the server says why.
-    onError: toastError,
+    onError: (error, _old, toastId) => {
+      toast.error(errorMessage(error), { id: toastId });
+    },
   });
 
   const askReissue = async (certificate: AdminCertificate) => {
@@ -299,7 +313,11 @@ export default function CertificatesPage() {
     if (confirmed) reissue.mutate(certificate);
   };
 
-  const actions = { onReissue: (certificate: AdminCertificate) => void askReissue(certificate), onRevoke: revoking.show };
+  const actions = {
+    reissuingId: reissue.isPending ? (reissue.variables?.id ?? null) : null,
+    onReissue: (certificate: AdminCertificate) => void askReissue(certificate),
+    onRevoke: revoking.show,
+  };
   const issueButton = (size?: "lg") => (
     <Button variant="accent" size={size} onClick={() => issuing.show(null)}>
       <Plus /> Emitir certificado
@@ -341,13 +359,17 @@ export default function CertificatesPage() {
           </div>
         </div>
 
+        <p className="sr-only" role="status">
+          {found}
+        </p>
         {certificates.isPending ? (
           <Skeleton className="h-72" />
         ) : !data ? (
           <QueryError query={certificates} />
         ) : data.items.length ? (
           <div aria-busy={certificates.isPlaceholderData || undefined}>
-            <p className="mb-3 text-sm text-muted-foreground" aria-live="polite">
+            {/* Read out by the region above. */}
+            <p className="mb-3 text-sm text-muted-foreground" aria-hidden>
               {plural(data.total, "certificado")}
             </p>
             <ul className="space-y-2 md:hidden" aria-label="Certificados">
@@ -380,7 +402,7 @@ export default function CertificatesPage() {
         ) : (
           <EmptyState
             icon={<Award />}
-            title={filtered ? "Ningún certificado coincide" : "Aún no hay certificados"}
+            title={emptyTitle}
             description={
               filtered
                 ? "Prueba con otra búsqueda o filtro."

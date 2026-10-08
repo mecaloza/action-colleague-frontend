@@ -27,7 +27,7 @@ function CertificateCard({ certificate }: { certificate: LearnerCertificate }) {
       </div>
       <p className="mt-2 text-sm text-muted-foreground">
         {certificateDates(certificate)}
-        {certificate.score !== null && ` · Nota promedio ${formatPercent(certificate.score)}`}
+        {certificate.score !== null && ` · Calificación promedio ${formatPercent(certificate.score)}`}
       </p>
       <p className="mt-1 break-all text-sm">
         Código <span className="font-semibold">{certificate.code}</span>
@@ -39,14 +39,14 @@ function CertificateCard({ certificate }: { certificate: LearnerCertificate }) {
         {pdf && (
           <Button variant="outline" size="sm" asChild>
             <a href={pdf} target="_blank" rel="noopener">
-              <Download aria-hidden /> Descargar{of}
+              <Download aria-hidden /> Descargar certificado{of}
             </a>
           </Button>
         )}
         {verify && (
           <Button variant="ghost" size="sm" asChild>
             <a href={verify} target="_blank" rel="noopener">
-              <ShieldCheck aria-hidden /> Verificar{of}
+              <ShieldCheck aria-hidden /> Ver verificación{of}
             </a>
           </Button>
         )}

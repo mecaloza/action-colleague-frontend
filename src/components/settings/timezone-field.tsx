@@ -37,17 +37,24 @@ const OTHER = "other";
 
 export const isCommonZone = (zone: string) => COMMON_ZONES.some((item) => item.value === zone);
 
+/** Each word capitalized, as zone names are written ("Asia/Kolkata", "America/Argentina/Buenos_Aires"). */
+const capitalized = (name: string) =>
+  name.replace(/[a-z]+/gi, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+
 /**
  * The zone typed as the server spells it ("america/bogota" -> "America/Bogota"), or null when there is no such zone.
- * The browser knows the same IANA zones; the server checks the exact name again.
+ * The browser knows the same IANA zones; the server checks the exact name again, capitals included.
  */
 export function knownZone(raw: string): string | null {
   const name = raw.trim();
   if (!name) return null;
   try {
     const resolved = new Intl.DateTimeFormat("en-US", { timeZone: name }).resolvedOptions().timeZone;
-    // Same name in other capitals: the canonical one. Another name (an alias) stays as typed.
-    return resolved.toLowerCase() === name.toLowerCase() ? resolved : name;
+    // The zone's own name, in any capitals: the browser's spelling.
+    if (resolved.toLowerCase() === name.toLowerCase()) return resolved;
+    // Another of its names, which some browsers give back as the zone's older one ("Asia/Kolkata" as "Asia/Calcutta"):
+    // as typed when written as zone names are; otherwise ("asia/kolkata") the browser's, which the server knows too.
+    return name === capitalized(name) ? name : resolved;
   } catch {
     return null;
   }

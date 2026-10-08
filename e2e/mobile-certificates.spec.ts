@@ -77,10 +77,12 @@ test.describe("colaborador", () => {
     await page.goto("/profile");
     const mine = page.getByRole("list", { name: "Mis certificados" }).getByRole("listitem").filter({ hasText: code });
     await expect(mine).toContainText("Válido");
-    const save = mine.getByRole("link", { name: `Descargar «${course.title}»` });
+    const save = mine.getByRole("link", { name: `Descargar certificado «${course.title}»` });
     await expectTarget(save);
     await expectWithinWidth(page, save);
-    await expectTarget(mine.getByRole("link", { name: `Verificar «${course.title}»` }));
+    const verify = mine.getByRole("link", { name: `Ver verificación «${course.title}»` });
+    await expectTarget(verify);
+    await expectWithinWidth(page, verify);
     await expectNoSidewaysScroll(page);
 
     // The public verification (no session needed: this one is the learner's, it would read the same).

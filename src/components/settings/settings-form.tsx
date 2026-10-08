@@ -34,7 +34,7 @@ const MESSAGES = {
   passingScore: `Escribe un número entero entre ${PASSING.min} y ${PASSING.max}.`,
   maxAttempts: `Escribe un número entero entre ${ATTEMPTS.min} y ${ATTEMPTS.max}.`,
   validityMonths: `Escribe un número de meses entre ${VALIDITY.min} y ${VALIDITY.max}, o déjalo vacío para que no venzan.`,
-  minScore: `Escribe una nota entre ${MIN_SCORE.min} y ${MIN_SCORE.max}, o déjala vacía para aceptar cualquiera.`,
+  minScore: `Escribe una calificación entre ${MIN_SCORE.min} y ${MIN_SCORE.max}, o déjala vacía para aceptar cualquiera.`,
 };
 
 /** A whole number typed (digits only) in [min, max]: null when empty, undefined when it isn't valid. */
@@ -66,10 +66,12 @@ function fieldsOf(settings: PlatformSettings) {
 type Fields = ReturnType<typeof fieldsOf>;
 
 /** What the fields say, read: undefined where a value isn't valid (null: empty, where that is allowed). */
-function valuesOf(fields: Fields) {
+function valuesOf(fields: Fields, saved: PlatformSettings) {
   return {
     companyName: fields.companyName.trim(),
-    timezone: knownZone(fields.timezone),
+    // The saved zone as the server took it (this browser may spell it otherwise, or not know it); another one, as the
+    // server would take it.
+    timezone: fields.timezone === saved.general.timezone ? fields.timezone : knownZone(fields.timezone),
     passingScore: wholeIn(fields.passingScore, PASSING),
     maxAttempts: wholeIn(fields.maxAttempts, ATTEMPTS),
     validityMonths: wholeIn(fields.validityMonths, VALIDITY),
@@ -205,7 +207,7 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
   const validityField = useRef<HTMLInputElement>(null);
   const minScoreField = useRef<HTMLInputElement>(null);
 
-  const values = valuesOf(fields);
+  const values = valuesOf(fields, settings);
   // A wrong value is said as it is typed; a required one left empty, once saving was tried.
   const requiredError = (value: number | null | undefined, message: string) =>
     value === undefined || (value === null && attempted) ? message : null;
@@ -313,7 +315,7 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
         <div className="grid gap-6 sm:grid-cols-2">
           <NumberField
             id="settings-passing-score"
-            label="Nota mínima para aprobar (%)"
+            label="Puntaje para aprobar (%)"
             value={fields.passingScore}
             onChange={(passingScore) => edit({ passingScore })}
             error={errors.passingScore}
@@ -358,11 +360,11 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
           />
           <NumberField
             id="settings-min-score"
-            label="Nota mínima promedio (%)"
+            label="Calificación promedio mínima (%)"
             value={fields.minScore}
             onChange={(minScore) => edit({ minScore })}
             error={errors.minScore}
-            hint="Promedio de las mejores notas del curso. Vacío: cualquiera. Los cursos sin evaluación siempre califican."
+            hint="Promedio de los mejores puntajes en las evaluaciones del curso. Vacío: cualquiera. Los cursos sin evaluación no la necesitan."
             placeholder="Cualquiera"
             inputRef={minScoreField}
           />

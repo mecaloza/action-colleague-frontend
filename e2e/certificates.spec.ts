@@ -105,14 +105,19 @@ test("el colaborador recibe su certificado, lo descarga y cualquiera lo verifica
   expect(pdf.headers()["content-type"]).toContain("application/pdf");
   expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
 
-  // Back in the course it stays at hand; in the profile, with its code and status.
+  // Back in the course it stays at hand; in the profile, with its code and status (the same words for its links).
   await dialog.getByRole("button", { name: "Repasar el curso" }).click();
-  await expect(learnerPage.getByRole("link", { name: "Descargar tu certificado" })).toHaveAttribute("href", pdfUrl);
+  await expect(dialog).toBeHidden(); // its own link, with the same words, gone
+  await expect(learnerPage.getByRole("link", { name: "Descargar certificado", exact: true })).toHaveAttribute("href", pdfUrl);
   await nav.getByRole("link", { name: "Mi perfil" }).click();
   const mine = learnerPage.getByRole("list", { name: "Mis certificados" }).getByRole("listitem").filter({ hasText: code });
   await expect(mine).toContainText(course.title);
   await expect(mine).toContainText("Válido");
-  await expect(mine.getByRole("link", { name: `Descargar «${course.title}»` })).toHaveAttribute("href", pdfUrl);
+  await expect(mine.getByRole("link", { name: `Descargar certificado «${course.title}»` })).toHaveAttribute("href", pdfUrl);
+  await expect(mine.getByRole("link", { name: `Ver verificación «${course.title}»` })).toHaveAttribute(
+    "href",
+    new RegExp(`/verify/${code}$`),
+  );
   // Its card in "Mis cursos" links it too (beside the course's own link, not inside it).
   await learnerPage.goto("/learn");
   await expect(learnerPage.getByRole("link", { name: `Certificado de «${course.title}»` })).toHaveAttribute("href", pdfUrl);
@@ -133,6 +138,21 @@ test("el colaborador recibe su certificado, lo descarga y cualquiera lo verifica
   await expect(card.getByRole("link", { name: "Descargar certificado" })).toHaveAttribute("href", pdfUrl);
   await publicPage.goto(`/verify/${code.toLowerCase().replace(/-/g, "")}`);
   await expect(publicPage.getByRole("heading", { level: 1, name: "Certificado válido" })).toBeVisible();
+  // A status this page doesn't know (a newer server's, say) is never taken for valid, nor offers the PDF.
+  const verification = `${API}/public/certificates/${code}`;
+  await publicPage.route(verification, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), status: "suspended" } });
+  });
+  await publicPage.goto(`/verify/${code}`);
+  await expect(publicPage.getByRole("heading", { level: 1, name: "Estado desconocido" })).toBeVisible();
+  await expect(publicPage.getByText("Desconocido", { exact: true })).toBeVisible();
+  await expect(
+    publicPage.getByText("No pudimos confirmar si está vigente. Consulta con quien lo emitió.", { exact: true }),
+  ).toBeVisible();
+  await expect(publicPage.getByText("Certificado válido")).toHaveCount(0);
+  await expect(publicPage.getByRole("link", { name: "Descargar certificado" })).toHaveCount(0);
+  await publicPage.unroute(verification);
   // A code that doesn't exist says so, and another one can be typed.
   await publicPage.goto("/verify/RC-0000-0000");
   await expect(publicPage.getByRole("heading", { level: 1, name: "Certificado no encontrado" })).toBeVisible();
@@ -144,11 +164,24 @@ test("el colaborador recibe su certificado, lo descarga y cualquiera lo verifica
   // The admin finds it in the registry (by code) and revokes it, saying why.
   await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Certificados" }).click();
   await expect(page).toHaveURL(/\/admin\/certificates$/);
-  await page.getByLabel("Buscar certificados").fill(code.toLowerCase());
+  const search = page.getByLabel("Buscar certificados");
+  await search.fill(code.toLowerCase());
   const row = page.getByRole("row").filter({ hasText: code });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(learner.name);
   await expect(row).toContainText("Válido");
+  // What each search finds is read out, nothing included: by one region that stays (one put in with its text, or
+  // taken out with the list, is never read).
+  const found = page.getByRole("status");
+  await expect(found).toHaveText("1 certificado");
+  const region = (await found.elementHandle())!;
+  const said = () => region.evaluate((node) => (node.isConnected ? node.textContent : null));
+  await search.fill(`Sin coincidencias ${stamp}`);
+  await expect(page.getByRole("heading", { name: "Ningún certificado coincide" })).toBeVisible();
+  expect(await said()).toBe("Ningún certificado coincide");
+  await search.fill(code.toLowerCase());
+  await expect(row).toHaveCount(1);
+  expect(await said()).toBe("1 certificado");
   await row.getByRole("button", { name: `Acciones del certificado ${code} de ${learner.name}` }).click();
   await page.getByRole("menuitem", { name: "Revocar" }).click();
   const revoke = page.getByRole("dialog", { name: `¿Revocar el certificado de ${learner.name}?` });
@@ -169,7 +202,7 @@ test("el colaborador recibe su certificado, lo descarga y cualquiera lo verifica
   // The learner's profile says it too.
   await learnerPage.goto("/profile");
   await expect(mine).toContainText("Revocado");
-  await expect(mine.getByRole("link", { name: `Descargar «${course.title}»` })).toHaveCount(0);
+  await expect(mine.getByRole("link", { name: `Descargar certificado «${course.title}»` })).toHaveCount(0);
   await learnerPage.context().close();
 });
 
@@ -181,6 +214,7 @@ test("un curso sin certificado, emitir a mano, reemitir y el certificado de una 
   const call = await adminApi(request);
   const stamp = Date.now();
   const { course: optedOut, learner } = await courseForLearner(call, `Inducción sin certificado ${stamp}`, `Persona de ruta ${stamp}`);
+  const idle = await newLearner(call, `Persona sin cursos ${stamp}`);
   // A path of one course that gives a certificate (the default), and another one the learner won't complete.
   const pathCourse = await publishedCourse(call, `Llantas para flotas ${stamp}`);
   const pending = await publishedCourse(call, `Ventas consultivas ${stamp}`);
@@ -238,14 +272,23 @@ test("un curso sin certificado, emitir a mano, reemitir y el certificado de una 
 
   // By hand, from the registry: the course that gives none (the rules don't apply)...
   await page.goto("/admin/certificates");
-  const issue = async () => {
+  const issue = async (person: { name: string } = learner) => {
     await page.getByRole("button", { name: "Emitir certificado" }).first().click();
     const dialog = page.getByRole("dialog", { name: "Emitir certificado" });
-    await dialog.getByLabel("Buscar persona").fill(learner.name);
-    await dialog.getByRole("radio", { name: new RegExp(learner.name) }).check();
+    await dialog.getByLabel("Buscar persona").fill(person.name);
+    await dialog.getByRole("radio", { name: new RegExp(person.name) }).check();
     return dialog;
   };
-  let dialog = await issue();
+  // (Someone who completed none has no course to choose: it says so, and goes back to the person.)
+  let dialog = await issue(idle);
+  await expect(dialog.getByText(`${idle.name} aún no completa ningún curso.`, { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Emitir certificado" }).click();
+  await expect(dialog.getByText(`${idle.name} aún no completa ningún curso: elige una ruta u otra persona.`)).toBeVisible();
+  await expect(dialog.getByLabel("Buscar persona")).toBeFocused();
+  await expect(dialog.getByText("Elige el curso.")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Cancelar" }).click();
+  await expect(dialog).toBeHidden();
+  dialog = await issue();
   await dialog.getByLabel("Curso", { exact: true }).selectOption({ label: optedOut.title });
   await dialog.getByRole("button", { name: "Emitir certificado" }).click();
   const issued = page.getByText(/^Certificado emitido: RC-/);
@@ -275,12 +318,27 @@ test("un curso sin certificado, emitir a mano, reemitir y el certificado de una 
     page.getByRole("row").filter({
       has: page.getByRole("button", { name: `Acciones del certificado ${target} de ${learner.name}` }),
     });
-  await rowOf(code).getByRole("button", { name: `Acciones del certificado ${code} de ${learner.name}` }).click();
+  // Held on its way: it says it is at it, and the row can't be reissued (nor revoked) again meanwhile.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(`${API}/certificates/*/reissue`, async (route) => {
+    await held;
+    await route.continue();
+  });
+  const actionsOf = (target: string) =>
+    rowOf(target).getByRole("button", { name: `Acciones del certificado ${target} de ${learner.name}` });
+  await actionsOf(code).click();
   await page.getByRole("menuitem", { name: "Reemitir" }).click();
   await page
     .getByRole("dialog", { name: `¿Reemitir el certificado de ${learner.name}?` })
     .getByRole("button", { name: "Reemitir" })
     .click();
+  await expect(page.getByText("Reemitiendo el certificado…")).toBeVisible();
+  await actionsOf(code).click();
+  await expect(page.getByRole("menuitem", { name: "Reemitir" })).toBeDisabled();
+  await expect(page.getByRole("menuitem", { name: "Revocar" })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  release();
   const reissued = page.getByText(new RegExp(`^Certificado reemitido: RC-.*El ${code} quedó revocado\\.$`));
   await expect(reissued).toBeVisible();
   const fresh = (await reissued.textContent())!.match(CODE)![0];
@@ -304,6 +362,8 @@ test("Parámetros: avisa lo que no es válido, pregunta antes de salir sin guard
   const course = await publishedCourse(call, `Evaluación con los parámetros ${stamp}`);
   try {
     await page.goto("/admin/settings");
+    // The same words as each evaluation's editor.
+    await expect(page.getByLabel("Puntaje para aprobar (%)")).toBeVisible();
     const attempts = page.getByLabel("Intentos permitidos");
     // Another default for the attempts (one more attempt changes nothing for the specs creating evaluations meanwhile).
     const savedAttempts = await attempts.inputValue();
@@ -349,20 +409,35 @@ test("Parámetros: avisa lo que no es válido, pregunta antes de salir sin guard
     await expect(page.getByLabel("Zona horaria")).toHaveValue("America/Bogota"); // now from the list
     await expect(zone).toBeHidden();
     await expect(attempts).toHaveValue(otherAttempts);
+    // Another name of a zone, in other capitals: saved as the server takes it (the browser may give the zone's
+    // older name), never refused by it.
+    await page.getByLabel("Zona horaria").selectOption({ label: "Otra zona (escribirla)" });
+    await zone.fill("asia/kolkata");
+    await expect(zoneError).toBeHidden();
+    await page.getByRole("button", { name: "Guardar cambios" }).click();
+    await expect(zone).toHaveValue(/^Asia\/(Kolkata|Calcutta)$/);
+    await expect(page.getByText("Todo guardado.")).toBeVisible();
     // Saved: leaving asks nothing.
     await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Cursos" }).click();
     await expect(page).toHaveURL(/\/admin\/courses$/);
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
     // A module's new evaluation starts with the platform's values, as the server gives them (some of its own here:
-    // the parameters are global, and a spec running alongside may save others meanwhile).
+    // the parameters are global, and a spec running alongside may save others meanwhile). If they can't be read, it
+    // says so instead of starting with made-up ones.
+    let unreadable = true;
     await page.route(`${API}/settings`, async (route) => {
       if (route.request().method() !== "GET") return route.continue();
+      if (unreadable) return route.fulfill({ status: 503, json: { detail: "Servicio no disponible" } });
       const response = await route.fetch();
       const settings = await response.json();
       await route.fulfill({ response, json: { ...settings, evaluations: { passing_score: 85, max_attempts: 7 } } });
     });
     await page.goto(`/admin/courses/${course.id}?tab=evaluations`);
+    await expect(page.getByText("No pudimos cargar esta información.")).toBeVisible({ timeout: 15_000 }); // after a retry
+    await expect(page.getByLabel("Intentos permitidos")).toHaveCount(0);
+    unreadable = false;
+    await page.getByRole("button", { name: "Reintentar" }).click();
     await expect(page.getByLabel("Intentos permitidos")).toHaveValue("7");
     await expect(page.getByLabel("Puntaje para aprobar (%)")).toHaveValue("85");
   } finally {

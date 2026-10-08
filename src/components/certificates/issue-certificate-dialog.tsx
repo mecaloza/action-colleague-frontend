@@ -84,9 +84,19 @@ export function IssueCertificateDialog({ open, onClose }: { open: boolean; onClo
   );
   const person = people.data?.find((user) => user.id === personId) ?? null;
   const completed = (courses.data ?? []).filter((course) => course.status === "completed");
+  // Someone who hasn't completed a course yet: there is none to choose (a path, or another person).
+  const noCourses = kind === "course" && personId !== null && courses.isSuccess && completed.length === 0;
+  const noCoursesText = `${person?.name ?? "Esta persona"} aún no completa ningún curso`;
   const target = kind === "course" ? courseId : pathId;
   const personError = attempted && personId === null ? "Elige a la persona." : null;
-  const targetError = attempted && personId !== null && !target ? (kind === "course" ? "Elige el curso." : "Elige la ruta.") : null;
+  const targetError =
+    attempted && personId !== null && !target
+      ? noCourses
+        ? `${noCoursesText}: elige una ruta u otra persona.`
+        : kind === "course"
+          ? "Elige el curso."
+          : "Elige la ruta."
+      : null;
 
   const issue = useMutation({
     mutationFn: (input: CertificateIssue) => certificatesApi.issue(input),
@@ -122,16 +132,17 @@ export function IssueCertificateDialog({ open, onClose }: { open: boolean; onClo
               issue.mutate(input);
               return;
             }
-            // Show the problems before moving to the first one, so it is read out with its message.
+            // Show the problems before moving to the first one, so it is read out with its message. Without a course
+            // to choose (the list is disabled), back to the person.
             flushSync(() => setAttempted(true));
-            (personId === null ? searchField : targetField).current?.focus();
+            (personId === null || noCourses ? searchField : targetField).current?.focus();
           }}
         >
           <DialogHeader>
             <DialogTitle>Emitir certificado</DialogTitle>
             <DialogDescription>
-              Para quien completó un curso o una ruta, aunque las reglas automáticas no se lo dieran (nota mínima, curso sin
-              certificado). Si ya tiene uno válido, lo conserva.
+              Para quien completó un curso o una ruta, aunque las reglas automáticas no se lo dieran (calificación mínima,
+              curso sin certificado). Si ya tiene uno válido, lo conserva.
             </DialogDescription>
           </DialogHeader>
 
@@ -251,13 +262,16 @@ export function IssueCertificateDialog({ open, onClose }: { open: boolean; onClo
                     ))}
                   </Select>
                 )}
-                <p id={`${IDS.course}-hint`} className="mt-1.5 text-xs text-muted-foreground">
-                  {personId === null
-                    ? "Elige primero a la persona: aquí aparecen los cursos que completó."
-                    : completed.length || courses.isPending
-                      ? "Los cursos que completó."
-                      : `${person?.name ?? "Esta persona"} aún no completa ningún curso.`}
-                </p>
+                {/* Once that is the error, the error says it. */}
+                {!(noCourses && targetError) && (
+                  <p id={`${IDS.course}-hint`} className="mt-1.5 text-xs text-muted-foreground">
+                    {personId === null
+                      ? "Elige primero a la persona: aquí aparecen los cursos que completó."
+                      : noCourses
+                        ? `${noCoursesText}.`
+                        : "Los cursos que completó."}
+                  </p>
+                )}
               </div>
             ) : (
               <div>

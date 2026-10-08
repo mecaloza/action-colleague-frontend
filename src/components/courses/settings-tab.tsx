@@ -39,7 +39,7 @@ function PlatformCertificateHint({ choice }: { choice: CertificateChoice }) {
   const rule = ruleOf(choice, certificates?.enabled);
   const minimum =
     choice !== "no" && certificates?.min_score != null
-      ? ` Necesita una nota promedio de al menos ${certificates.min_score}% en sus evaluaciones.`
+      ? ` Necesita una calificación promedio de al menos ${certificates.min_score}% en sus evaluaciones.`
       : "";
   return (
     <p id="course-certificate-hint" className="mt-1.5 text-xs text-muted-foreground">

@@ -229,7 +229,7 @@ function CoursePlayer() {
               rel="noopener"
               className="mt-3 inline-flex min-h-10 items-center gap-2 text-[11px] font-bold uppercase tracking-label text-accent hover:underline"
             >
-              <Award className="h-4 w-4" aria-hidden /> Descargar tu certificado
+              <Award className="h-4 w-4" aria-hidden /> Descargar certificado
             </a>
           )}
         </div>
