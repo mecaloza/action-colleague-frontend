@@ -66,11 +66,13 @@ interface ModuleRowProps {
   total: number;
   /** Moves the module one place up (-1) or down (1): what dragging does, with a tap or a key. */
   onMove: (direction: -1 | 1) => void;
+  /** A move is being saved: the arrows wait for it. */
+  moving: boolean;
   onOpen: () => void;
 }
 
 /** One row of the module list: dragged by its handle or moved with its arrows. */
-export function ModuleRow({ module, index, total, onMove, onOpen }: ModuleRowProps) {
+export function ModuleRow({ module, index, total, onMove, moving, onOpen }: ModuleRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: module.id });
   const { label, icon: SourceIcon } = SOURCE_META[module.source] ?? SOURCE_META.text;
   const poster = useStableUrl(module.poster_url);
@@ -138,7 +140,14 @@ export function ModuleRow({ module, index, total, onMove, onOpen }: ModuleRowPro
         )}
         {/* On phones the arrows go to a line of their own, at its end. */}
         <div className="ml-auto">
-          <MoveButtons id={`module-${module.id}`} label={module.title} index={index} total={total} onMove={onMove} />
+          <MoveButtons
+            id={`module-${module.id}`}
+            label={module.title}
+            index={index}
+            total={total}
+            busy={moving}
+            onMove={onMove}
+          />
         </div>
         {/* On phones the title opens the module; the row keeps room for it. */}
         <Button variant="outline" size="sm" onClick={onOpen} className="hidden sm:inline-flex" aria-label={`Editar ${module.title}`}>

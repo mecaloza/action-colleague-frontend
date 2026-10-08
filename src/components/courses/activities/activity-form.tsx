@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -204,20 +205,21 @@ interface FormProps<S> {
 interface RemoveButtonProps {
   label: string;
   disabled?: boolean;
-  title?: string;
+  /** The text on the page that says why it is off: a disabled button shows no tooltip, and a finger has no hover. */
+  describedBy?: string;
   onClick: () => void;
 }
 
 /** The trash can at the end of a row of a list. */
-function RemoveButton({ label, disabled, title, onClick }: RemoveButtonProps) {
+function RemoveButton({ label, disabled, describedBy, onClick }: RemoveButtonProps) {
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon-sm"
       aria-label={label}
+      aria-describedby={describedBy}
       disabled={disabled}
-      title={title}
       onClick={onClick}
     >
       <Trash2 />
@@ -395,6 +397,10 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
   const setItem = (index: number, changes: Partial<InspectionItemSpec>) =>
     onChange({ ...spec, items: replaceAt(spec.items, index, { ...spec.items[index], ...changes }) });
   const hasPairs = spec.scene !== "truck" || spec.items.length % 2 === 0;
+  // A decision stays while the game needs two, or while some item has it as its answer.
+  const keeps = (verdict: InspectionVerdict) =>
+    spec.verdicts.length <= 2 || spec.items.some((item) => item.answer === verdict.id);
+  const keepsHint = useId();
   return (
     <div className="space-y-5">
       <div>
@@ -450,12 +456,18 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
             />
             <RemoveButton
               label={`Quitar decisión ${index + 1}`}
-              disabled={spec.verdicts.length <= 2 || spec.items.some((item) => item.answer === verdict.id)}
-              title="Solo se quita una decisión que no es la respuesta de ningún elemento"
+              disabled={keeps(verdict)}
+              describedBy={keeps(verdict) ? keepsHint : undefined}
               onClick={() => onChange({ ...spec, verdicts: removeAt(spec.verdicts, index) })}
             />
           </div>
         ))}
+        {spec.verdicts.some(keeps) && (
+          <p id={keepsHint} className="text-xs text-muted-foreground">
+            Mínimo dos decisiones. Para quitar una, cambia antes la «Respuesta correcta» de{" "}
+            {spec.scene === "truck" ? "las llantas" : "los casos"} que la tienen.
+          </p>
+        )}
         {spec.verdicts.length < 4 && (
           <Button
             type="button"

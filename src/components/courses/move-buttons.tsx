@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface MoveButtonsProps {
   /** Prefix of the buttons' ids (`${id}-up`, `${id}-down`), for `focusMoveButton`. */
@@ -8,12 +9,16 @@ interface MoveButtonsProps {
   label: string;
   index: number;
   total: number;
-  disabled?: boolean;
+  /**
+   * A move is being saved: the arrows wait, dimmed and announced as unavailable. They are never `disabled`, which
+   * would drop the focus of the one just pressed.
+   */
+  busy?: boolean;
   onMove: (direction: -1 | 1) => void;
 }
 
 /** "Subir" and "Bajar" for a row of an ordered list: what dragging does, with a finger or a key. */
-export function MoveButtons({ id, label, index, total, disabled = false, onMove }: MoveButtonsProps) {
+export function MoveButtons({ id, label, index, total, busy = false, onMove }: MoveButtonsProps) {
   return (
     <div className="flex shrink-0 items-center">
       <Button
@@ -21,8 +26,10 @@ export function MoveButtons({ id, label, index, total, disabled = false, onMove 
         size="icon-sm"
         id={`${id}-up`}
         aria-label={`Subir ${label}`}
-        disabled={disabled || index === 0}
-        onClick={() => onMove(-1)}
+        disabled={index === 0}
+        aria-disabled={busy || undefined}
+        className={cn(busy && "opacity-45")}
+        onClick={() => !busy && onMove(-1)}
       >
         <ArrowUp />
       </Button>
@@ -31,8 +38,10 @@ export function MoveButtons({ id, label, index, total, disabled = false, onMove 
         size="icon-sm"
         id={`${id}-down`}
         aria-label={`Bajar ${label}`}
-        disabled={disabled || index === total - 1}
-        onClick={() => onMove(1)}
+        disabled={index === total - 1}
+        aria-disabled={busy || undefined}
+        className={cn(busy && "opacity-45")}
+        onClick={() => !busy && onMove(1)}
       >
         <ArrowDown />
       </Button>

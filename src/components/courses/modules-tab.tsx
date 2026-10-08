@@ -68,11 +68,10 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
   };
 
   // The arrows move a module without dragging (a finger, a keyboard): the focus follows it to its new place, and
-  // screen readers hear where it landed. They are never off while a move is saved (that would drop the focus).
+  // screen readers hear where it landed. While a move is saved they wait (dimmed, still focusable).
   const [moved, setMoved] = useState("");
   const refocus = useRef<{ id: number; direction: -1 | 1 } | null>(null);
   const move = (index: number, direction: -1 | 1) => {
-    if (reorder.isPending) return; // the last move is still being saved
     const { id, title } = modules[index];
     refocus.current = { id, direction };
     save(index, index + direction);
@@ -143,6 +142,7 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
                   index={index}
                   total={modules.length}
                   onMove={(direction) => move(index, direction)}
+                  moving={reorder.isPending}
                   onOpen={() => setOpened({ id: module.id, startRecording: false })}
                 />
               ))}

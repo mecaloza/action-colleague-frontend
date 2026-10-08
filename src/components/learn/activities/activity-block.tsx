@@ -50,7 +50,7 @@ export function ActivityBlock({ activities, onPlay, preview = false }: ActivityB
         </div>
         <p className="text-sm text-muted-foreground">
           {preview
-            ? "Pruébalas como las jugará tu equipo: nada se guarda."
+            ? `${activities.length === 1 ? "Pruébala como la" : "Pruébalas como las"} jugará tu equipo: nada se guarda.`
             : pending
               ? `Te ${pending === 1 ? "falta" : "faltan"} ${plural(pending, "actividad", "actividades")}`
               : "Las completaste todas"}
@@ -80,14 +80,14 @@ export function ActivityBlock({ activities, onPlay, preview = false }: ActivityB
               </div>
               <div className="mt-auto flex items-center justify-between gap-3">
                 {preview ? (
-                  <p className="text-sm text-muted-foreground">Hasta {activity.max_score} puntos</p>
+                  <p className="text-sm text-muted-foreground">Hasta {plural(activity.max_score, "punto")}</p>
                 ) : activity.finished ? (
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-success">
                     <CheckCircle2 className="h-4 w-4" /> {activity.best_score} de {activity.max_score} puntos
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    {activity.resumable ? "Partida sin terminar" : "Pendiente"} · hasta {activity.max_score} puntos
+                    {activity.resumable ? "Partida sin terminar" : "Pendiente"} · hasta {plural(activity.max_score, "punto")}
                   </p>
                 )}
                 <Button

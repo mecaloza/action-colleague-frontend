@@ -54,12 +54,27 @@ function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   return <div className={cn("border-b border-border px-6 py-5 pr-14", className)} {...props} />;
 }
 
+// The panel reaches the bottom of the screen, under a phone's home bar: its last part keeps its content above it.
+// Without a footer that is the body (the close button after it is no div).
 function SheetBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex-1 overflow-y-auto px-6 py-6", className)} {...props} />;
+  return (
+    <div
+      className={cn("flex-1 overflow-y-auto px-6 py-6 last-of-type:pb-[max(1.5rem,env(safe-area-inset-bottom))]", className)}
+      {...props}
+    />
+  );
 }
 
 function SheetFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex items-center justify-between gap-3 border-t border-border px-6 py-4", className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between gap-3 border-t border-border px-6 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 const SheetTitle = DialogPrimitive.Title;

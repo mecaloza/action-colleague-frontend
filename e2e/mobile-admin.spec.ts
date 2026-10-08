@@ -86,6 +86,32 @@ async function expectWithinWidth(page: Page, locator: Locator) {
   expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
 }
 
+/** An iPhone's home bar, in px: the page reaches under it (viewport-fit=cover). */
+const HOME_BAR = 34;
+
+/** From now on the phone has a home bar at the bottom of the screen (Chromium emulates env(safe-area-inset-*)). */
+async function emulateHomeBar(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: { top: 0, left: 0, right: 0, bottom: HOME_BAR } });
+}
+
+/** Clear of the home bar: a tap there would fight the swipe that goes home. */
+async function expectAboveHomeBar(page: Page, locator: Locator) {
+  const box = (await locator.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height - HOME_BAR);
+}
+
+/** Holds the requests to this URL until `release()`: what the page shows while a save is on its way. */
+async function holdRequests(page: Page, url: string) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  await page.route(url, async (route) => {
+    await released;
+    await route.continue();
+  });
+  return release;
+}
+
 test("la cabecera del curso y la vista previa caben en el celular, con sus actividades para probar", async ({
   page,
   request,
@@ -97,6 +123,8 @@ test("la cabecera del curso y la vista previa caben en el celular, con sus activ
       content_text: "Cómo presentar el costo por kilómetro a un cliente que solo pregunta el precio.",
       activities: [{ type: "decision", title: "Cliente que solo pide precio", spec: DECISION }],
     },
+    // Enough modules for their list to fill the phone's screen: the module shows under it.
+    ...["Presión y desgaste", "Rotación", "Reencauche", "Garantías", "Flotas", "Repaso"].map((name) => ({ title: name })),
     { title: "Cierre" },
   ]);
   await page.goto(`/admin/courses/${course.id}`);
@@ -126,7 +154,8 @@ test("la cabecera del curso y la vista previa caben en el celular, con sus activ
   await expectTarget(page.getByRole("link", { name: "Volver al editor" }));
 
   // The module's activity is there to try, with the admin's preview (nothing is saved).
-  await expect(page.getByText("Pruébalas como las jugará tu equipo: nada se guarda.")).toBeVisible();
+  await expect(page.getByText("Pruébala como la jugará tu equipo: nada se guarda.")).toBeVisible();
+  await expect(page.getByText("Hasta 10 puntos")).toBeVisible();
   const tryIt = page.getByRole("button", { name: "Probar: Cliente que solo pide precio" });
   await expectTarget(tryIt);
   await tryIt.tap();
@@ -141,6 +170,18 @@ test("la cabecera del curso y la vista previa caben en el celular, con sus activ
   await game.getByRole("button", { name: "Continuar" }).tap();
   await expect(game).toBeHidden();
   await expect(tryIt).toBeFocused(); // back where the admin was
+
+  // The module picked shows under the whole list, out of sight: the page takes the admin there, and its title takes
+  // the focus (a screen reader reads it out).
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const nav = page.getByRole("navigation", { name: "Módulos del curso" });
+  const pick = nav.getByRole("button", { name: /Presión y desgaste/ });
+  const picked = page.getByRole("heading", { level: 2, name: "Presión y desgaste" });
+  await expect(pick).toBeInViewport();
+  await pick.tap();
+  await expect(picked).toBeFocused();
+  await expect(picked).toBeInViewport({ ratio: 1 });
+  await expect(pick).toHaveAttribute("aria-current", "step");
 });
 
 test("participantes y evaluaciones en el celular: «Retirar» a la mano y el título del módulo legible", async ({
@@ -197,6 +238,25 @@ test("participantes y evaluaciones en el celular: «Retirar» a la mano y el tí
   await page.reload();
   await expect(section).toHaveValue("evaluations", { timeout: 20_000 });
   await expect(page.getByRole("button", { name: new RegExp(LONG_TITLE), expanded: true })).toBeVisible();
+
+  // A new question takes a finger: its correct-answer marks are 40px targets, and its long text wraps and grows
+  // instead of hiding past the edge (still one line of text: Enter adds none).
+  await page.getByRole("button", { name: "Agregar pregunta" }).tap();
+  await page.getByRole("menuitem", { name: /^Opción única/ }).tap();
+  const mark = page.getByRole("button", { name: "Marcar como correcta" });
+  await expect(mark).toHaveCount(2);
+  await expectTarget(mark.first());
+  await mark.first().tap();
+  await expect(page.getByRole("button", { name: "Respuesta correcta" })).toHaveAttribute("aria-pressed", "true");
+  await expectTarget(page.getByRole("button", { name: "Respuesta correcta" }));
+  const prompt = page.getByLabel("Enunciado");
+  const oneLine = (await prompt.boundingBox())!.height;
+  await prompt.fill("¿Qué le muestras primero a un cliente de carretera que solo pregunta cuánto cuesta cada llanta?");
+  await prompt.press("Enter");
+  await expect(prompt).toHaveValue(/cada llanta\?$/);
+  await expect.poll(async () => (await prompt.boundingBox())!.height).toBeGreaterThan(oneLine);
+  expect(await prompt.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
+  await expectNoSidewaysScroll(page);
 });
 
 test("actividades en el celular: despublicar pide confirmación, flechas para ordenar y el editor sin teclado", async ({
@@ -204,7 +264,7 @@ test("actividades en el celular: despublicar pide confirmación, flechas para or
   request,
 }) => {
   const title = `Celular admin: actividades ${Date.now()}`;
-  const { course } = await prepareCourse(request, title, [
+  const { course, modules } = await prepareCourse(request, title, [
     {
       title: "Ventas",
       activities: [
@@ -240,18 +300,35 @@ test("actividades en el celular: despublicar pide confirmación, flechas para or
   await confirm.getByRole("button", { name: "Despublicar" }).tap();
   await expect(first).toContainText("Borrador");
 
-  // The arrows reorder with a tap; the focus stays with the activity (at the bottom, on its other arrow).
-  await first.getByRole("button", { name: "Bajar Cliente que solo pide precio" }).tap();
+  // The arrows reorder with a tap. While the move is saved they wait, dimmed, and the arrow pressed keeps the focus;
+  // then the focus stays with the activity (at the bottom, on its other arrow) and a screen reader hears where it is.
+  const saveOrder = await holdRequests(page, `${API}/modules/${modules[0].id}/activities/order`);
+  const down = first.getByRole("button", { name: "Bajar Cliente que solo pide precio" });
+  await down.tap();
+  await expect(down).toHaveAttribute("aria-disabled", "true");
+  await expect(down).toBeFocused();
+  saveOrder();
   await expect(list.getByRole("listitem").first()).toContainText("Cliente con prisa");
   await expect(page.getByRole("button", { name: "Subir Cliente que solo pide precio" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Subir Cliente que solo pide precio" })).not.toHaveAttribute(
+    "aria-disabled",
+  );
+  await expect(page.getByText("«Cliente que solo pide precio» quedó en la posición 2 de 2.")).toHaveAttribute(
+    "aria-live",
+    "polite",
+  );
 
-  // The editor opens without popping the keyboard up; a long option wraps and grows instead of hiding.
+  // The editor opens without popping the keyboard up; a long option wraps and grows instead of hiding. On a phone
+  // with a home bar its buttons stay above it (the panel reaches the bottom of the screen).
+  await emulateHomeBar(page);
   await menu.tap();
   await page.getByRole("menuitem", { name: "Editar" }).tap();
   const editor = page.getByRole("dialog", { name: "Decisión con cliente" });
   await expect(editor).toBeFocused();
   await expect(editor.getByLabel("Título")).not.toBeFocused();
   await expectTarget(editor.getByRole("button", { name: "Cerrar" }));
+  await expect(editor.getByRole("button", { name: "Guardar" })).toBeInViewport({ ratio: 1 });
+  await expectAboveHomeBar(page, editor.getByRole("button", { name: "Guardar" }));
   const option = editor.getByLabel("Opción 1 de la situación 1");
   const oneLine = (await option.boundingBox())!.height;
   await option.fill("Le doy la más barata, aunque sé que en carretera su costo por kilómetro termina siendo mayor.");
@@ -266,6 +343,22 @@ test("actividades en el celular: despublicar pide confirmación, flechas para or
   await expect(page.getByText("Actividad guardada")).toBeVisible();
   await expect(page.locator("[data-sonner-toaster]")).toHaveAttribute("data-y-position", "top");
   expect((await page.getByText("Actividad guardada").boundingBox())!.y).toBeLessThan(page.viewportSize()!.height / 3);
+  await expect(editor).toBeHidden();
+
+  // A decision that is some tire's answer can't be removed: why is on the page (a disabled button shows no tooltip,
+  // and a finger has no hover), and it describes that button to a screen reader.
+  await page.getByRole("region", { name: /Ventas$/ }).getByRole("button", { name: "Agregar", exact: true }).tap();
+  await page.getByRole("menuitem", { name: "Inspección visual" }).tap();
+  const inspection = page.getByRole("dialog", { name: "Inspección visual" });
+  const why = "Mínimo dos decisiones. Para quitar una, cambia antes la «Respuesta correcta» de las llantas que la tienen.";
+  await expect(inspection.getByText(why)).toBeVisible();
+  const kept = inspection.getByRole("button", { name: "Quitar decisión 1" });
+  await expect(kept).toBeDisabled();
+  await expect(kept).toHaveAccessibleDescription(why);
+  await inspection.getByRole("button", { name: "Decisión", exact: true }).tap(); // nobody's answer yet
+  const unused = inspection.getByRole("button", { name: "Quitar decisión 4" });
+  await expect(unused).toBeEnabled();
+  await expect(unused).toHaveAccessibleDescription("");
 });
 
 test("contenido en el celular: módulos con flechas y el motivo de un aviso con un toque", async ({ page, request }) => {
@@ -298,14 +391,24 @@ test("contenido en el celular: módulos con flechas y el motivo de un aviso con 
   await badge.tap();
   await expect(page.getByText(warning)).toBeHidden();
 
-  // A finger-sized handle to drag, and arrows to move without dragging.
+  // A finger-sized handle to drag, and arrows to move without dragging. The module moves at once; while that is
+  // saved the arrows wait, dimmed, the focus still on the one pressed: a second tap does nothing.
   await expectTarget(page.getByRole("button", { name: "Reordenar Bienvenida" }));
   const down = page.getByRole("button", { name: "Bajar Bienvenida" });
   await expectTarget(down);
+  const saveOrder = await holdRequests(page, `${API}/courses/${course.id}/modules/order`);
   await down.tap();
   await expect(rows.first()).toContainText("Seguridad");
   await expect(rows.nth(1)).toContainText("Bienvenida");
   await expect(down).toBeFocused(); // it moved with its module
+  await expect(down).toHaveAttribute("aria-disabled", "true");
+  await down.tap({ force: true });
+  saveOrder();
+  await expect(down).not.toHaveAttribute("aria-disabled");
+  await expect(rows.nth(1)).toContainText("Bienvenida"); // one place, not two
+  await expect(rows.nth(2)).toContainText("Cierre");
+  await expect(down).toBeFocused();
+  await expect(page.getByText("«Bienvenida» quedó en la posición 2 de 3.")).toHaveAttribute("aria-live", "polite");
   await expectNoSidewaysScroll(page);
 });
 
@@ -350,9 +453,14 @@ test("panel, cursos y equipo en el celular", async ({ page, request }) => {
   await expect(row.getByText("0 de 1 curso terminado")).toBeVisible();
   await expectNoSidewaysScroll(page);
 
-  // Its sheet: links and the close button take a finger.
+  // Its sheet: links and the close button take a finger. With a home bar, the end of the sheet (no footer: its
+  // body) pads itself above it.
   await row.getByRole("button", { name, exact: true }).tap();
   const sheet = page.getByRole("dialog", { name });
   await expectTarget(sheet.getByRole("link", { name: course.title }));
   await expectTarget(sheet.getByRole("button", { name: "Cerrar" }));
+  await emulateHomeBar(page);
+  const end = sheet.locator("xpath=./div[last()]");
+  await expect(end.getByRole("link", { name: course.title })).toBeVisible(); // the body, after the header
+  await expect.poll(() => end.evaluate((element) => getComputedStyle(element).paddingBottom)).toBe(`${HOME_BAR}px`);
 });

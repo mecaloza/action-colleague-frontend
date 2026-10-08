@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type Ref } from "react";
+import { flushSync } from "react-dom";
 import { notFound, useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useReducedMotion } from "framer-motion";
 import { FileText, HelpCircle } from "lucide-react";
 import { ActivityPreview } from "@/components/courses/activity-preview";
 import { ModuleVideo } from "@/components/courses/module-video";
@@ -15,16 +17,29 @@ import { Button } from "@/components/ui/button";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { LearnerActivitySummary, LearnerModule } from "@/lib/api/types";
 import { formatDuration, plural, twoDigits } from "@/lib/format";
+import { matchesMedia } from "@/lib/hooks/use-media-query";
 import { safeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 
-function ModuleContent({ module, onTry }: { module: LearnerModule; onTry: (activity: LearnerActivitySummary) => void }) {
+/** Below Tailwind's `lg`: one column, the module under the whole list of modules. */
+const ONE_COLUMN = "not all and (min-width: 1024px)";
+
+interface ModuleContentProps {
+  module: LearnerModule;
+  articleRef: Ref<HTMLElement>;
+  titleRef: Ref<HTMLHeadingElement>;
+  onTry: (activity: LearnerActivitySummary) => void;
+}
+
+function ModuleContent({ module, articleRef, titleRef, onTry }: ModuleContentProps) {
   const documentUrl = safeHttpUrl(module.document?.url);
   return (
-    <article className="space-y-6">
+    <article ref={articleRef} className="scroll-mt-20 space-y-6">
       <div>
         <p className="eyebrow mb-3">Módulo {module.order}</p>
-        <h2 className="display-md">{module.title}</h2>
+        <h2 ref={titleRef} tabIndex={-1} className="display-md outline-none">
+          {module.title}
+        </h2>
         {module.description && <p className="mt-3 text-muted-foreground">{module.description}</p>}
       </div>
       <ModuleVideo module={module} />
@@ -105,6 +120,17 @@ export default function CoursePreviewPage() {
   const [selected, setSelected] = useState(0);
   // The activity being tried, played as the admin's preview (nothing is saved); a new session starts it anew.
   const [trying, setTrying] = useState<{ activity: LearnerActivitySummary; session: number } | null>(null);
+  const article = useRef<HTMLElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
+  const reduce = useReducedMotion();
+
+  /** In one column the module shows under the list: the one picked comes into view, its title focused (read out). */
+  const select = (index: number) => {
+    flushSync(() => setSelected(index)); // the new title is on the page before it takes the focus
+    if (!matchesMedia(ONE_COLUMN)) return;
+    article.current?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+    title.current?.focus({ preventScroll: true });
+  };
 
   if (!validId) notFound();
   if (preview.isPending) return <PageLoading bodyClassName="aspect-video" />;
@@ -136,10 +162,12 @@ export default function CoursePreviewPage() {
         // One column on phones; from lg the list of modules and the module side by side. The tracks never grow past
         // the screen for a long title: it truncates instead.
         <div className="container grid grid-cols-1 gap-10 py-10 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <ModuleNav modules={modules} selected={selected} onSelect={setSelected} />
+          <ModuleNav modules={modules} selected={selected} onSelect={select} />
           {current && (
             <ModuleContent
               module={current}
+              articleRef={article}
+              titleRef={title}
               onTry={(activity) => setTrying((last) => ({ activity, session: (last?.session ?? 0) + 1 }))}
             />
           )}

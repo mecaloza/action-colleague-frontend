@@ -47,6 +47,7 @@ import { courseKeys } from "@/lib/api/courses";
 import { studioApi } from "@/lib/api/studio";
 import type { ActivityAdmin, ActivityType, CourseDetail, Language, ModuleAdmin } from "@/lib/api/types";
 import { twoDigits } from "@/lib/format";
+import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { useUpload } from "@/lib/hooks/use-upload";
 import { toastError } from "@/lib/notify";
 import { ActivityForm, TEMPLATES, type AnySpec } from "./activities/activity-form";
@@ -84,6 +85,7 @@ export function ActivitiesTab({ course }: { course: CourseDetail }) {
 function ModuleActivities({ courseId, language, module }: { courseId: number; language: Language; module: ModuleAdmin }) {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const { refreshCourse, refreshPeople } = useCourseCache();
   const key = activityKeys.module(module.id);
   const [jobId, setJobId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ActivityAdmin | null>(null);
@@ -110,6 +112,10 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
       queryClient.invalidateQueries({ queryKey: key }),
       queryClient.invalidateQueries({ queryKey: courseKeys.preview(courseId) }),
     ]);
+  // Unpublished or deleted: whoever only had it pending completed the module, so the course's progress changed
+  // (participants, results, the course's counts; each person's courses in Equipo, and the panel).
+  const refreshProgress = () =>
+    Promise.all([queryClient.invalidateQueries({ queryKey: key }), refreshCourse(courseId), refreshPeople()]);
 
   useEffect(() => {
     const status = job.data?.status;
@@ -147,14 +153,18 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
   const change = useMutation({
     mutationFn: ({ id, changes }: { id: number; changes: Parameters<typeof activitiesApi.update>[1] }) =>
       activitiesApi.update(id, changes),
-    onSuccess: () => refresh(),
+    onSuccess: (_saved, { changes }) => (changes.status === "draft" ? refreshProgress() : refresh()),
     onError: toastError,
   });
+  // Where a moved activity landed, for screen readers (the list shows it once the new order is saved).
+  const [moved, setMoved] = useState("");
   const order = useMutation({
-    mutationFn: (ids: number[]) => activitiesApi.order(module.id, ids),
-    onSuccess: (saved) => {
+    mutationFn: ({ ids }: { ids: number[]; movedId: number }) => activitiesApi.order(module.id, ids),
+    onSuccess: (saved, { movedId }) => {
       queryClient.setQueryData(key, saved);
       void queryClient.invalidateQueries({ queryKey: courseKeys.preview(courseId) });
+      const at = saved.findIndex((activity) => activity.id === movedId);
+      if (at >= 0) setMoved(`«${saved[at].title}» quedó en la posición ${at + 1} de ${saved.length}.`);
     },
     onError: toastError,
   });
@@ -168,7 +178,7 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
     if (!ok) return;
     try {
       await activitiesApi.remove(activity.id);
-      await refresh();
+      await refreshProgress();
     } catch (error) {
       toastError(error);
     }
@@ -193,9 +203,10 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
   const refocus = useRef<{ id: number; direction: -1 | 1 } | null>(null);
   const move = (index: number, direction: -1 | 1) => {
     const ids = activities.map((activity) => activity.id);
+    const movedId = ids[index];
     [ids[index], ids[index + direction]] = [ids[index + direction], ids[index]];
-    refocus.current = { id: ids[index + direction], direction };
-    order.mutate(ids);
+    refocus.current = { id: movedId, direction };
+    order.mutate({ ids, movedId });
   };
   useEffect(() => {
     const target = refocus.current;
@@ -302,7 +313,7 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
                     label={activity.title}
                     index={index}
                     total={activities.length}
-                    disabled={order.isPending}
+                    busy={order.isPending}
                     onMove={(direction) => move(index, direction)}
                   />
                   <Button
@@ -365,6 +376,9 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
           })}
         </ol>
       )}
+      <p aria-live="polite" className="sr-only">
+        {moved}
+      </p>
 
       {editing && (
         <ActivityEditor
