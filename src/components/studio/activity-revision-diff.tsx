@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Type, Volume2 } from "lucide-react";
 import { LOOK_LABELS } from "@/components/learn/activities/tire-tread";
 import type { ActivityAdmin, ActivityChange, EntityChange, RevisionLearners, TireLook } from "@/lib/api/types";
@@ -8,6 +8,7 @@ import {
   Blank,
   ChangeCard,
   changeLooks,
+  ChangesSection,
   Compare,
   FieldDiff,
   LongText,
@@ -188,33 +189,27 @@ function EntityChangeCard({ change, names }: { change: EntityChange; names: Spec
  * situation, a choice, an item, a control, its instruction...) with what changes in it.
  */
 export function ActivityRevisionDiff({ change, activity }: { change: ActivityChange; activity: ActivityAdmin }) {
-  const headingId = useId();
   const names = specNames(activity.spec, change.entities);
   return (
-    <section aria-labelledby={headingId} className="space-y-3">
-      <h4 id={headingId} className="text-[11px] font-bold uppercase tracking-label text-ink-700">
-        Qué cambia
-      </h4>
-      <ol className="space-y-3">
-        {change.title && (
-          <ChangeCard marker={<Type className="h-5 w-5 shrink-0 text-accent" aria-hidden />} title="Título" look={LOOKS.update}>
-            <Compare before={change.title.before || <Blank />} after={change.title.after || <Blank />} />
-          </ChangeCard>
-        )}
-        {change.intro && (
-          <ChangeCard
-            marker={<Volume2 className="h-5 w-5 shrink-0 text-accent" aria-hidden />}
-            title="Introducción"
-            look={LOOKS.update}
-          >
-            <Compare before={<LongText value={change.intro.before} />} after={<LongText value={change.intro.after} />} />
-          </ChangeCard>
-        )}
-        {change.entities.map((entity) => (
-          <EntityChangeCard key={`${entity.action}:${entity.path}`} change={entity} names={names} />
-        ))}
-      </ol>
-    </section>
+    <ChangesSection>
+      {change.title && (
+        <ChangeCard marker={<Type className="h-5 w-5 shrink-0 text-accent" aria-hidden />} title="Título" look={LOOKS.update}>
+          <Compare before={change.title.before || <Blank />} after={change.title.after || <Blank />} />
+        </ChangeCard>
+      )}
+      {change.intro && (
+        <ChangeCard
+          marker={<Volume2 className="h-5 w-5 shrink-0 text-accent" aria-hidden />}
+          title="Introducción"
+          look={LOOKS.update}
+        >
+          <Compare before={<LongText value={change.intro.before} />} after={<LongText value={change.intro.after} />} />
+        </ChangeCard>
+      )}
+      {change.entities.map((entity) => (
+        <EntityChangeCard key={`${entity.action}:${entity.path}`} change={entity} names={names} />
+      ))}
+    </ChangesSection>
   );
 }
 

@@ -1192,7 +1192,6 @@ export interface TextOp {
 
 /** "move": the same scene, question or part of an activity, in another place. */
 export type ChangeAction = "update" | "insert" | "delete" | "move";
-export type SceneChangeAction = ChangeAction;
 
 /** Where a scene or question is (1 = first) before and after the change (null: not there). */
 export interface ChangePosition {
@@ -1203,7 +1202,7 @@ export interface ChangePosition {
 export interface SceneChange {
   scene_id: string;
   /** "move": the same scene in another place. */
-  action: SceneChangeAction;
+  action: ChangeAction;
   /** Where the scene is in the script (1 = first) before and after the change (null: not there). */
   position: ChangePosition;
   /**

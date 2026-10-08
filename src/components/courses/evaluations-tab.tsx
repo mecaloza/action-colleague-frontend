@@ -80,6 +80,8 @@ interface QuizChangesProps {
 function QuizChanges({ module, dirty, hintId, onRequestChange }: QuizChangesProps) {
   const pending = usePendingRevision(module, "quiz");
   const headingId = `quiz-changes-${module.id}`;
+  // A proposal waiting can be reviewed anytime (applying it waits for the draft to be saved or discarded).
+  const blocked = dirty && !pending;
   return (
     <section aria-labelledby={headingId} className="space-y-3 border-l-2 border-accent bg-accent-soft/50 px-4 py-3">
       <h3 id={headingId} className="text-[11px] font-bold uppercase tracking-label text-ink-700">
@@ -91,22 +93,15 @@ function QuizChanges({ module, dirty, hintId, onRequestChange }: QuizChangesProp
           : "Pide a la IA un ajuste puntual: propone solo lo que cambia y lo revisas antes de aplicarlo."}
       </p>
       <div className="flex flex-wrap gap-2">
-        {/* A proposal waiting can be reviewed anytime (applying it waits for the draft to be saved or discarded). */}
-        {pending ? (
-          <Button variant="outline" size="sm" onClick={() => onRequestChange()}>
-            <Sparkles /> Revisar la propuesta
-          </Button>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onRequestChange()}
-            disabled={dirty}
-            aria-describedby={dirty ? hintId : undefined}
-          >
-            <Sparkles /> Pedir un cambio
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onRequestChange()}
+          disabled={blocked}
+          aria-describedby={blocked ? hintId : undefined}
+        >
+          <Sparkles /> {pending ? "Revisar la propuesta" : "Pedir un cambio"}
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => onRequestChange({ tab: "history" })}>
           <History /> Historial de cambios
         </Button>

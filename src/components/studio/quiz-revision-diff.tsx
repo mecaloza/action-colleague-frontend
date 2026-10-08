@@ -1,6 +1,5 @@
 "use client";
 
-import { useId } from "react";
 import { Check } from "lucide-react";
 import { questionTypeLabel } from "@/components/courses/question-model";
 import type { QuestionChange, QuestionType, RevisionChanges, RevisionLearners } from "@/lib/api/types";
@@ -9,7 +8,9 @@ import {
   CardNumber,
   ChangeCard,
   ChangeReason,
+  changedFields,
   changeLooks,
+  ChangesSection,
   Compare,
   FieldDiff,
   listOf,
@@ -143,10 +144,7 @@ function QuestionChangeCard({ change }: { change: QuestionChange }) {
   const number = position.after ?? position.before ?? 0;
   const before = change.before as StoredQuestion | null;
   const after = change.after as StoredQuestion | null;
-  const names = [
-    ...FIELDS.map(([name]) => name).filter((name) => name in fields),
-    ...Object.keys(fields).filter((name) => !FIELD_LABELS.has(name)),
-  ];
+  const names = changedFields(fields, FIELDS);
   // What is answered changed: to the results it is a new question (the answers to the old one stay with it).
   const renewed = action === "update" && before !== null && after !== null && before.id !== after.id;
   return (
@@ -189,18 +187,12 @@ function QuestionChangeCard({ change }: { change: QuestionChange }) {
 
 /** What a change does to the module's quiz, question by question: its fields before and after, or the whole question. */
 export function QuizRevisionDiff({ changes }: { changes: RevisionChanges }) {
-  const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="space-y-3">
-      <h4 id={headingId} className="text-[11px] font-bold uppercase tracking-label text-ink-700">
-        Qué cambia
-      </h4>
-      <ol className="space-y-3">
-        {changes.questions.map((change) => (
-          <QuestionChangeCard key={`${change.action}:${change.question_id}`} change={change} />
-        ))}
-      </ol>
-    </section>
+    <ChangesSection>
+      {changes.questions.map((change) => (
+        <QuestionChangeCard key={`${change.action}:${change.question_id}`} change={change} />
+      ))}
+    </ChangesSection>
   );
 }
 

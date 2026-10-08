@@ -236,6 +236,29 @@ export function ChangeCard({ marker, title, look, children }: ChangeCardProps) {
   );
 }
 
+/** The «Qué cambia» block of a diff: an optional note, then its cards. */
+export function ChangesSection({ note, children }: { note?: ReactNode; children: ReactNode }) {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="space-y-3">
+      <h4 id={headingId} className="text-[11px] font-bold uppercase tracking-label text-ink-700">
+        Qué cambia
+      </h4>
+      {note}
+      <ol className="space-y-3">{children}</ol>
+    </section>
+  );
+}
+
+/** The fields a change touches: the known ones in `known`'s order, then any other the server sent. */
+export function changedFields(fields: Record<string, unknown>, known: [name: string, label: string][]): string[] {
+  const knownNames = known.map(([name]) => name);
+  return [
+    ...knownNames.filter((name) => name in fields),
+    ...Object.keys(fields).filter((name) => !knownNames.includes(name)),
+  ];
+}
+
 /** A number leading a card (a scene's, a question's). */
 export function CardNumber({ number }: { number: number }) {
   return (
@@ -312,10 +335,7 @@ type ScenePreview = (scene: StoryboardScene, when: "before" | "after", number: n
 function SceneChangeCard({ change, preview }: { change: SceneChange; preview: ScenePreview }) {
   const { action, position, fields } = change;
   const number = position.after ?? position.before ?? 0;
-  const names = [
-    ...FIELDS.map(([name]) => name).filter((name) => name in fields),
-    ...Object.keys(fields).filter((name) => !FIELD_LABELS.has(name)),
-  ];
+  const names = changedFields(fields, FIELDS);
   const before = action === "insert" ? undefined : change.before;
   const after = action === "delete" ? undefined : change.after;
   // The slide is drawn when something on it changed (a narration alone looks the same).
@@ -385,7 +405,6 @@ interface RevisionDiffProps {
 
 /** What a change does to the script, scene by scene (slides before and after), and to the module's reading. */
 export function RevisionDiff({ course, module, changes, sceneCount }: RevisionDiffProps) {
-  const headingId = useId();
   const added = changes.scenes.filter((change) => change.action === "insert").length;
   const removed = changes.scenes.filter((change) => change.action === "delete").length;
   const last = (when: "before" | "after") => Math.max(0, ...changes.scenes.map((change) => change.position[when] ?? 0));
@@ -415,23 +434,21 @@ export function RevisionDiff({ course, module, changes, sceneCount }: RevisionDi
   };
   const narrationDiff = changes.scenes.some((change) => change.action === "update" && change.narration_diff.length);
   return (
-    <section aria-labelledby={headingId} className="space-y-3">
-      <h4 id={headingId} className="text-[11px] font-bold uppercase tracking-label text-ink-700">
-        Qué cambia
-      </h4>
-      {narrationDiff && (
-        <p className="text-xs text-muted-foreground">
-          En la narración, lo <ins className="bg-green-100 text-green-900 underline-offset-2">subrayado en verde</ins>{" "}
-          se agrega y lo <del className="bg-red-100 text-red-900">tachado en rojo</del> se quita.
-        </p>
-      )}
-      <ol className="space-y-3">
-        {changes.scenes.map((change) => (
-          <SceneChangeCard key={`${change.action}:${change.scene_id}`} change={change} preview={preview} />
-        ))}
-        {changes.reading && <ReadingCard reading={changes.reading} />}
-      </ol>
-    </section>
+    <ChangesSection
+      note={
+        narrationDiff && (
+          <p className="text-xs text-muted-foreground">
+            En la narración, lo <ins className="bg-green-100 text-green-900 underline-offset-2">subrayado en verde</ins>{" "}
+            se agrega y lo <del className="bg-red-100 text-red-900">tachado en rojo</del> se quita.
+          </p>
+        )
+      }
+    >
+      {changes.scenes.map((change) => (
+        <SceneChangeCard key={`${change.action}:${change.scene_id}`} change={change} preview={preview} />
+      ))}
+      {changes.reading && <ReadingCard reading={changes.reading} />}
+    </ChangesSection>
   );
 }
 
