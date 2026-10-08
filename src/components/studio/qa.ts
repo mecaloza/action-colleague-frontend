@@ -8,6 +8,7 @@ import type {
   ModuleAdmin,
   ReviewBadge,
   ReviewIssue,
+  ReviewStatus,
   VideoReview,
 } from "@/lib/api/types";
 import { plural } from "@/lib/format";
@@ -15,8 +16,13 @@ import { isBusy } from "./steps";
 
 // The automatic review of a module's AI video ("Revisión de calidad"): how its state and its findings are told.
 
-export const isReviewing = (review: Pick<ReviewBadge, "status"> | null | undefined) =>
-  review?.status === "queued" || review?.status === "running";
+const inProgress = (status: ReviewStatus | undefined) => status === "queued" || status === "running";
+
+export const isReviewing = (review: Pick<ReviewBadge, "status"> | null | undefined) => inProgress(review?.status);
+
+/** A review that was being made (`was`) and is no longer (`now`; undefined while it isn't known). */
+export const reviewEnded = (was: ReviewStatus | undefined, now: ReviewStatus | undefined) =>
+  inProgress(was) && now !== undefined && !inProgress(now);
 
 /**
  * An AI module whose video has (or can have) a review: the server says so with `review` (null until there is one;
@@ -80,7 +86,7 @@ export function pendingSentence(open: number, critical: number): string {
 /** Where a video's review is, from the admin's side: what (if anything) waits for them. */
 export type ReviewState = "unreviewed" | "reviewing" | "critical" | "issues" | "failed" | "clean";
 
-export function reviewState(review: ReviewBadge | null): ReviewState {
+export function reviewState(review: ReviewBadge | null | undefined): ReviewState {
   if (!review) return "unreviewed";
   if (isReviewing(review)) return "reviewing";
   if (review.critical) return "critical";
@@ -104,69 +110,68 @@ export interface ReviewLook {
   pulse?: boolean;
 }
 
-export function reviewLook(review: ReviewBadge | null): ReviewLook {
+export function reviewLook(review: ReviewBadge | null | undefined): ReviewLook {
   const state = reviewState(review);
   const open = review?.open_issues ?? 0;
   const critical = review?.critical ?? 0;
+  const look = (rest: Omit<ReviewLook, "state" | "count"> & { count?: string }): ReviewLook => ({
+    state,
+    count: "",
+    ...rest,
+  });
   switch (state) {
     case "unreviewed":
-      return {
-        state,
+      return look({
         label: "Sin revisar",
-        count: "",
         sentence: "Este video todavía no tiene revisión.",
         variant: "outline",
         tone: "pending",
-      };
+      });
     case "reviewing":
-      return {
-        state,
+      return look({
         label: "Revisando",
-        count: "",
         sentence: "La IA está revisando el video.",
         variant: "secondary",
         tone: "pending",
         pulse: true,
-      };
+      });
     case "critical":
-      return {
-        state,
+      return look({
         label: plural(critical, "crítico"),
         count: String(critical),
         sentence: pendingSentence(open, critical),
         variant: "destructive",
         tone: "issues",
-      };
+      });
     case "issues":
-      return {
-        state,
+      return look({
         label: plural(open, "hallazgo"),
         count: String(open),
         sentence: pendingSentence(open, 0),
         variant: "warning",
         tone: "issues",
-      };
+      });
     case "failed":
-      return {
-        state,
+      return look({
         label: "Revisión fallida",
-        count: "",
         sentence: "No se pudo completar la revisión del video.",
         variant: "warning",
         tone: "issues",
-      };
+      });
     case "clean":
-      return {
-        state,
-        count: "",
+      return look({
         variant: "success",
         tone: "clean",
         ...(review?.verdict === "ok"
           ? { label: "Sin problemas", sentence: "La revisión no encontró problemas." }
           : { label: "Sin pendientes", sentence: "Lo que encontró la revisión ya se corrigió o se ignoró." }),
-      };
+      });
   }
 }
+
+/** The button into a module's review: to see it, or to ask for the first one. */
+export const openReviewLabel = (review: ReviewBadge | null | undefined) =>
+  review ? "Ver la revisión" : "Revisar el video";
 
 /**
  * The scenes as the video shows them, numbered in its order: as its frames come, then (a scene no frame shows, found

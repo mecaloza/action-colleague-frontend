@@ -28,9 +28,15 @@ export const sceneLabel = (sceneId: string | null, numbers: Map<string, number>)
   return number ? `Escena ${twoDigits(number)}` : null;
 };
 
-/** The findings on this frame (its own, those with a box first: they are numbered on it). */
+/** The findings seen on this frame. */
 export const issuesOn = (frame: ReviewFrame, issues: ReviewIssue[]) =>
   issues.filter((issue) => issue.frame_index === frame.index);
+
+/** A finding no longer open: dismissed or fixed. */
+export function IssueStatusBadge({ issue }: { issue: ReviewIssue }) {
+  const status = ISSUE_STATUSES[issue.status];
+  return status && <Badge variant={status.variant}>{status.label}</Badge>;
+}
 
 interface FrameImageProps {
   frame: ReviewFrame;
@@ -138,12 +144,6 @@ interface FrameDialogProps {
   /** The frame shown (its place in `frames`); null: closed. */
   position: number | null;
   onPositionChange: (position: number | null) => void;
-}
-
-/** A finding no longer open: dismissed or fixed. */
-export function IssueStatusBadge({ issue }: { issue: ReviewIssue }) {
-  const status = ISSUE_STATUSES[issue.status];
-  return status && <Badge variant={status.variant}>{status.label}</Badge>;
 }
 
 /** One frame enlarged, with each finding drawn where it was seen and listed under it; the others one tap away. */

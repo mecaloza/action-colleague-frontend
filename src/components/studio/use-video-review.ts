@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { courseKeys } from "@/lib/api/courses";
 import { reviewKeys, reviewsApi } from "@/lib/api/reviews";
 import { studioKeys } from "@/lib/api/studio";
 import type { ModuleAdmin } from "@/lib/api/types";
 import { toastError } from "@/lib/notify";
-import { isReviewing } from "./qa";
+import { isReviewing, reviewEnded } from "./qa";
 import { useStudioCache } from "./use-studio-cache";
 
 /** A review being made is followed this often. */
@@ -16,6 +16,10 @@ const REVIEWING_POLL_MS = 2000;
 
 /** The video's file, whatever its signature: a new one is a new video (with its own review). */
 const videoFile = (module: ModuleAdmin) => module.video?.url.split("?")[0] ?? null;
+
+/** The course itself, not what hangs from it: its modules carry the badge of their review. */
+const refreshBadges = (queryClient: QueryClient, courseId: number) =>
+  queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId), exact: true });
 
 /**
  * The newest review of the module's video (null while it has none), followed while it is being made. The course's
@@ -31,7 +35,7 @@ export function useVideoReview(module: ModuleAdmin, courseId: number) {
     refetchInterval: (query) => (isReviewing(query.state.data) ? REVIEWING_POLL_MS : false),
   });
 
-  const seen = JSON.stringify([module.review ?? null, videoFile(module)]);
+  const seen = JSON.stringify([module.review, videoFile(module)]);
   const lastSeen = useRef(seen);
   useEffect(() => {
     if (lastSeen.current === seen) return;
@@ -44,9 +48,7 @@ export function useVideoReview(module: ModuleAdmin, courseId: number) {
   useEffect(() => {
     const was = lastStatus.current;
     lastStatus.current = status;
-    if (was && isReviewing({ status: was }) && status && !isReviewing({ status })) {
-      void queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId), exact: true });
-    }
+    if (reviewEnded(was, status)) void refreshBadges(queryClient, courseId);
   }, [status, courseId, queryClient]);
 
   return review;
@@ -63,7 +65,7 @@ export function useRequestReview(courseId: number, moduleId: number) {
       queryClient.setQueryData(studioKeys.job(job.id), job);
       trackJobs(courseId, [job]);
       // The module says its video is being reviewed (and the course is followed meanwhile).
-      void queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId), exact: true });
+      void refreshBadges(queryClient, courseId);
     },
     onError: failed(courseId),
   });
@@ -80,7 +82,7 @@ export function useIssueAction(courseId: number, moduleId: number) {
     onSuccess: (review, { action }) => {
       queryClient.setQueryData(reviewKeys.module(moduleId), review);
       // Its module counts what is still open (and a course may now be published).
-      void queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId), exact: true });
+      void refreshBadges(queryClient, courseId);
       toast.success(action === "dismiss" ? "Hallazgo ignorado" : "Hallazgo abierto de nuevo");
     },
     onError: (error) => {

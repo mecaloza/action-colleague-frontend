@@ -176,6 +176,20 @@ export async function fakeReviews(page: Page, courseId: number, moduleId: number
     next: (asked: number) => queued(900 + asked, moduleId),
     asked: 0,
   };
+  const job = (id: string, changes: Record<string, unknown>) => ({
+    id,
+    type: "video.review",
+    status: "queued",
+    progress: 0,
+    step: "",
+    error: null,
+    course_id: courseId,
+    module_id: moduleId,
+    result: null,
+    created_at: null,
+    updated_at: null,
+    ...changes,
+  });
   const badge = () => {
     const review = fake.review;
     if (!review) return null;
@@ -200,20 +214,7 @@ export async function fakeReviews(page: Page, courseId: number, moduleId: number
     if (route.request().method() === "POST") {
       fake.asked += 1;
       fake.review = fake.next(fake.asked);
-      const job = {
-        id: fake.review.job_id,
-        type: "video.review",
-        status: "queued",
-        progress: 0,
-        step: "",
-        error: null,
-        course_id: courseId,
-        module_id: moduleId,
-        result: null,
-        created_at: null,
-        updated_at: null,
-      };
-      return route.fulfill(json({ review: fake.review, job }, 202));
+      return route.fulfill(json({ review: fake.review, job: job(fake.review.job_id, {}) }, 202));
     }
     return route.fulfill(fake.review ? json(fake.review) : json({ detail: "Este video aún no tiene revisión" }, 404));
   });
@@ -227,19 +228,13 @@ export async function fakeReviews(page: Page, courseId: number, moduleId: number
   // A review being made: its job is where the AI looks at the frames.
   await page.route(new RegExp(`${API}/jobs/e2e-review-\\d+$`), (route) =>
     route.fulfill(
-      json({
-        id: route.request().url().split("/").pop(),
-        type: "video.review",
-        status: "running",
-        progress: 40,
-        step: "Revisando los fotogramas con IA",
-        error: null,
-        course_id: courseId,
-        module_id: moduleId,
-        result: null,
-        created_at: null,
-        updated_at: null,
-      }),
+      json(
+        job(route.request().url().split("/").pop()!, {
+          status: "running",
+          progress: 40,
+          step: "Revisando los fotogramas con IA",
+        }),
+      ),
     ),
   );
   return fake;

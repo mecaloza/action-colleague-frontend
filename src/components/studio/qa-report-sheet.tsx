@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, EyeOff, Loader2, PlayCircle, RotateCcw, ScanSearch, Undo2, Wrench } from "lucide-react";
 import { ModuleVideo } from "@/components/courses/module-video";
@@ -34,6 +34,7 @@ import {
   isOpen,
   isReviewing,
   pendingSentence,
+  reviewEnded,
   sceneNumbers,
   SEVERITIES,
   SOURCES,
@@ -152,7 +153,7 @@ function QaPanel({ course, module, jobs, busy }: PanelProps) {
   useEffect(() => {
     const was = lastStatus.current;
     lastStatus.current = data?.status;
-    if (!data || !was || !isReviewing({ status: was }) || isReviewing(data)) return;
+    if (!data || !reviewEnded(was, data.status)) return;
     setNews(data.status === "error" ? "No se pudo completar la revisión." : `Revisión terminada. ${foundSentence(data.issues)}`);
   }, [data]);
 
@@ -197,7 +198,7 @@ function QaPanel({ course, module, jobs, busy }: PanelProps) {
                   qaIssue: { id: issue.id, description: issue.description },
                 })
               }
-              onSee={(issue) => moment.show(issue)}
+              onSee={moment.show}
               onFrame={openFrame}
             />
             {frames.length > 0 && (
@@ -258,7 +259,9 @@ function SectionTitle({ id, children }: { id: string; children: ReactNode }) {
   );
 }
 
-function StatusHeading({ headingRef, children }: { headingRef: React.Ref<HTMLHeadingElement>; children: ReactNode }) {
+type HeadingRef = Ref<HTMLHeadingElement>;
+
+function StatusHeading({ headingRef, children }: { headingRef: HeadingRef; children: ReactNode }) {
   return (
     <h3 ref={headingRef} tabIndex={-1} className="font-display text-2xl font-medium tracking-tightest focus-visible:ring-0">
       {children}
@@ -267,7 +270,7 @@ function StatusHeading({ headingRef, children }: { headingRef: React.Ref<HTMLHea
 }
 
 /** The video has no review yet (made before reviews, or with them turned off in Parámetros). */
-function NoReview({ headingRef }: { headingRef: React.Ref<HTMLHeadingElement> }) {
+function NoReview({ headingRef }: { headingRef: HeadingRef }) {
   return (
     <div className="space-y-2">
       <StatusHeading headingRef={headingRef}>Este video aún no tiene revisión</StatusHeading>
@@ -280,7 +283,7 @@ function NoReview({ headingRef }: { headingRef: React.Ref<HTMLHeadingElement> })
 }
 
 /** Where the review is: being made (with its progress), failed (and why), or done (what it found, and what is open). */
-function StatusBlock({ review, headingRef }: { review: VideoReview; headingRef: React.Ref<HTMLHeadingElement> }) {
+function StatusBlock({ review, headingRef }: { review: VideoReview; headingRef: HeadingRef }) {
   const job = useJob(isReviewing(review) ? review.job_id : null);
   const open = review.issues.filter(isOpen);
   const critical = open.filter((issue) => issue.severity === "critical").length;

@@ -14,7 +14,15 @@ import {
 import type { CourseDetail, ModuleAdmin } from "@/lib/api/types";
 import { plural, twoDigits } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { reviewable, type ReviewLook, reviewLook, type ReviewState, reviewState, type ReviewTone } from "./qa";
+import {
+  openReviewLabel,
+  reviewable,
+  type ReviewLook,
+  reviewLook,
+  type ReviewState,
+  reviewState,
+  type ReviewTone,
+} from "./qa";
 
 const TONE_ICONS: Record<ReviewTone, LucideIcon> = { pending: ScanEye, issues: ShieldAlert, clean: ShieldCheck };
 
@@ -54,8 +62,7 @@ interface QaChipProps {
  * tooltip: a phone has no hover.
  */
 export function QaChip({ module, onOpen, compact = false }: QaChipProps) {
-  const review = module.review ?? null;
-  const look = reviewLook(review);
+  const look = reviewLook(module.review);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -71,7 +78,7 @@ export function QaChip({ module, onOpen, compact = false }: QaChipProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onOpen}>
-          <ScanSearch /> {review ? "Ver la revisión" : "Revisar el video"}
+          <ScanSearch /> {openReviewLabel(module.review)}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -90,7 +97,7 @@ const STATE_WORDS: [ReviewState, string][] = [
 
 /** How many of the course's videos are in each state of their review, in a line. */
 function countsLine(videos: ModuleAdmin[]): string {
-  const states = videos.map((module) => reviewState(module.review ?? null));
+  const states = videos.map((module) => reviewState(module.review));
   return STATE_WORDS.map(([state, words]) => [states.filter((each) => each === state).length, words] as const)
     .filter(([count]) => count > 0)
     .map(([count, words]) => `${plural(count, "video")} ${words}`)
@@ -115,7 +122,7 @@ export function CourseQaSummary({ course, onOpen, linked = [], inverse = false, 
   const videos = course.modules.filter(reviewable);
   if (!videos.length) return null;
   // Those with findings still open, the critical ones first.
-  const waiting = (module: ModuleAdmin) => ["critical", "issues"].includes(reviewState(module.review ?? null));
+  const waiting = (module: ModuleAdmin) => ["critical", "issues"].includes(reviewState(module.review));
   const pending = videos
     .filter((module) => waiting(module) && !linked.includes(module.id))
     .sort((a, b) => (b.review?.critical ?? 0) - (a.review?.critical ?? 0));
@@ -138,7 +145,7 @@ export function CourseQaSummary({ course, onOpen, linked = [], inverse = false, 
               <span className={cn("min-w-0 break-words", inverse ? "text-white" : "text-ink-800")}>
                 {twoDigits(module.order)} · {module.title}
               </span>
-              <ReviewBadgeLabel look={reviewLook(module.review ?? null)} />
+              <ReviewBadgeLabel look={reviewLook(module.review)} />
               <Button
                 variant="link"
                 className="text-[13px]"

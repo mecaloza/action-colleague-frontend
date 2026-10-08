@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, History, ScanSearch, Sparkles, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
-import { reviewable, reviewLook } from "@/components/studio/qa";
+import { openReviewLabel, reviewable, reviewLook } from "@/components/studio/qa";
 import { ReviewBadgeLabel } from "@/components/studio/qa-chip";
 import type { RevisionTab } from "@/components/studio/revision-sheet";
 import { StaleVideoNotice, usePendingRevision } from "@/components/studio/revision-status";
@@ -46,8 +46,7 @@ interface ModuleFormProps {
 
 /** The automatic review of an AI module's video ("Revisión de calidad"): how it went, and a way into it. */
 function VideoReviewSection({ module, onOpen }: { module: ModuleAdmin; onOpen: () => void }) {
-  const review = module.review ?? null;
-  const look = reviewLook(review);
+  const look = reviewLook(module.review);
   return (
     <section aria-labelledby="module-video-review" className="space-y-3 border-l-2 border-border bg-mist/60 px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -58,7 +57,7 @@ function VideoReviewSection({ module, onOpen }: { module: ModuleAdmin; onOpen: (
       </div>
       <p className="text-sm text-muted-foreground">{look.sentence}</p>
       <Button variant="outline" size="sm" onClick={onOpen}>
-        <ScanSearch /> {review ? "Ver la revisión" : "Revisar el video"}
+        <ScanSearch /> {openReviewLabel(module.review)}
       </Button>
     </section>
   );
