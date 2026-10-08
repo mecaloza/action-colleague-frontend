@@ -45,7 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { activitiesApi, activityKeys } from "@/lib/api/activities";
 import { ApiError } from "@/lib/api/client";
 import { studioApi } from "@/lib/api/studio";
-import type { ActivityAdmin, ActivityType, CourseDetail, ModuleAdmin } from "@/lib/api/types";
+import type { ActivityAdmin, ActivityType, CourseDetail, Language, ModuleAdmin } from "@/lib/api/types";
 import { twoDigits } from "@/lib/format";
 import { useUpload } from "@/lib/hooks/use-upload";
 import { toastError } from "@/lib/notify";
@@ -71,13 +71,15 @@ export function ActivitiesTab({ course }: { course: CourseDetail }) {
           description="Las actividades se agregan a cada módulo."
         />
       ) : (
-        course.modules.map((module) => <ModuleActivities key={module.id} courseId={course.id} module={module} />)
+        course.modules.map((module) => (
+          <ModuleActivities key={module.id} courseId={course.id} language={course.language} module={module} />
+        ))
       )}
     </div>
   );
 }
 
-function ModuleActivities({ courseId, module }: { courseId: number; module: ModuleAdmin }) {
+function ModuleActivities({ courseId, language, module }: { courseId: number; language: Language; module: ModuleAdmin }) {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
   const key = activityKeys.module(module.id);
@@ -334,6 +336,7 @@ function ModuleActivities({ courseId, module }: { courseId: number; module: Modu
           open
           onOpenChange={(open) => !open && setTrying(null)}
           allowUntimed={false}
+          language={language}
           api={{ start: () => activitiesApi.preview(trying.activity.id), move: activitiesApi.previewMove }}
         />
       )}

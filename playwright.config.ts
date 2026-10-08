@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Phone specs (e2e/mobile-*.spec.ts) run only in the "mobile" project: a phone's screen, touch and no hover.
+const MOBILE_SPECS = /mobile-.*\.spec\.ts/;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -20,6 +23,7 @@ export default defineConfig({
     },
     {
       name: 'chromium',
+      testIgnore: MOBILE_SPECS,
       use: {
         ...devices['Desktop Chrome'],
         storageState: 'playwright/.auth/user.json',
@@ -28,6 +32,15 @@ export default defineConfig({
         launchOptions: {
           args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
         },
+      },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'mobile',
+      testMatch: MOBILE_SPECS,
+      use: {
+        ...devices['Pixel 7'],
+        storageState: 'playwright/.auth/user.json',
       },
       dependencies: ['setup'],
     },

@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { useReducedMotion } from "framer-motion";
+import { toast } from "sonner";
 import { CheckCircle2, Circle, Lock } from "lucide-react";
 import type { LearnerModule } from "@/lib/api/types";
 import { formatDuration, twoDigits } from "@/lib/format";
@@ -23,19 +26,45 @@ function moduleSubtitle(module: LearnerModule): string {
   return module.quiz ? "Con evaluación" : "Lectura";
 }
 
+/** Why a module is still locked: the first one before it that isn't completed yet. */
+function lockReason(modules: LearnerModule[], locked: LearnerModule): string {
+  const blocking = modules.slice(0, modules.indexOf(locked)).find((module) => !module.completed);
+  return blocking
+    ? `Completa «${blocking.title}» para desbloquear este módulo.`
+    : "Completa el módulo anterior para desbloquear este.";
+}
+
 /** The course's modules in order: done, available or still locked. */
 export function ModuleNav({ modules, currentId, onSelect }: ModuleNavProps) {
+  const reduce = useReducedMotion();
+  const list = useRef<HTMLOListElement>(null);
+
+  // On a phone the list scrolls sideways: the current module comes to its middle (the page itself never scrolls).
+  useEffect(() => {
+    const scroller = list.current;
+    const item = scroller?.querySelector<HTMLElement>("[aria-current]");
+    if (!scroller || !item || scroller.scrollWidth <= scroller.clientWidth) return;
+    const left = item.offsetLeft - (scroller.clientWidth - item.offsetWidth) / 2;
+    scroller.scrollTo({ left: Math.max(0, left), behavior: reduce ? "auto" : "smooth" });
+  }, [currentId, reduce]);
+
   return (
     <nav aria-label="Módulos del curso">
-      <ol className="scrollbar-thin -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 lg:mx-0 lg:block lg:space-y-1 lg:overflow-visible lg:px-0 lg:pb-0">
+      <ol
+        ref={list}
+        className="scrollbar-thin relative -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 lg:mx-0 lg:block lg:space-y-1 lg:overflow-visible lg:px-0 lg:pb-0"
+      >
         {modules.map((module) => {
           const current = module.id === currentId;
           return (
             <li key={module.id} className="shrink-0">
               <button
                 type="button"
-                onClick={() => onSelect(module)}
-                disabled={!module.unlocked}
+                // A locked module stays tappable: it says what unlocks it.
+                onClick={() =>
+                  module.unlocked ? onSelect(module) : toast(lockReason(modules, module), { id: "module-locked" })
+                }
+                aria-disabled={!module.unlocked || undefined}
                 aria-current={current ? "step" : undefined}
                 className={cn(
                   "flex w-60 items-start gap-3 border px-4 py-3 text-left transition-colors lg:w-full",

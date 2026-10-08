@@ -63,12 +63,14 @@ interface QuizResultProps {
   result: AttemptResult;
   questions: LearnerQuestion[];
   passingScore: number;
+  /** What to do next, shown right under the score (before the answers, which can be long). */
+  actions?: React.ReactNode;
 }
 
-export function QuizResult({ result, questions, passingScore }: QuizResultProps) {
+export function QuizResult({ result, questions, passingScore, actions }: QuizResultProps) {
   const byId = new Map(questions.map((question) => [question.id, question]));
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 sm:space-y-10">
       <div className="flex flex-col items-center gap-6 text-center sm:flex-row sm:text-left">
         <ScoreRing score={result.score} passed={result.passed} />
         <div>
@@ -79,6 +81,7 @@ export function QuizResult({ result, questions, passingScore }: QuizResultProps)
           </p>
         </div>
       </div>
+      {actions}
       <ol className="space-y-2">
         {result.results.map((item, index) => {
           const question = byId.get(item.question_id);

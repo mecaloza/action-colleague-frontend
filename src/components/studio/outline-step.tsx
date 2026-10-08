@@ -263,7 +263,7 @@ function OutlineDetails({ outline, onChange }: OutlineDetailsProps) {
           value={outline.title}
           onChange={(event) => onChange({ title: event.target.value })}
           maxLength={300}
-          className="font-display text-xl"
+          className="font-display text-xl sm:text-xl"
         />
       </div>
       <div>

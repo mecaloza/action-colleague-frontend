@@ -145,6 +145,38 @@
     @apply animate-shimmer rounded-sm bg-[length:200%_100%];
     background-image: linear-gradient(90deg, #f1f1f1 25%, #e6e6e6 50%, #f1f1f1 75%);
   }
+
+  /* A slider made for a thumb: 40px to touch, a 28px knob, the part up to the value (`--range-fill`) in orange. */
+  .range {
+    @apply h-10 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .range::-webkit-slider-runnable-track {
+    @apply h-1.5 rounded-full;
+    background: linear-gradient(
+      to right,
+      hsl(var(--accent)) var(--range-fill, 0%),
+      rgb(255 255 255 / 0.2) var(--range-fill, 0%)
+    );
+  }
+  .range::-webkit-slider-thumb {
+    @apply -mt-[11px] h-7 w-7 appearance-none rounded-full border-2 border-white bg-accent shadow-md;
+  }
+  .range::-moz-range-track {
+    @apply h-1.5 rounded-full bg-white/20;
+  }
+  .range::-moz-range-progress {
+    @apply h-1.5 rounded-full bg-accent;
+  }
+  .range::-moz-range-thumb {
+    @apply h-7 w-7 rounded-full border-2 border-white bg-accent shadow-md;
+  }
+
+  /* The page reaches under a landscape phone's notch (viewport-fit=cover): its sides keep clear of it. Only the
+     DEFAULT padding exists (the container's own `screens` leave out the per-breakpoint ones). */
+  .container {
+    padding-left: max(theme("container.padding.DEFAULT"), env(safe-area-inset-left));
+    padding-right: max(theme("container.padding.DEFAULT"), env(safe-area-inset-right));
+  }
 }
 
 @layer utilities {

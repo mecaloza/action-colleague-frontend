@@ -178,7 +178,7 @@ function FillBlank({ question, response, onChange }: InputProps<Extract<LearnerQ
         maxLength={300}
         placeholder="Tu respuesta"
         aria-label="Tu respuesta"
-        className="h-14 text-lg"
+        className="h-14 text-lg sm:text-lg"
         autoComplete="off"
       />
       {question.hint && <p className="text-sm text-white/70">Pista: {question.hint}</p>}

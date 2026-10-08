@@ -143,7 +143,7 @@ function MobileMenu({ nav, pathname, user, open, onOpenChange, onLogout }: Mobil
                   <button
                     type="button"
                     onClick={onLogout}
-                    className="mt-4 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-label text-accent"
+                    className="mt-2 inline-flex min-h-10 items-center gap-2 text-[11px] font-bold uppercase tracking-label text-accent"
                   >
                     <LogOut className="h-4 w-4" /> Cerrar sesión
                   </button>
@@ -188,7 +188,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="container flex h-16 items-center justify-between gap-6">
           <Link href={homeFor(user)} className="shrink-0" aria-label="Inicio">

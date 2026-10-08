@@ -38,6 +38,9 @@ interface QuizDialogProps {
   onPassed: (result: AttemptResult) => void;
 }
 
+// A result action: full width on a phone (its label may wrap there), its own width from `sm` up.
+const RESULT_ACTION = "h-auto min-h-12 w-full whitespace-normal py-3 sm:w-auto";
+
 /** Where the "passed" button leads. */
 function passedLabel(result: AttemptResult): string {
   if (result.course_completed) return "Terminar el curso";
@@ -153,26 +156,39 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-950/90" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-ink-950 text-white"
+          className="fixed inset-0 z-50 flex flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-ink-950 text-white"
           {...focus}
         >
-          <div className="container flex h-16 shrink-0 items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="eyebrow text-white/50">Evaluación</p>
-              <DialogPrimitive.Title className="truncate font-display text-lg font-medium">{module.title}</DialogPrimitive.Title>
+          {/* Sticky: the way out stays in reach while a long question or the results scroll. */}
+          <div className="sticky top-0 z-10 shrink-0 border-b border-white/10 bg-ink-950/95 backdrop-blur">
+            <div className="container flex h-16 items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="eyebrow text-white/50">Evaluación</p>
+                <DialogPrimitive.Title className="truncate font-display text-lg font-medium">{module.title}</DialogPrimitive.Title>
+              </div>
+              <button
+                type="button"
+                onClick={() => void close()}
+                className="flex h-10 w-10 shrink-0 items-center justify-center"
+                aria-label="Cerrar evaluación"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <button type="button" onClick={() => void close()} className="flex h-10 w-10 items-center justify-center" aria-label="Cerrar evaluación">
-              <X className="h-5 w-5" />
-            </button>
           </div>
 
-          <div className="container max-w-3xl flex-1 pb-16 pt-6">
+          <div className="container max-w-3xl flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] pt-6">
             {quiz.isPending ? (
               <Skeleton className="h-72 bg-white/10 bg-none" />
             ) : !quiz.data ? (
-              <p role="alert" className="text-white/80">
-                {quiz.error instanceof Error ? quiz.error.message : "No pudimos cargar la evaluación."}
-              </p>
+              <div className="space-y-4">
+                <p role="alert" className="text-white/80">
+                  {quiz.error instanceof Error ? quiz.error.message : "No pudimos cargar la evaluación."}
+                </p>
+                <Button variant="outline-inverse" onClick={() => void quiz.refetch()} loading={quiz.isFetching}>
+                  <RotateCcw /> Reintentar
+                </Button>
+              </div>
             ) : closedReason ? (
               <div className="space-y-6">
                 <p role="status" className="border-l-2 border-white/40 bg-white/5 px-4 py-3 text-white/85">
@@ -183,29 +199,35 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
                 </Button>
               </div>
             ) : result ? (
-              <div className="space-y-10">
-                <QuizResult result={result} questions={questions} passingScore={quiz.data.passing_score} />
-                <div className="flex flex-wrap gap-3">
-                  {result.passed ? (
-                    <Button variant="accent" size="lg" onClick={() => onPassed(result)}>
-                      {passedLabel(result)} <ArrowRight />
+              <QuizResult
+                result={result}
+                questions={questions}
+                passingScore={quiz.data.passing_score}
+                actions={
+                  // Right under the score, before the answers: the next step needs no scroll past the list.
+                  // Stacked full width on a phone, where long labels wrap instead of overflowing.
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    {result.passed ? (
+                      <Button variant="accent" size="lg" className={RESULT_ACTION} onClick={() => onPassed(result)}>
+                        {passedLabel(result)} <ArrowRight />
+                      </Button>
+                    ) : attemptsLeft > 0 ? (
+                      <Button variant="accent" size="lg" className={RESULT_ACTION} onClick={restart}>
+                        <RotateCcw /> Intentar de nuevo ({plural(attemptsLeft, "intento")})
+                      </Button>
+                    ) : (
+                      <p className="border-l-2 border-white/40 bg-white/5 px-4 py-3 text-sm text-white/80">
+                        Usaste todos los intentos. Habla con tu administrador si necesitas otro.
+                      </p>
+                    )}
+                    <Button variant="outline-inverse" size="lg" className={RESULT_ACTION} onClick={() => void close()}>
+                      Revisar el módulo
                     </Button>
-                  ) : attemptsLeft > 0 ? (
-                    <Button variant="accent" size="lg" onClick={restart}>
-                      <RotateCcw /> Intentar de nuevo ({plural(attemptsLeft, "intento")})
-                    </Button>
-                  ) : (
-                    <p className="border-l-2 border-white/40 bg-white/5 px-4 py-3 text-sm text-white/80">
-                      Usaste todos los intentos. Habla con tu administrador si necesitas otro.
-                    </p>
-                  )}
-                  <Button variant="outline-inverse" size="lg" onClick={() => void close()}>
-                    Revisar el módulo
-                  </Button>
-                </div>
-              </div>
+                  </div>
+                }
+              />
             ) : question ? (
-              <div className="space-y-8">
+              <div className="space-y-6 sm:space-y-8">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm text-white/60">
                     <span>
@@ -226,7 +248,7 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
                   >
                     <div>
                       <p className="eyebrow mb-3 text-white/50">{TYPE_HINTS[question.type]}</p>
-                      <h3 className="font-display text-3xl font-medium leading-tight tracking-tightest">
+                      <h3 className="font-display text-xl font-medium leading-tight tracking-tightest sm:text-3xl">
                         <span className="mr-3 text-accent">{twoDigits(index + 1)}</span>
                         {question.prompt}
                       </h3>
@@ -240,16 +262,27 @@ export function QuizDialog({ courseId, module, session, open, onOpenChange, onPa
                     </div>
                   </motion.div>
                 </AnimatePresence>
-                <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-6">
-                  <Button variant="outline-inverse" onClick={() => setIndex(index - 1)} disabled={index === 0}>
-                    <ArrowLeft /> Anterior
+                {/* On a phone "Anterior" is just its arrow and the main button takes the rest: they fit at 320 px. */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-6">
+                  <Button
+                    variant="outline-inverse"
+                    className="w-11 shrink-0 px-0 sm:w-auto sm:px-6"
+                    onClick={() => setIndex(index - 1)}
+                    disabled={index === 0}
+                  >
+                    <ArrowLeft /> <span className="sr-only sm:not-sr-only">Anterior</span>
                   </Button>
                   {index < questions.length - 1 ? (
-                    <Button variant="inverse" onClick={() => setIndex(index + 1)}>
+                    <Button variant="inverse" className="flex-1 sm:flex-none" onClick={() => setIndex(index + 1)}>
                       Siguiente <ArrowRight />
                     </Button>
                   ) : (
-                    <Button variant="accent" onClick={() => void send()} loading={submit.isPending}>
+                    <Button
+                      variant="accent"
+                      className="flex-1 sm:flex-none"
+                      onClick={() => void send()}
+                      loading={submit.isPending}
+                    >
                       <Send /> Enviar respuestas
                     </Button>
                   )}

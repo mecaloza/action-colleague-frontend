@@ -12,7 +12,7 @@ export function SplashScreen() {
 
   if (status === "error") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-ink-950 px-6 text-center text-white">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-ink-950 px-6 text-center text-white">
         <span className="h-6 w-6 rotate-45 bg-accent" aria-hidden />
         <div role="alert" className="max-w-sm space-y-2">
           <p className="font-display text-2xl font-medium tracking-tightest">No pudimos conectar con el servidor</p>
@@ -31,7 +31,7 @@ export function SplashScreen() {
   }
 
   return (
-    <div role="status" className="flex min-h-screen items-center justify-center bg-ink-950">
+    <div role="status" className="flex min-h-dvh items-center justify-center bg-ink-950">
       <span className="h-8 w-8 rotate-45 bg-accent motion-safe:animate-pulse" aria-hidden />
       <span className="sr-only">Cargando…</span>
     </div>
