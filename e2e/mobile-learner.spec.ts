@@ -785,11 +785,14 @@ test("el curso en el celular: módulos a la vista, bloqueos explicados y errores
   await expect(page.getByText("¿Terminaste? Márcalo para terminar el curso.")).toBeVisible();
   await expectNoSidewaysScroll(page);
 
-  // "Cerrar sesión" in the menu is a finger-sized target.
-  await page.getByRole("button", { name: "Abrir menú" }).tap();
-  const menu = page.getByRole("dialog", { name: "Menú principal" });
-  await expectTarget(menu.getByRole("button", { name: "Cerrar sesión" }));
-  await menu.getByRole("button", { name: "Cerrar menú" }).tap();
+  // A learner's sections are in the bar at the bottom, and "Cerrar sesión" in their own menu: finger-sized targets.
+  await expect(page.getByRole("button", { name: "Abrir menú" })).toHaveCount(0);
+  const tabs = page.getByRole("navigation", { name: "Principal" });
+  await expectTarget(tabs.getByRole("link", { name: "Inicio" }));
+  await expectTarget(tabs.getByRole("link", { name: "Perfil" }));
+  await page.getByRole("button", { name: /^Menú de / }).tap();
+  await expectTarget(page.getByRole("menuitem", { name: "Cerrar sesión" }));
+  await page.keyboard.press("Escape");
 
   // A course that isn't the learner's: a clear message and the way back, not a retry.
   await page.goto("/learn/99999999");

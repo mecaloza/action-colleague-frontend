@@ -453,10 +453,13 @@ test("panel, cursos y equipo en el celular", async ({ page, request }) => {
   await expect(row.getByText("0 de 1 curso terminado")).toBeVisible();
   await expectNoSidewaysScroll(page);
 
-  // Its sheet: links and the close button take a finger. With a home bar, the end of the sheet (no footer: its
-  // body) pads itself above it.
-  await row.getByRole("button", { name, exact: true }).tap();
+  // Its quick view (from the row's menu): links and the close button take a finger. With a home bar, the end of the
+  // sheet (no footer: its body) pads itself above it.
+  await expectTarget(row.getByRole("link", { name, exact: true })); // the name leads to the person's page
+  await row.getByRole("button", { name: `Acciones para ${name}` }).tap();
+  await page.getByRole("menuitem", { name: "Vista rápida" }).tap();
   const sheet = page.getByRole("dialog", { name });
+  await expectTarget(sheet.getByRole("link", { name: "Ver ficha completa" }));
   await expectTarget(sheet.getByRole("link", { name: course.title }));
   await expectTarget(sheet.getByRole("button", { name: "Cerrar" }));
   await emulateHomeBar(page);

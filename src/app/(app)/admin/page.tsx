@@ -2,57 +2,87 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, CheckCircle2, Sparkles, XCircle } from "lucide-react";
+import { ArrowRight, Award, CheckCircle2, Route, Sparkles, XCircle } from "lucide-react";
 import { NewCourseButton } from "@/components/courses/new-course-button";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHero } from "@/components/layout/page-hero";
 import { QueryError } from "@/components/layout/query-state";
+import { Kpi } from "@/components/people/kpi";
+import { TopTodayCard } from "@/components/ranking/top-today-card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth-context";
 import { dashboardApi, dashboardKeys } from "@/lib/api/dashboard";
-import type { Dashboard } from "@/lib/api/types";
-import { formatPercent, formatRelative, plural, twoDigits } from "@/lib/format";
+import type { Dashboard, DashboardActivity, DashboardActivityKind } from "@/lib/api/types";
+import { formatDate, formatPercent, formatRelative, plural, twoDigits } from "@/lib/format";
 
-function Kpi({ value, label, hint }: { value: string; label: string; hint?: string }) {
-  // A divider before every figure but the first of its row: two rows of two on phones, one row of four from md.
-  return (
-    <div className="border-white/15 even:border-l even:pl-6 md:border-l md:pl-6 md:first:border-l-0 md:first:pl-0">
-      <p className="font-display text-5xl font-medium tracking-tightest text-white">{value}</p>
-      <p className="mt-2 text-[10.5px] font-bold uppercase tracking-label text-white/60">{label}</p>
-      {hint && <p className="mt-1 text-xs text-white/60">{hint}</p>}
-    </div>
-  );
-}
+/** The panel refreshes itself this often. */
+const REFRESH_MS = 30_000;
 
-const ACTIVITY_TEXT = {
+// A divider before every figure but the first of its row: two rows of two on phones, one row of four from md.
+const KPI_DIVIDERS = "even:border-l even:pl-6 md:border-l md:pl-6 md:first:border-l-0 md:first:pl-0";
+
+const ACTIVITY_TEXT: Record<DashboardActivityKind, string> = {
   passed_quiz: "aprobó la evaluación de",
   failed_quiz: "no aprobó la evaluación de",
   completed_course: "completó el curso",
-} as const;
+  certificate_issued: "recibió el certificado de",
+  path_completed: "completó la ruta",
+};
 
-type Activity = Dashboard["recent_activity"][number];
+/** What the item is about, linked to its page when it still exists: the module or course, or the path. */
+function ActivityTarget({ item }: { item: DashboardActivity }) {
+  const className = "font-semibold hover:text-accent";
+  if (item.path_title != null) {
+    const title = item.path_title;
+    return item.path_id != null ? (
+      <Link href={`/admin/paths/${item.path_id}`} className={className}>
+        {title}
+      </Link>
+    ) : (
+      <span className="font-semibold">{title}</span>
+    );
+  }
+  const title = item.module_title ?? item.course_title;
+  return item.course_id != null ? (
+    <Link href={`/admin/courses/${item.course_id}`} className={className}>
+      {title}
+    </Link>
+  ) : (
+    <span className="font-semibold">{title}</span>
+  );
+}
 
-function ActivityItem({ item }: { item: Activity }) {
-  const showScore = item.score !== null && item.kind !== "completed_course";
+function ActivityIcon({ kind }: { kind: DashboardActivityKind }) {
+  const className = "mt-0.5 h-5 w-5 shrink-0";
+  if (kind === "failed_quiz") return <XCircle className={`${className} text-destructive`} />;
+  if (kind === "certificate_issued") return <Award className={`${className} text-accent`} />;
+  if (kind === "path_completed") return <Route className={`${className} text-success`} />;
+  return <CheckCircle2 className={`${className} text-success`} />;
+}
+
+function ActivityItem({ item }: { item: DashboardActivity }) {
+  const showScore = item.score !== null && (item.kind === "passed_quiz" || item.kind === "failed_quiz");
+  // Under it: the course of a module, or the code of a certificate.
+  const detail = item.certificate_code ? `Código ${item.certificate_code}` : item.module_title ? item.course_title : null;
   return (
     <li className="flex items-start gap-4 px-5 py-4">
-      {item.kind === "failed_quiz" ? (
-        <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
-      ) : (
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
-      )}
-      <div className="min-w-0 flex-1 text-sm">
+      <ActivityIcon kind={item.kind} />
+      <div className="min-w-0 flex-1 break-words text-sm">
         <p>
-          <span className="font-semibold">{item.user_name}</span> {ACTIVITY_TEXT[item.kind]}{" "}
-          <Link href={`/admin/courses/${item.course_id}`} className="font-semibold hover:text-accent">
-            {item.module_title ?? item.course_title}
-          </Link>
+          <Link href={`/admin/team/${item.user_id}`} className="font-semibold hover:text-accent">
+            {item.user_name}
+          </Link>{" "}
+          {ACTIVITY_TEXT[item.kind] ?? "avanzó en"} <ActivityTarget item={item} />
           {showScore ? ` (${formatPercent(item.score)})` : ""}
         </p>
-        {item.module_title && <p className="text-xs text-muted-foreground">{item.course_title}</p>}
+        {detail && <p className="text-xs text-muted-foreground">{detail}</p>}
       </div>
-      {item.at && <time className="shrink-0 text-xs text-muted-foreground">{formatRelative(item.at)}</time>}
+      {item.at && (
+        <time dateTime={item.at} title={formatDate(item.at, true)} className="shrink-0 text-xs text-muted-foreground">
+          {formatRelative(item.at)}
+        </time>
+      )}
     </li>
   );
 }
@@ -82,7 +112,7 @@ function TopCourseItem({ course, rank }: { course: Dashboard["top_courses"][numb
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
-  const dashboard = useQuery({ queryKey: dashboardKeys.all, queryFn: dashboardApi.get, refetchInterval: 30_000 });
+  const dashboard = useQuery({ queryKey: dashboardKeys.all, queryFn: dashboardApi.get, refetchInterval: REFRESH_MS });
   const data = dashboard.data;
 
   return (
@@ -95,18 +125,25 @@ export default function AdminDashboardPage() {
       >
         {data ? (
           <dl className="grid grid-cols-2 gap-8 md:grid-cols-4">
-            <Kpi value={String(data.courses.published)} label="Cursos publicados" hint={`${data.courses.draft} en borrador`} />
+            <Kpi
+              value={String(data.courses.published)}
+              label="Cursos publicados"
+              hint={`${data.courses.draft} en borrador`}
+              className={KPI_DIVIDERS}
+            />
             <Kpi
               value={String(data.learners.active_30d)}
               label="Personas activas (30 días)"
               hint={`de ${plural(data.learners.total, "colaborador", "colaboradores")}`}
+              className={KPI_DIVIDERS}
             />
             <Kpi
               value={formatPercent(data.completion_rate)}
               label="Tasa de finalización"
               hint={`${data.enrollments.completed} de ${plural(data.enrollments.total, "inscripción", "inscripciones")}`}
+              className={KPI_DIVIDERS}
             />
-            <Kpi value={formatPercent(data.average_score)} label="Puntaje promedio" />
+            <Kpi value={formatPercent(data.average_score)} label="Puntaje promedio" className={KPI_DIVIDERS} />
           </dl>
         ) : dashboard.isLoading ? (
           <Skeleton className="h-20 bg-white/10" />
@@ -142,17 +179,20 @@ export default function AdminDashboardPage() {
           )}
         </div>
 
-        <div>
-          <h2 className="display-md mb-5">Cursos con más personas</h2>
-          {data?.top_courses.length ? (
-            <ol className="space-y-3">
-              {data.top_courses.map((course, index) => (
-                <TopCourseItem key={course.id} course={course} rank={index + 1} />
-              ))}
-            </ol>
-          ) : (
-            !dashboard.isLoading && <EmptyState title="Aún no hay inscripciones" description="Asigna cursos a tu equipo desde cada curso." />
-          )}
+        <div className="space-y-12">
+          <TopTodayCard refetchInterval={REFRESH_MS} />
+          <div>
+            <h2 className="display-md mb-5">Cursos con más personas</h2>
+            {data?.top_courses.length ? (
+              <ol className="space-y-3">
+                {data.top_courses.map((course, index) => (
+                  <TopCourseItem key={course.id} course={course} rank={index + 1} />
+                ))}
+              </ol>
+            ) : (
+              !dashboard.isLoading && <EmptyState title="Aún no hay inscripciones" description="Asigna cursos a tu equipo desde cada curso." />
+            )}
+          </div>
         </div>
       </section>
       )}

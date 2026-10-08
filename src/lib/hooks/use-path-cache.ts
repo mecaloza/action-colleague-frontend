@@ -3,6 +3,7 @@ import { courseKeys } from "@/lib/api/courses";
 import { dashboardKeys } from "@/lib/api/dashboard";
 import { pathKeys } from "@/lib/api/paths";
 import { profileKeys } from "@/lib/api/profiles";
+import { rankingKeys } from "@/lib/api/ranking";
 import { userKeys } from "@/lib/api/users";
 import type { PathDetail } from "@/lib/api/types";
 
@@ -14,10 +15,13 @@ import type { PathDetail } from "@/lib/api/types";
 export function usePathCache() {
   const queryClient = useQueryClient();
 
-  /** What is around the paths: the team and each person's courses, the panel, the profiles and the courses. */
+  /**
+   * What is around the paths: the team and each person's courses, the panel, the profiles, the courses and the
+   * rankings (a path's ranks its people, and counts its courses).
+   */
   const refreshAround = () =>
     Promise.all(
-      [userKeys.all, dashboardKeys.all, profileKeys.all, courseKeys.all].map((queryKey) =>
+      [userKeys.all, dashboardKeys.all, profileKeys.all, courseKeys.all, rankingKeys.all].map((queryKey) =>
         queryClient.invalidateQueries({ queryKey }),
       ),
     );

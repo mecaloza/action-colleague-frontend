@@ -3,6 +3,7 @@ import { courseKeys } from "@/lib/api/courses";
 import { dashboardKeys } from "@/lib/api/dashboard";
 import { pathKeys } from "@/lib/api/paths";
 import { profileKeys } from "@/lib/api/profiles";
+import { rankingKeys } from "@/lib/api/ranking";
 import { userKeys } from "@/lib/api/users";
 import type { CourseDetail, Participant } from "@/lib/api/types";
 
@@ -14,10 +15,13 @@ import type { CourseDetail, Participant } from "@/lib/api/types";
 export function useCourseCache() {
   const queryClient = useQueryClient();
 
-  /** The team (lists, each person's courses), the panel's counts, and the paths and profiles. */
+  /**
+   * The team (lists, each person's courses and overview), the panel's counts, the paths and profiles, and the
+   * rankings (only active collaborators are ranked, and a path ranks its people).
+   */
   const refreshTeam = () =>
     Promise.all(
-      [userKeys.all, dashboardKeys.all, pathKeys.all, profileKeys.all].map((queryKey) =>
+      [userKeys.all, dashboardKeys.all, pathKeys.all, profileKeys.all, rankingKeys.all].map((queryKey) =>
         queryClient.invalidateQueries({ queryKey }),
       ),
     );

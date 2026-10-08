@@ -1,41 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Check, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight } from "lucide-react";
+import { QueryError } from "@/components/layout/query-state";
+import { AttemptCard } from "@/components/people/attempt-card";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { QueryError } from "@/components/layout/query-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
-import type { AttemptDetail, Participant } from "@/lib/api/types";
-import { formatDate, formatPercent, plural } from "@/lib/format";
-
-function AttemptCard({ attempt }: { attempt: AttemptDetail }) {
-  return (
-    <li className="border border-border p-4">
-      <div className="mb-2 flex items-center justify-between text-sm">
-        <span className="font-semibold">Intento {attempt.attempt_number}</span>
-        <Badge variant={attempt.passed ? "success" : "destructive"}>
-          {attempt.passed ? "Aprobado" : "No aprobado"} · {formatPercent(attempt.score)}
-        </Badge>
-      </div>
-      <p className="mb-3 text-xs text-muted-foreground">{formatDate(attempt.created_at)}</p>
-      <ul className="space-y-1.5 text-sm">
-        {attempt.results.map((result) => (
-          <li key={result.question_id} className="flex items-start gap-2">
-            {result.correct ? (
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-            ) : (
-              <X className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-            )}
-            <span>{result.prompt || "Pregunta"}</span>
-          </li>
-        ))}
-      </ul>
-    </li>
-  );
-}
+import type { Participant } from "@/lib/api/types";
+import { formatPercent, plural } from "@/lib/format";
 
 function ParticipantDetail({ courseId, participant }: { courseId: number; participant: Participant }) {
   const attempts = useQuery({
@@ -49,6 +25,12 @@ function ParticipantDetail({ courseId, participant }: { courseId: number; partic
         <p className="eyebrow mb-2">Detalle</p>
         <SheetTitle className="font-display text-2xl font-medium tracking-tightest">{participant.user.name}</SheetTitle>
         <p className="text-sm text-muted-foreground">{participant.user.email}</p>
+        {/* Their page opens on this course: every course, path, certificate and the latest things they did. */}
+        <Button variant="outline" size="sm" className="mt-4" asChild>
+          <Link href={`/admin/team/${participant.user.id}?course=${courseId}`}>
+            Ver ficha completa <ArrowRight />
+          </Link>
+        </Button>
       </SheetHeader>
       <SheetBody className="space-y-6">
         <div>

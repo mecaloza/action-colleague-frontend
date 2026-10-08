@@ -44,15 +44,18 @@ test("un admin agrega a una persona, que entra con su contraseña temporal, y la
   await expect(learner.getByText("Aún no tienes cursos asignados")).toBeVisible();
   await context.close();
 
-  // Search, open the detail, edit.
+  // Search, open the quick view (from the row's menu), edit.
   await page.getByLabel("Buscar personas").fill("Ana Prueba");
   const row = page.getByRole("row").filter({ hasText: email });
   const rowMenu = row.getByRole("button", { name: "Acciones para Ana Prueba" });
   await expect(row).toHaveCount(1);
-  await row.getByRole("button", { name: "Ana Prueba", exact: true }).click();
+  await rowMenu.click();
+  await page.getByRole("menuitem", { name: "Vista rápida" }).click();
   const sheet = page.getByRole("dialog", { name: "Ana Prueba" });
   await expect(sheet.getByText("No tiene cursos asignados")).toBeVisible();
   await page.keyboard.press("Escape");
+  // The name leads to the person's page.
+  await expect(row.getByRole("link", { name: "Ana Prueba", exact: true })).toHaveAttribute("href", /\/admin\/team\/\d+$/);
 
   await rowMenu.click();
   await page.getByRole("menuitem", { name: /Editar datos/ }).click();
@@ -83,16 +86,17 @@ test("al cerrar la ficha o un diálogo, el foco vuelve a quien lo abrió", async
   const row = page.getByRole("row").filter({ hasText: email });
   await expect(row).toHaveCount(1);
 
-  // The detail, opened with the keyboard from the name.
-  const nameButton = row.getByRole("button", { name, exact: true });
-  await nameButton.focus();
+  // The quick view, opened with the keyboard from the row's menu (its first item), goes back to the menu's button.
+  const rowMenu = row.getByRole("button", { name: `Acciones para ${name}` });
+  await rowMenu.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menuitem", { name: "Vista rápida" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(nameButton).toBeFocused();
+  await expect(rowMenu).toBeFocused();
 
-  // Dialogs opened from the row's menu go back to the menu's button, also those that start on a field.
-  const rowMenu = row.getByRole("button", { name: `Acciones para ${name}` });
+  // So do the dialogs opened from the row's menu that start on a field.
   const edit = page.getByRole("dialog", { name: `Editar a ${name}` });
   await rowMenu.click();
   await page.getByRole("menuitem", { name: /Editar datos/ }).click();

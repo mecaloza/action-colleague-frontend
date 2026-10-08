@@ -10,6 +10,7 @@ import { PageHero } from "@/components/layout/page-hero";
 import { QueryError } from "@/components/layout/query-state";
 import { courseActionLabel, courseHref, LearnerCourseCard, pathPlace } from "@/components/learn/learner-course-card";
 import { MyPaths } from "@/components/learn/learner-paths";
+import { RankingCard, useTodayRanking } from "@/components/ranking/learner-ranking";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/contexts/auth-context";
@@ -48,7 +49,12 @@ function progressSummary(pending: number, total: number): string | undefined {
 function ContinueCard({ course }: { course: LearnerCourse }) {
   const place = pathPlace(course);
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="max-w-2xl border border-white/15 bg-white/5 p-6">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="min-w-0 max-w-2xl border border-white/15 bg-white/5 p-6 lg:flex-1"
+    >
       <p className="eyebrow mb-3 text-white/60">
         {place ?? (course.status === "assigned" ? "Empieza por aquí" : "Continúa donde lo dejaste")}
       </p>
@@ -78,6 +84,8 @@ export default function MyCoursesPage() {
   // Once both are in: the hero never jumps from one course to the path's.
   const toContinue = paths.isPending ? undefined : nextUp(list, myPaths);
   const pending = list.filter((course) => course.status !== "completed").length;
+  // Where they stand today, for whoever has courses to earn points in (hidden when the parameters say so).
+  const today = useTodayRanking(list.length ? paths.data : undefined);
 
   return (
     <>
@@ -86,7 +94,12 @@ export default function MyCoursesPage() {
         title={`Hola, ${user?.name.split(" ")[0] ?? ""}`.trim()}
         description={progressSummary(pending, list.length)}
       >
-        {toContinue && <ContinueCard course={toContinue} />}
+        {(toContinue || today) && (
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
+            {toContinue && <ContinueCard course={toContinue} />}
+            {today && <RankingCard {...today} className="lg:w-80 lg:shrink-0" />}
+          </div>
+        )}
       </PageHero>
 
       <section className="container space-y-14 py-12">

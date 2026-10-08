@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { LogOut, Menu, SlidersHorizontal, UserRound, X } from "lucide-react";
+import { House, LogOut, Menu, SlidersHorizontal, Trophy, UserRound, X, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { SplashScreen } from "@/components/layout/splash-screen";
 import {
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { homeFor, useAuth } from "@/contexts/auth-context";
 import type { CurrentUser } from "@/lib/api/auth";
+import { learnApi, learnKeys } from "@/lib/api/learn";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,8 @@ interface NavItem {
   href: string;
   label: string;
   exact?: boolean;
+  /** Its place in a learner's tab bar (phones and tablets): a shorter name and an icon. */
+  tab?: { label: string; icon: LucideIcon };
 }
 
 const ADMIN_NAV: NavItem[] = [
@@ -37,9 +41,11 @@ const ADMIN_NAV: NavItem[] = [
 
 /** The platform's parameters: in the admin's own menu, not in the main nav (they are set once, seldom changed). */
 const SETTINGS_ITEM: NavItem = { href: "/admin/settings", label: "Parámetros" };
-const PROFILE_ITEM: NavItem = { href: "/profile", label: "Mi perfil" };
+const PROFILE_ITEM: NavItem = { href: "/profile", label: "Mi perfil", tab: { label: "Perfil", icon: UserRound } };
 
-const LEARNER_NAV: NavItem[] = [{ href: "/learn", label: "Mis cursos" }, PROFILE_ITEM];
+const LEARNER_HOME: NavItem = { href: "/learn", label: "Mis cursos", tab: { label: "Inicio", icon: House } };
+/** Only while the parameters show it to collaborators. */
+const RANKING_ITEM: NavItem = { href: "/learn/ranking", label: "Ranking", tab: { label: "Ranking", icon: Trophy } };
 
 function matches(pathname: string, { href, exact }: NavItem): boolean {
   return pathname === href || (!exact && pathname.startsWith(`${href}/`));
@@ -55,17 +61,23 @@ function activeItem(pathname: string, nav: NavItem[]): NavItem | undefined {
     .reduce<NavItem | undefined>((best, item) => (!best || item.href.length > best.href.length ? item : best), undefined);
 }
 
+/** The user's own menu (their profile, signing out). Admins have it from lg (below, their full menu holds it); a
+ * learner, whose sections go in the tab bar below lg, always: just the initials on a phone. */
 function UserMenu({ user, onLogout }: { user: CurrentUser; onLogout: () => void }) {
+  const learner = user.role !== "admin";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Menú de ${user.name}`}
-        className="hidden items-center gap-3 rounded-sm py-1 pl-1 pr-2 transition-colors hover:bg-mist lg:flex"
+        className={cn(
+          "min-h-10 items-center gap-3 rounded-sm py-1 pl-1 pr-2 transition-colors hover:bg-mist",
+          learner ? "flex" : "hidden lg:flex",
+        )}
       >
         <span className="flex h-8 w-8 items-center justify-center bg-ink-800 text-[11px] font-bold text-white">
           {initials(user.name)}
         </span>
-        <span className="max-w-[160px] truncate text-sm font-semibold">{user.name}</span>
+        <span className={cn("max-w-[160px] truncate text-sm font-semibold", learner && "hidden sm:inline")}>{user.name}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuLabel>
@@ -183,6 +195,51 @@ function MobileMenu({ nav, pathname, user, open, onOpenChange, onLogout }: Mobil
   );
 }
 
+interface TabBarProps {
+  nav: NavItem[];
+  pathname: string;
+  /** An item whose place is kept, unseen and out of reach, until it is known whether it shows. */
+  held?: NavItem;
+}
+
+/**
+ * A learner's sections at the bottom of the screen, below lg (where the header has no room for them): within reach of
+ * the thumb, clear of the home bar. `data-tab-bar` publishes its height (`--tab-bar`, globals.css): what sticks to the
+ * bottom of the page, and the toasts, keep above it.
+ */
+function TabBar({ nav, pathname, held }: TabBarProps) {
+  const active = activeItem(pathname, nav);
+  return (
+    <nav
+      aria-label="Principal"
+      data-tab-bar
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur supports-[backdrop-filter]:bg-white/85 lg:hidden"
+    >
+      <ul className="mx-auto flex max-w-lg">
+        {nav.map((item) => {
+          const current = item === active;
+          const Icon = item.tab?.icon ?? House;
+          return (
+            <li key={item.href} className={cn("flex-1", item === held && "invisible")}>
+              <Link
+                href={item.href}
+                aria-current={current ? "page" : undefined}
+                className={cn(
+                  "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-bold uppercase tracking-label transition-colors",
+                  current ? "text-accent-strong" : "text-ink-700 hover:text-accent-strong",
+                )}
+              >
+                <Icon className="h-5 w-5" aria-hidden />
+                {item.tab?.label ?? item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, status, logout } = useAuth();
   const pathname = usePathname();
@@ -191,6 +248,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const signingOut = useRef(false);
 
   const lacksAdminAccess = pathname.startsWith("/admin") && user?.role !== "admin";
+  const isLearner = status === "authenticated" && user?.role !== "admin";
+  // "Ranking" shows only once the parameters say collaborators see it: never by mistake, while they are asked or if
+  // they can't be read. While asked, its place is kept: when it comes (as it usually does) nothing in the nav moves.
+  const learnerSettings = useQuery({ queryKey: learnKeys.settings, queryFn: learnApi.settings, enabled: isLearner });
+  const held = isLearner && learnerSettings.isPending ? RANKING_ITEM : undefined;
+  const withRanking = held !== undefined || learnerSettings.data?.ranking_visible === true;
 
   useEffect(() => {
     if (status === "anonymous") {
@@ -206,7 +269,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (status !== "authenticated" || !user || lacksAdminAccess) return <SplashScreen />;
 
-  const nav = user.role === "admin" ? ADMIN_NAV : LEARNER_NAV;
+  const nav = isLearner ? [LEARNER_HOME, ...(withRanking ? [RANKING_ITEM] : []), PROFILE_ITEM] : ADMIN_NAV;
   const active = activeItem(pathname, nav);
   const handleLogout = () => {
     signingOut.current = true;
@@ -215,14 +278,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
+    // A learner's tab bar covers the bottom of the screen: the page ends above it.
+    <div className={cn("flex min-h-dvh flex-col bg-background", isLearner && "pb-[var(--tab-bar,0px)]")}>
       <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="container flex h-16 items-center justify-between gap-6">
           <Link href={homeFor(user)} className="shrink-0" aria-label="Inicio">
             <Logo />
           </Link>
 
-          {/* Five items and the user's name only fit side by side from lg: below, the menu holds them. */}
+          {/* Five items and the user's name only fit side by side from lg: below, the menu (an admin's) or the tab bar
+              (a learner's) holds them. */}
           <nav className="hidden flex-1 items-center justify-center gap-8 lg:flex" aria-label="Principal">
             {nav.map((item) => {
               const current = item === active;
@@ -234,6 +299,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "relative py-1 text-[11.5px] font-bold uppercase tracking-label transition-colors hover:text-accent",
                     current ? "text-accent" : "text-ink-800",
+                    item === held && "invisible",
                   )}
                 >
                   {item.label}
@@ -244,17 +310,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2">
             <UserMenu user={user} onLogout={handleLogout} />
-            <MobileMenu
-              nav={nav}
-              pathname={pathname}
-              user={user}
-              open={menuOpen}
-              onOpenChange={setMenuOpen}
-              onLogout={handleLogout}
-            />
+            {!isLearner && (
+              <MobileMenu
+                nav={nav}
+                pathname={pathname}
+                user={user}
+                open={menuOpen}
+                onOpenChange={setMenuOpen}
+                onLogout={handleLogout}
+              />
+            )}
           </div>
         </div>
       </header>
+      {/* Fixed at the bottom, but right after the header for keyboards and screen readers (as the header's nav). */}
+      {isLearner && <TabBar nav={nav} pathname={pathname} held={held} />}
 
       <main className="flex-1">{children}</main>
 

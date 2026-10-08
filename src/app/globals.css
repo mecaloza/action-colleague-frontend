@@ -52,6 +52,14 @@
   :focus-visible {
     @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-background;
   }
+
+  /* A learner's tab bar at the bottom of the screen (below lg): its height, for the page's end, what sticks to the
+     bottom and the toasts to keep above it. */
+  @media (max-width: 1023.98px) {
+    :root:has([data-tab-bar]) {
+      --tab-bar: calc(4rem + env(safe-area-inset-bottom));
+    }
+  }
 }
 
 @layer components {

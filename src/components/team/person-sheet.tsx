@@ -1,60 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Lock } from "lucide-react";
-import { EnrollmentBadge } from "@/components/courses/status-badge";
-import { QueryError } from "@/components/layout/query-state";
-import { pathPlace } from "@/components/learn/learner-course-card";
+import { ArrowRight, BookOpen } from "lucide-react";
+import { PersonCourses } from "@/components/people/person-courses";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { UserRow } from "@/lib/api/types";
-import { userKeys, usersApi } from "@/lib/api/users";
-import { formatDate, formatPercent, plural } from "@/lib/format";
-
-function PersonCourses({ person }: { person: UserRow }) {
-  const courses = useQuery({ queryKey: userKeys.courses(person.id), queryFn: () => usersApi.courses(person.id) });
-  if (courses.isPending) return <Skeleton className="h-40" />;
-  if (!courses.data) return <QueryError query={courses} />;
-  if (!courses.data.length) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No tiene cursos asignados. Asígnalos desde cada curso, en Participantes, o con una ruta de aprendizaje.
-      </p>
-    );
-  }
-  return (
-    <ul className="space-y-3">
-      {courses.data.map((course) => (
-        <li key={course.course_id} className="border border-border p-4">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            {/* A finger-sized target (taller than its line) without spacing the card out. */}
-            <Link href={`/admin/courses/${course.course_id}`} className="-my-2.5 min-w-0 py-2.5 font-semibold hover:text-accent">
-              {course.title}
-            </Link>
-            <EnrollmentBadge status={course.status} />
-          </div>
-          <div className="flex items-center gap-3">
-            <Progress value={course.progress_pct} className="flex-1" />
-            <span className="w-10 text-right text-xs font-semibold">{formatPercent(course.progress_pct)}</span>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {course.completed_modules} de {plural(course.total_modules, "módulo")}
-            {course.completed_at ? ` · terminado el ${formatDate(course.completed_at)}` : ""}
-          </p>
-          {course.path && <p className="mt-1 text-xs text-muted-foreground">{pathPlace(course)}</p>}
-          {course.locked_by && (
-            <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden /> Se desbloquea al terminar «{course.locked_by.title}»
-            </p>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
-}
+import { formatDate } from "@/lib/format";
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -72,6 +25,12 @@ function PersonDetail({ person }: { person: UserRow }) {
         <p className="eyebrow mb-2">{person.role === "admin" ? "Administrador" : "Colaborador"}</p>
         <SheetTitle className="font-display text-2xl font-medium tracking-tightest">{person.name}</SheetTitle>
         <SheetDescription className="text-sm text-muted-foreground">{person.email}</SheetDescription>
+        {/* The quick view; the page has their paths, each module's results, certificates and latest activity. */}
+        <Button variant="outline" size="sm" className="mt-4" asChild>
+          <Link href={`/admin/team/${person.id}`}>
+            Ver ficha completa <ArrowRight />
+          </Link>
+        </Button>
       </SheetHeader>
       <SheetBody className="space-y-8">
         <dl className="grid grid-cols-2 gap-4 text-sm">
@@ -87,7 +46,7 @@ function PersonDetail({ person }: { person: UserRow }) {
           <h3 className="mb-4 flex items-center gap-2 font-display text-xl font-medium tracking-tightest">
             <BookOpen className="h-5 w-5 text-accent" /> Cursos
           </h3>
-          <PersonCourses person={person} />
+          <PersonCourses userId={person.id} />
         </section>
       </SheetBody>
     </>
@@ -101,7 +60,7 @@ interface PersonSheetProps {
   onClose: () => void;
 }
 
-/** One person: their data and every course they were assigned, with progress. */
+/** One person at a glance: their data and every course they were assigned, with progress. */
 export function PersonSheet({ open, person, onClose }: PersonSheetProps) {
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
