@@ -8,9 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { SceneVisual, Slide, SlideContext, SlideLayout, StoryboardScene, VisualKind } from "@/lib/api/types";
+import type {
+  LayoutWarning,
+  SceneVisual,
+  Slide,
+  SlideContext,
+  SlideLayout,
+  StoryboardScene,
+  VisualKind,
+} from "@/lib/api/types";
 import { twoDigits } from "@/lib/format";
 import { IconPicker } from "./icon-picker";
+import { FieldWarnings, type SceneWarnings, sceneWarnings, warnedField, WarningsBadge } from "./layout-warnings";
 import { ListEditor } from "./list-editor";
 import { RowActions } from "./row-actions";
 import { SlidePreview } from "./slide-preview";
@@ -109,7 +118,20 @@ const usableNumber = (number: number) => Number.isFinite(number) && Math.abs(num
  * A figure typed as text (so "-", "" or "1,5" can be typed on the way): only a finite number reaches the slide,
  * and the field says when what is written isn't one.
  */
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+function NumberField({
+  id,
+  label,
+  value,
+  onChange,
+  warnings,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  /** What doesn't fit on the slide because of this figure (its bar and its value with the unit). */
+  warnings: LayoutWarning[];
+}) {
   const [text, setText] = useState(String(value));
   useEffect(() => {
     if (parseNumber(text) !== value) setText(String(value)); // changed elsewhere (e.g. a bar above was removed)
@@ -118,6 +140,7 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
   const invalid = !usableNumber(parseNumber(text));
   return (
     <Input
+      id={id}
       aria-label={label}
       inputMode="decimal"
       value={text}
@@ -127,14 +150,14 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
         if (usableNumber(number)) onChange(number);
       }}
       onBlur={() => invalid && setText(String(value))} // what is left written is what is saved
-      aria-invalid={invalid}
+      {...warnedField(id, warnings, invalid)}
       className="w-32"
     />
   );
 }
 
 /** A chart's bars: a label and its exact value each, plus their unit. */
-function ChartFields({ id, slide, onChange }: SlideFieldsProps) {
+function ChartFields({ id, slide, onChange, warnings }: SlideFieldsProps) {
   const labels = slide.chart_labels ?? [];
   const values = slide.chart_values ?? [];
   const rows = labels.slice(0, MAX_BARS).map((label, index) => ({ label, value: values[index] ?? 0 }));
@@ -146,34 +169,48 @@ function ChartFields({ id, slide, onChange }: SlideFieldsProps) {
   return (
     <fieldset className="space-y-2">
       <legend className="mb-1 text-[11px] font-bold uppercase tracking-label text-ink-700">Barras</legend>
-      {rows.map((row, index) => (
-        <div key={index} className="flex items-center gap-2">
-          <Input
-            aria-label={`Barra ${index + 1}: qué mide`}
-            value={row.label}
-            onChange={(event) => setRow(index, { label: event.target.value })}
-            placeholder="Presión correcta"
-            maxLength={80}
-          />
-          <NumberField
-            label={`Barra ${index + 1}: valor`}
-            value={row.value}
-            onChange={(value) => setRow(index, { value })}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Quitar barra ${index + 1}`}
-            onClick={() => {
-              set(rows.filter((_, at) => at !== index));
-              add.current?.focus(); // the row (and this button) is gone
-            }}
-          >
-            <X />
-          </Button>
-        </div>
-      ))}
+      {rows.map((row, index) => {
+        const labelId = `${id}-bar-${index}-label`;
+        const valueId = `${id}-bar-${index}-value`;
+        const labelWarnings = warnings.of(`chart_labels.${index}`);
+        const valueWarnings = warnings.of(`chart_values.${index}`);
+        return (
+          <div key={index}>
+            <div className="flex items-center gap-2">
+              <Input
+                id={labelId}
+                aria-label={`Barra ${index + 1}: qué mide`}
+                value={row.label}
+                onChange={(event) => setRow(index, { label: event.target.value })}
+                placeholder="Presión correcta"
+                maxLength={80}
+                {...warnedField(labelId, labelWarnings)}
+              />
+              <NumberField
+                id={valueId}
+                label={`Barra ${index + 1}: valor`}
+                value={row.value}
+                onChange={(value) => setRow(index, { value })}
+                warnings={valueWarnings}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Quitar barra ${index + 1}`}
+                onClick={() => {
+                  set(rows.filter((_, at) => at !== index));
+                  add.current?.focus(); // the row (and this button) is gone
+                }}
+              >
+                <X />
+              </Button>
+            </div>
+            <FieldWarnings fieldId={labelId} warnings={labelWarnings} />
+            <FieldWarnings fieldId={valueId} warnings={valueWarnings} />
+          </div>
+        );
+      })}
       {rows.length < MAX_BARS && (
         <Button
           ref={add}
@@ -204,28 +241,50 @@ interface SlideFieldsProps {
   id: string;
   slide: Slide;
   onChange: (changes: Partial<Slide>) => void;
+  /** What doesn't fit or overlaps on the slide, by field: said next to each one. */
+  warnings: SceneWarnings;
 }
 
 /** The texts of a slide: which fields there are depends on its layout. */
-function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
-  const textField = (field: SlideTextField, label: string, max = 300) => (
-    <div>
-      <Label htmlFor={`${id}-${field}`}>{label}</Label>
-      <Input
-        id={`${id}-${field}`}
-        value={slide[field]}
-        onChange={(event) => onChange({ [field]: event.target.value })}
-        maxLength={max}
-      />
-    </div>
-  );
+function SlideFields({ id, slide, onChange, warnings }: SlideFieldsProps) {
+  const textField = (field: SlideTextField, label: string, max = 300) => {
+    const fieldId = `${id}-${field}`;
+    const fieldWarnings = warnings.of(field);
+    return (
+      <div>
+        <Label htmlFor={fieldId}>{label}</Label>
+        <Input
+          id={fieldId}
+          value={slide[field]}
+          onChange={(event) => onChange({ [field]: event.target.value })}
+          maxLength={max}
+          {...warnedField(fieldId, fieldWarnings)}
+        />
+        <FieldWarnings fieldId={fieldId} warnings={fieldWarnings} />
+      </div>
+    );
+  };
   const pointsLabel = POINTS_LABEL[slide.layout];
-  const iconField = (label: string) => (
-    <div className="flex items-center gap-3">
-      <IconPicker value={slide.icon ?? ""} onChange={(icon) => onChange({ icon })} label={label} />
-      <span className="text-sm text-muted-foreground">Ícono (opcional)</span>
-    </div>
-  );
+  const pointWarnings = (index: number) => warnings.of(`points.${index}`);
+  const titleWarnings = warnings.of("title");
+  const iconField = (label: string) => {
+    const iconId = `${id}-icon`;
+    const iconWarnings = warnings.of("icon");
+    return (
+      <div>
+        <div className="flex items-center gap-3">
+          <IconPicker
+            value={slide.icon ?? ""}
+            onChange={(icon) => onChange({ icon })}
+            label={label}
+            describedBy={warnedField(iconId, iconWarnings)["aria-describedby"]}
+          />
+          <span className="text-sm text-muted-foreground">Ícono (opcional)</span>
+        </div>
+        <FieldWarnings fieldId={iconId} warnings={iconWarnings} />
+      </div>
+    );
+  };
 
   return (
     <>
@@ -254,14 +313,16 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
                 }}
                 maxLength={300}
                 className="min-h-[60px]"
+                {...warnedField(`${id}-case-${index}`, pointWarnings(index))}
               />
+              <FieldWarnings fieldId={`${id}-case-${index}`} warnings={pointWarnings(index)} />
             </div>
           ))}
         </>
       ) : slide.layout === "chart" ? (
         <>
           {textField("title", "Título de la gráfica")}
-          <ChartFields id={id} slide={slide} onChange={onChange} />
+          <ChartFields id={id} slide={slide} onChange={onChange} warnings={warnings} />
         </>
       ) : slide.layout === "visual" ? (
         textField("title", "Tema de la infografía")
@@ -275,7 +336,9 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
               onChange={(event) => onChange({ title: event.target.value })}
               maxLength={300}
               className="min-h-[72px]"
+              {...warnedField(`${id}-title`, titleWarnings)}
             />
+            <FieldWarnings fieldId={`${id}-title`} warnings={titleWarnings} />
           </div>
           {textField("quote_author", "Autor o fuente (opcional)", 60)}
           {iconField("la frase")}
@@ -296,6 +359,7 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
           maxLength={slide.layout === "calculation" ? 200 : 160}
           icons={ICON_LAYOUTS.includes(slide.layout) ? (slide.icons ?? []) : undefined}
           onIconsChange={ICON_LAYOUTS.includes(slide.layout) ? (icons) => onChange({ icons }) : undefined}
+          warnings={pointWarnings}
         />
       )}
       {slide.layout === "calculation" && (
@@ -306,25 +370,35 @@ function SlideFields({ id, slide, onChange }: SlideFieldsProps) {
       )}
       {slide.layout === "comparison" && (
         <div className="grid gap-4 sm:grid-cols-2">
-          {SIDES.map(({ side, heading, placeholder, column }) => (
-            <div key={side} className="space-y-2">
-              <Input
-                aria-label={heading}
-                value={slide[side].heading}
-                onChange={(event) => onChange({ [side]: { ...slide[side], heading: event.target.value } })}
-                placeholder={placeholder}
-                maxLength={80}
-              />
-              <ListEditor
-                label={column}
-                values={slide[side].points}
-                onChange={(points) => onChange({ [side]: { ...slide[side], points } })}
-                placeholder="Punto"
-                max={4}
-                maxLength={120}
-              />
-            </div>
-          ))}
+          {SIDES.map(({ side, heading, placeholder, column }) => {
+            const headingId = `${id}-${side}-heading`;
+            const headingWarnings = warnings.of(`${side}.heading`);
+            return (
+              <div key={side} className="space-y-2">
+                <div>
+                  <Input
+                    id={headingId}
+                    aria-label={heading}
+                    value={slide[side].heading}
+                    onChange={(event) => onChange({ [side]: { ...slide[side], heading: event.target.value } })}
+                    placeholder={placeholder}
+                    maxLength={80}
+                    {...warnedField(headingId, headingWarnings)}
+                  />
+                  <FieldWarnings fieldId={headingId} warnings={headingWarnings} />
+                </div>
+                <ListEditor
+                  label={column}
+                  values={slide[side].points}
+                  onChange={(points) => onChange({ [side]: { ...slide[side], points } })}
+                  placeholder="Punto"
+                  max={4}
+                  maxLength={120}
+                  warnings={(index) => warnings.of(`${side}.points.${index}`)}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </>
@@ -336,12 +410,24 @@ function InfographicFields({
   id,
   visual,
   onChange,
+  warnings,
+  redrawing,
+  onAnotherVersion,
 }: {
   id: string;
   visual: SceneVisual;
   onChange: (changes: Partial<SceneVisual>) => void;
+  /** The presenter's bubble covers part of the picture already made: another version is the fix. */
+  warnings: LayoutWarning[];
+  /** Another version of a covered picture was asked for: it isn't drawn (nor checked) yet. */
+  redrawing: boolean;
+  onAnotherVersion: () => void;
 }) {
   const missing = !visual.prompt.trim();
+  const versionId = `${id}-infographic-version`;
+  const noteId = `${versionId}-note`;
+  // Not taken as fixed: the new version is checked once it is drawn (then its warning, if any, comes back here).
+  const unchecked = redrawing && !warnings.length;
   return (
     <div className="space-y-2">
       <Label htmlFor={`${id}-infographic`}>Qué explica la infografía</Label>
@@ -356,20 +442,32 @@ function InfographicFields({
         aria-describedby={`${id}-infographic-hint`}
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p
-          id={`${id}-infographic-hint`}
-          className={missing ? "text-xs text-destructive" : "text-xs text-muted-foreground"}
-        >
-          {missing
-            ? "Describe qué debe mostrar: sin eso la escena sale solo con su título."
-            : "Se dibuja al guardar el guion, con los rótulos en español; tarda alrededor de un minuto."}
-        </p>
+        <div className="min-w-0 flex-1 basis-60">
+          {/* Beside the button that fixes it (the same button, so a click never loses the focus). */}
+          <FieldWarnings fieldId={versionId} warnings={warnings} className="mb-1.5 mt-0" />
+          {/* Always mounted, so screen readers announce the note when it appears. */}
+          <p id={noteId} role="status" className={unchecked ? "mb-1.5 text-xs text-muted-foreground" : "sr-only"}>
+            {unchecked ? "La nueva versión se dibuja al guardar el guion y se revisa cuando esté lista." : ""}
+          </p>
+          <p
+            id={`${id}-infographic-hint`}
+            className={missing ? "text-xs text-destructive" : "text-xs text-muted-foreground"}
+          >
+            {missing
+              ? "Describe qué debe mostrar: sin eso la escena sale solo con su título."
+              : "Se dibuja al guardar el guion, con los rótulos en español; tarda alrededor de un minuto."}
+          </p>
+        </div>
         <Button
           type="button"
           variant="outline"
           size="sm"
           disabled={missing}
-          onClick={() => onChange({ variant: ((visual.variant ?? 0) + 1) % 100 })}
+          onClick={() => {
+            onAnotherVersion();
+            onChange({ variant: ((visual.variant ?? 0) + 1) % 100 });
+          }}
+          aria-describedby={warnedField(versionId, warnings)["aria-describedby"] ?? (unchecked ? noteId : undefined)}
         >
           <RefreshCw /> Otra versión
         </Button>
@@ -394,6 +492,13 @@ interface SceneEditorProps {
   context: SlideContext;
   /** The course the scene belongs to: its prepared infographics are shown in the preview. */
   courseId: number;
+  /** What doesn't fit or overlaps on the scene's slide (or the presenter covers of its infographic). */
+  warnings: LayoutWarning[];
+  /**
+   * The scene's infographic, as saved, was just drawn (its preview shows it): the warnings are checked again over it.
+   * Left out while the scene's visual has unsaved changes: only what is saved is drawn.
+   */
+  onPictureReady?: () => Promise<void>;
   onChange: (scene: StoryboardScene) => void;
   onMove: (to: number) => void;
   onDuplicate: () => void;
@@ -410,6 +515,8 @@ export function SceneEditor({
   total,
   context,
   courseId,
+  warnings,
+  onPictureReady,
   onChange,
   onMove,
   onDuplicate,
@@ -417,6 +524,10 @@ export function SceneEditor({
 }: SceneEditorProps) {
   const id = `scene-${scene.id}`;
   const slide = scene.slide;
+  const notes = sceneWarnings(slide.layout, warnings);
+  const covered = notes.of("visual");
+  // Another version of an infographic the presenter covers: until it is drawn and checked, a note says so.
+  const [redrawing, setRedrawing] = useState(false);
   const setSlide = (changes: Partial<Slide>) => onChange({ ...scene, slide: { ...slide, ...changes } });
   const infographic = slide.layout === "visual";
   // An infographic scene's picture is its content (always an infographic); other layouts may have a decorative
@@ -435,7 +546,7 @@ export function SceneEditor({
   const seconds = narrationSeconds(scene.narration);
 
   return (
-    <li className="border border-border bg-white">
+    <li id={id} className="scroll-mt-24 border border-border bg-white">
       <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
         <span className="font-display text-xl font-medium text-accent">{twoDigits(index + 1)}</span>
         <div className="w-44">
@@ -444,6 +555,8 @@ export function SceneEditor({
             value={slide.layout}
             onChange={(event) => setLayout(event.target.value as SlideLayout)}
             className="h-9"
+            // What no field causes (a line or a frame of the layout) is said about the layout.
+            aria-describedby={warnedField(`${id}-layout`, notes.general)["aria-describedby"]}
           >
             {LAYOUTS.map((layout) => {
               const unavailable = layout.value === "visual" && !infographic && !visuals.includes("infographic");
@@ -456,6 +569,7 @@ export function SceneEditor({
             })}
           </Select>
         </div>
+        <WarningsBadge warnings={warnings} />
         <RowActions
           noun="escena"
           index={index}
@@ -475,12 +589,26 @@ export function SceneEditor({
           courseId={courseId}
           alt={`Diapositiva de la escena ${index + 1}`}
           className="lg:sticky lg:top-24 lg:self-start"
+          onReady={
+            infographic && onPictureReady ? () => void onPictureReady().then(() => setRedrawing(false)) : undefined
+          }
         />
         <div className="space-y-4">
-          <SlideFields id={id} slide={slide} onChange={setSlide} />
+          {/* What no field causes (a line or a frame of the layout): the scene's as a whole. */}
+          <FieldWarnings fieldId={`${id}-layout`} warnings={notes.general} className="mt-0" />
+          <SlideFields id={id} slide={slide} onChange={setSlide} warnings={notes} />
           {infographic ? (
             <div className="border-t border-border pt-4">
-              <InfographicFields id={id} visual={visual} onChange={setVisual} />
+              <InfographicFields
+                id={id}
+                visual={visual}
+                onChange={setVisual}
+                warnings={covered}
+                redrawing={redrawing}
+                onAnotherVersion={() => {
+                  if (covered.length) setRedrawing(true);
+                }}
+              />
             </div>
           ) : (
             <div className="space-y-3 border-t border-border pt-4">

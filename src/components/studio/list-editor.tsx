@@ -1,13 +1,19 @@
 "use client";
 
+import { useId } from "react";
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import dynamic from "next/dynamic";
+import type { LayoutWarning } from "@/lib/api/types";
 import { removeAt, replaceAt } from "@/lib/array";
+import { cn } from "@/lib/utils";
+import { FieldWarnings, warnedField } from "./layout-warnings";
 
 // Only the script editor shows icons: the other lists don't load the catalog.
 const IconPicker = dynamic(() => import("./icon-picker").then((module) => module.IconPicker));
+
+const NO_WARNINGS: LayoutWarning[] = [];
 
 interface ListEditorProps {
   label: string;
@@ -20,6 +26,8 @@ interface ListEditorProps {
   /** One icon per value: a picker shows before each one (removing a value removes its icon too). */
   icons?: string[];
   onIconsChange?: (icons: string[]) => void;
+  /** What doesn't fit on the slide because of the value at `index`: said under it. */
+  warnings?: (index: number) => LayoutWarning[];
 }
 
 /** A short list of one-line texts (objectives, key points, bullets). */
@@ -32,7 +40,9 @@ export function ListEditor({
   maxLength = 300,
   icons,
   onIconsChange,
+  warnings,
 }: ListEditorProps) {
+  const listId = useId();
   // Padded to the values, so every value has its icon (or "") and they stay in step.
   const iconOf = (index: number) => (icons && index < icons.length ? icons[index] : "");
   const allIcons = () => values.map((_, index) => iconOf(index));
@@ -40,35 +50,47 @@ export function ListEditor({
     <fieldset>
       <legend className="mb-2 text-[11px] font-bold uppercase tracking-label text-ink-700">{label}</legend>
       <ul className="space-y-2">
-        {values.map((value, index) => (
-          <li key={index} className="flex items-center gap-2">
-            {onIconsChange ? (
-              <IconPicker
-                value={iconOf(index)}
-                onChange={(icon) => onIconsChange(replaceAt(allIcons(), index, icon))}
-                label={`${label} ${index + 1}`}
+        {values.map((value, index) => {
+          const fieldId = `${listId}-${index}`;
+          const notes = warnings?.(index) ?? NO_WARNINGS;
+          return (
+            <li key={index} className="flex flex-wrap items-center gap-x-2">
+              {onIconsChange ? (
+                <IconPicker
+                  value={iconOf(index)}
+                  onChange={(icon) => onIconsChange(replaceAt(allIcons(), index, icon))}
+                  label={`${label} ${index + 1}`}
+                />
+              ) : (
+                <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-accent" aria-hidden />
+              )}
+              <Input
+                value={value}
+                onChange={(event) => onChange(replaceAt(values, index, event.target.value))}
+                placeholder={placeholder}
+                maxLength={maxLength}
+                aria-label={`${label} ${index + 1}`}
+                className="min-w-0 flex-1"
+                {...warnedField(fieldId, notes)}
               />
-            ) : (
-              <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-accent" aria-hidden />
-            )}
-            <Input
-              value={value}
-              onChange={(event) => onChange(replaceAt(values, index, event.target.value))}
-              placeholder={placeholder}
-              maxLength={maxLength}
-              aria-label={`${label} ${index + 1}`}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Quitar: ${value || `${label} ${index + 1}`}`}
-              onClick={() => onChange(removeAt(values, index), onIconsChange && removeAt(allIcons(), index))}
-            >
-              <X />
-            </Button>
-          </li>
-        ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Quitar: ${value || `${label} ${index + 1}`}`}
+                onClick={() => onChange(removeAt(values, index), onIconsChange && removeAt(allIcons(), index))}
+              >
+                <X />
+              </Button>
+              {/* On a line of its own, under the value (past the icon or the marker). */}
+              <FieldWarnings
+                fieldId={fieldId}
+                warnings={notes}
+                className={cn("basis-full", onIconsChange ? "pl-16" : "pl-3.5")}
+              />
+            </li>
+          );
+        })}
       </ul>
       {values.length < max && (
         <Button type="button" variant="link" className="mt-2 text-[13px]" onClick={() => onChange([...values, ""])}>

@@ -2,14 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, Eye, Play, RotateCcw, Sparkles } from "lucide-react";
 import { ModuleVideo } from "@/components/courses/module-video";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { STUDIO_STALE_MS, studioApi, studioKeys } from "@/lib/api/studio";
 import type { CourseDetail, Job, ModuleAdmin } from "@/lib/api/types";
 import { formatDuration, plural, twoDigits } from "@/lib/format";
 import { useStableUrl } from "@/lib/hooks/use-stable-url";
+import { cn } from "@/lib/utils";
 import { JobFailure, JobStatus } from "./job-status";
+import { isError, summaryLines } from "./layout-warnings";
+import { inRenderSlot } from "./render-slots";
 import { aiModules, type ModuleActivity, moduleActivity, moduleJob } from "./steps";
 import { useProduceModule } from "./use-produce-module";
 
@@ -102,13 +107,86 @@ function VideoState({ module, activity, job }: VideoStateProps) {
   );
 }
 
+/** What doesn't fit or overlaps on the slides of the module's saved script, scene by scene, and a way to fix it. */
+function ScriptWarnings({ module, onFix }: { module: ModuleAdmin; onFix: () => void }) {
+  const [open, setOpen] = useState(false);
+  const storyboard = useQuery({
+    queryKey: studioKeys.storyboard(module.id),
+    // Every module asks at once, and the server draws each script's slides: two at a time, like the previews.
+    queryFn: ({ signal }) => inRenderSlot(signal, () => studioApi.storyboard(module.id, signal)),
+    // The script editor's own copy (same key): dropped when this step closes, so the editor never opens it stale.
+    gcTime: 0,
+    staleTime: STUDIO_STALE_MS,
+  });
+  const data = storyboard.data;
+  // Not knowing isn't "no warnings": the admin could produce the video again over a text that is cut.
+  if (!data && storyboard.isError) {
+    return (
+      <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+        No se pudieron revisar los avisos de diseño.
+        <Button
+          variant="link"
+          className="text-[13px]"
+          onClick={() => void storyboard.refetch()}
+          aria-label={`Reintentar: avisos de diseño de ${module.title}`}
+        >
+          Reintentar
+        </Button>
+      </p>
+    );
+  }
+  if (!data?.warnings?.length) return null;
+  const { warnings } = data;
+  const numbers = new Map(data.scenes.map((scene, index) => [scene.id, index + 1]));
+  const listId = `studio-module-${module.id}-warnings`;
+  return (
+    <div className="space-y-1">
+      <p
+        className={cn(
+          "flex items-start gap-2 text-sm",
+          warnings.some(isError) ? "text-destructive" : "text-warning",
+        )}
+      >
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+        <span>Avisos de diseño: {summaryLines(warnings).join(" · ")}.</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-x-4 pl-6">
+        <Button
+          variant="link"
+          className="text-[13px]"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          onClick={() => setOpen((shown) => !shown)}
+        >
+          {open ? "Ocultar avisos" : "Ver avisos"}
+        </Button>
+        <Button variant="link" className="text-[13px]" onClick={onFix}>
+          Corregir en el guion <ArrowRight />
+        </Button>
+      </div>
+      {open && (
+        <ul id={listId} className="space-y-1 pl-6 text-sm">
+          {warnings.map((warning) => (
+            <li key={`${warning.scene_id}:${warning.code}:${warning.field}`}>
+              <span className="font-semibold">Escena {twoDigits(numbers.get(warning.scene_id) ?? 0)}:</span>{" "}
+              {warning.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 interface ProductionStepProps {
   course: CourseDetail;
   jobs: Job[];
+  /** Opens the module's script in the Contenido step, to fix what its slides warn about. */
+  onFixScript: (moduleId: number) => void;
 }
 
 /** Each module's video being produced, ready to watch (and to produce again), or failed with a retry. */
-export function ProductionStep({ course, jobs }: ProductionStepProps) {
+export function ProductionStep({ course, jobs, onFixScript }: ProductionStepProps) {
   const [watching, setWatching] = useState<ModuleAdmin | null>(null);
   const { produce, producingId } = useProduceModule(course);
   // Per AI module: what it is doing (producing its video, or writing its script) and the job doing it.
@@ -144,6 +222,10 @@ export function ProductionStep({ course, jobs }: ProductionStepProps) {
             <div className="min-w-0 flex-1 basis-60 space-y-1.5">
               <p className="font-semibold">{module.title}</p>
               <VideoState module={module} activity={activity} job={job} />
+              {/* Its saved script's slides (one being rewritten has no warnings to show yet). */}
+              {module.scene_count > 0 && activity !== "drafting" && (
+                <ScriptWarnings module={module} onFix={() => onFixScript(module.id)} />
+              )}
             </div>
             {/* Any module with a script can be produced (again, e.g. after editing it) unless it's being produced;
                 while its script is being written the button waits. */}

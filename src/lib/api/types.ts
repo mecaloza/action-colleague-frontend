@@ -1112,6 +1112,48 @@ export interface Storyboard {
   scenes: StoryboardScene[];
 }
 
+/** What a layout warning is about. */
+export type LayoutWarningCode =
+  | "text_truncated" // a text doesn't fit even at its smallest size: its end is cut
+  | "word_broken" // a word wider than its box is split across lines
+  | "presenter_overlap" // under the presenter (its bubble, or large on the cover and the closing)
+  | "motif_overlap" // over the brand motif in the corner
+  | "frame_overlap" // over the slide's header or its counter
+  | "outside_safe_area" // past the slide's margins
+  | "text_overlap" // two texts on top of each other
+  | "visual_under_presenter"; // the presenter's bubble covers drawings of the scene's infographic
+
+/** Something on a scene's slide that doesn't fit or overlaps, found by drawing it as the video draws it. */
+export interface LayoutWarning {
+  scene_id: string;
+  code: LayoutWarningCode;
+  /** "warning": a broken word or an infographic under the presenter; anything else is an "error". */
+  severity: "error" | "warning";
+  /**
+   * The slide's field the admin edits: "title", "subtitle", "stat_value", "stat_label", "quote_author", "icon",
+   * "points.2" (its index in `points`, blank ones included), "left.heading", "right.points.0", "chart_labels.1",
+   * "chart_values.1" (the bar and its value), "visual" (the infographic); null for a decoration of the layout.
+   */
+  field: string | null;
+  /** For the admin, in Spanish. */
+  message: string;
+}
+
+/** The saved script, with what doesn't fit or overlaps on its slides (older servers leave the warnings out). */
+export interface StoryboardOut extends Storyboard {
+  warnings?: LayoutWarning[];
+}
+
+/** A script being edited, as its slides are checked (not saved): a narration may be empty or left out. */
+export interface StoryboardDraft {
+  scenes: (Omit<StoryboardScene, "narration"> & { narration?: string })[];
+}
+
+/** What doesn't fit or overlaps on the slides of a script being edited (it is checked, never saved). */
+export interface StoryboardLint {
+  warnings: LayoutWarning[];
+}
+
 export interface OutlineModule {
   title: string;
   summary: string;

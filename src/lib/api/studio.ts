@@ -11,6 +11,9 @@ import type {
   Slide,
   SlideContext,
   Storyboard,
+  StoryboardDraft,
+  StoryboardLint,
+  StoryboardOut,
   StudioCapabilities,
   Voice,
 } from "./types";
@@ -38,9 +41,17 @@ export const studioApi = {
   /** Storyboard, reading and quiz of the AI modules still without a script (or of `moduleIds`). */
   draft: (courseId: number, moduleIds?: number[]) =>
     http.post<Job[]>(`/courses/${courseId}/draft`, { module_ids: moduleIds ?? null }),
-  storyboard: (moduleId: number) => http.get<Storyboard>(`/modules/${moduleId}/storyboard`),
+  /** The module's script, with what doesn't fit or overlaps on its slides (the server draws them to know). */
+  storyboard: (moduleId: number, signal?: AbortSignal) =>
+    http.get<StoryboardOut>(`/modules/${moduleId}/storyboard`, undefined, signal),
   saveStoryboard: (moduleId: number, storyboard: Storyboard) =>
-    http.put<Storyboard>(`/modules/${moduleId}/storyboard`, storyboard),
+    http.put<StoryboardOut>(`/modules/${moduleId}/storyboard`, storyboard),
+  /**
+   * What doesn't fit or overlaps on the slides of a script being edited (narrations may still be empty): the server
+   * draws them over the infographics already made; nothing is saved and no provider is asked.
+   */
+  lintStoryboard: (moduleId: number, draft: StoryboardDraft, signal?: AbortSignal) =>
+    http.post<StoryboardLint>(`/modules/${moduleId}/storyboard/lint`, draft, signal),
   regenerateStoryboard: (moduleId: number, feedback: string) =>
     http.post<Job>(`/modules/${moduleId}/storyboard/regenerate`, { feedback }),
   suggestQuiz: (moduleId: number, count = 5) => http.post<Job>(`/modules/${moduleId}/evaluation/generate`, { count }),
@@ -97,4 +108,8 @@ export const studioKeys = {
   materials: (courseId: number) => ["courses", courseId, "materials"] as const,
   job: (jobId: string) => ["jobs", jobId] as const,
   storyboard: (moduleId: number) => ["modules", moduleId, "storyboard"] as const,
+  /** The checks of every draft of the module's script. */
+  storyboardLints: (moduleId: number) => ["modules", moduleId, "storyboard-lint"] as const,
+  /** The check of one draft of the script (`draft`: its scenes as JSON). */
+  storyboardLint: (moduleId: number, draft: string) => ["modules", moduleId, "storyboard-lint", draft] as const,
 };

@@ -10,17 +10,27 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { STUDIO_STALE_MS, studioApi, studioKeys } from "@/lib/api/studio";
-import type { CourseDetail, ModuleAdmin, SlideContext, Storyboard, StoryboardScene } from "@/lib/api/types";
+import type {
+  CourseDetail,
+  LayoutWarning,
+  ModuleAdmin,
+  SlideContext,
+  StoryboardOut,
+  StoryboardScene,
+} from "@/lib/api/types";
 import { moveItem, removeAt, replaceAt } from "@/lib/array";
 import { formatDuration, plural } from "@/lib/format";
 import { useCourseCache } from "@/lib/hooks/use-course-cache";
 import { useStudioCapabilities } from "@/lib/hooks/use-studio-capabilities";
+import { LayoutSummary, warningsByScene } from "./layout-warnings";
 import { NO_VISUAL, narrationSeconds, SceneEditor, sceneVisual } from "./scene-editor";
 import { videoStyle } from "./steps";
+import { useLayoutWarnings } from "./use-layout-warnings";
 import { useProduceModule } from "./use-produce-module";
 import { useStudioCache } from "./use-studio-cache";
 
 const MAX_SCENES = 40;
+const NO_WARNINGS: LayoutWarning[] = [];
 
 const newSceneId = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
@@ -77,7 +87,8 @@ export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChan
     // Another tab may have changed it; a new copy restarts the form, so never over unsaved edits.
     refetchOnWindowFocus: !dirty,
   });
-  const copy = JSON.stringify(storyboard.data ?? null);
+  // Only the scenes: the same script with other warnings (an infographic made since) keeps the form as it is.
+  const copy = JSON.stringify(storyboard.data?.scenes ?? null);
   const [formKey, setFormKey] = useState(copy);
   if (storyboard.data && copy !== formKey && copy !== ownSave.current) setFormKey(copy); // another tab, the AI
   if (storyboard.isPending) return <Skeleton className="h-96" />;
@@ -85,7 +96,7 @@ export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChan
   return (
     <StoryboardForm
       key={formKey}
-      onSaved={(stored) => (ownSave.current = JSON.stringify(stored))}
+      onSaved={(stored) => (ownSave.current = JSON.stringify(stored.scenes))}
       course={course}
       module={module}
       rendering={rendering}
@@ -98,9 +109,9 @@ export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChan
 }
 
 interface StoryboardFormProps extends Omit<StoryboardEditorProps, "dirty"> {
-  saved: Storyboard;
+  saved: StoryboardOut;
   /** Called with what the server stored, before the editor's copy becomes it. */
-  onSaved: (stored: Storyboard) => void;
+  onSaved: (stored: StoryboardOut) => void;
   /** Owned by the editor: this form is remounted when the saved script changes elsewhere. */
   feedback: string;
   onFeedbackChange: (feedback: string) => void;
@@ -128,6 +139,11 @@ function StoryboardForm({
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   // Closed (or replaced by the AI's rewrite): nothing is left unsaved.
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+  // What doesn't fit or overlaps on the slides: the saved script's, or the draft's after a pause in the typing.
+  const layout = useLayoutWarnings(module.id, scenes, saved);
+  const warnings = warningsByScene(layout.warnings);
+  // Each scene's visual as saved: only that is drawn (an infographic, once the script is saved).
+  const savedVisuals = new Map(saved.scenes.map((scene) => [scene.id, JSON.stringify(scene.visual)]));
 
   const context = (index: number): SlideContext => ({
     course_title: course.title,
@@ -137,6 +153,17 @@ function StoryboardForm({
     ...videoStyle(course.settings),
   });
   const seconds = scenes.reduce((total, scene) => total + narrationSeconds(scene.narration), 0);
+
+  /** Takes the admin to a scene's first field with a warning (to its layout, when no field causes it). */
+  const showScene = (sceneId: string) => {
+    const scene = document.getElementById(`scene-${sceneId}`);
+    // A field with warnings is described by them last (`warnedField`); so is the layout's select, by the rest.
+    const target =
+      scene?.querySelector<HTMLElement>('[aria-describedby$="-warnings"]:not(select)') ??
+      scene?.querySelector<HTMLElement>("select");
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: "center" });
+  };
 
   const save = useMutation({
     mutationFn: () => studioApi.saveStoryboard(module.id, { scenes }),
@@ -198,6 +225,16 @@ function StoryboardForm({
           El video se está produciendo; edita el guion cuando termine.
         </p>
       )}
+      {layout.supported && (
+        <LayoutSummary
+          warnings={layout.warnings}
+          scenes={scenes}
+          checking={layout.checking}
+          failed={layout.failed}
+          onRetry={layout.retry}
+          onShow={showScene}
+        />
+      )}
 
       <ol className="space-y-5" aria-label={`Escenas de ${module.title}`}>
         {scenes.map((scene, index) => (
@@ -211,6 +248,8 @@ function StoryboardForm({
             index={index}
             total={scenes.length}
             context={context(index)}
+            warnings={warnings.get(scene.id) ?? NO_WARNINGS}
+            onPictureReady={savedVisuals.get(scene.id) === JSON.stringify(scene.visual) ? layout.recheck : undefined}
             onChange={(next) => setScenes((list) => replaceAt(list, index, next))}
             onMove={(to) => setScenes((list) => moveItem(list, index, to))}
             onDuplicate={() => setScenes((list) => duplicateScene(list, index))}

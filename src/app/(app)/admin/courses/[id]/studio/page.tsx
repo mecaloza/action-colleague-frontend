@@ -90,6 +90,8 @@ export default function CourseStudioPage() {
   // The step on screen stays where the admin is: it only moves by their choice or when a step finishes
   // (e.g. the proposal was asked for), never while they are editing a script.
   const [selected, setSelected] = useState<StepId | null>(null);
+  // The module whose script Producción sent the admin to fix: Contenido opens with it.
+  const [scriptToFix, setScriptToFix] = useState<number | null>(null);
 
   // The step to open depends on the course, its proposal and its jobs: nothing is shown until the three are known.
   // A proposal that can't be loaded counts as there: its step shows the error, the others work without it.
@@ -118,9 +120,10 @@ export default function CourseStudioPage() {
   // Moving on from inside a step (not with the stepper) takes the focus to the new step's heading.
   const stepRoot = useRef<HTMLDivElement>(null);
   const focusOnEnter = useRef(false);
-  const show = (next: StepId, focus: boolean) => {
+  const show = (next: StepId, focus: boolean, script: number | null = null) => {
     focusOnEnter.current = focus && next !== step;
     setDirty(false);
+    setScriptToFix(script);
     setSelected(next);
   };
   // The step on screen now: a request that ends after the admin moved on doesn't move them again.
@@ -241,6 +244,7 @@ export default function CourseStudioPage() {
                   dirty={dirty}
                   onDirtyChange={setDirty}
                   onContinue={() => void goTo("style")}
+                  openModuleId={scriptToFix}
                 />
               )}
               {step === "style" && (
@@ -251,7 +255,14 @@ export default function CourseStudioPage() {
                   onProducing={() => advance("style", "production")}
                 />
               )}
-              {step === "production" && <ProductionStep course={data} jobs={activeJobs} />}
+              {step === "production" && (
+                // Production edits nothing: off to the script without asking (Contenido takes the focus to it).
+                <ProductionStep
+                  course={data}
+                  jobs={activeJobs}
+                  onFixScript={(moduleId) => show("content", false, moduleId)}
+                />
+              )}
             </div>
           </motion.div>
         </AnimatePresence>

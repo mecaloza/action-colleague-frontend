@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowRight, BookOpen, ChevronDown, HelpCircle, Loader2, RotateCcw, Sparkles } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
@@ -61,14 +61,25 @@ interface ContentStepProps {
   dirty: boolean;
   onDirtyChange: (dirty: boolean) => void;
   onContinue: () => void;
+  /** A module whose script opens right away, with the focus on it (the admin came from Producción to fix it). */
+  openModuleId?: number | null;
 }
 
+const scriptToggleId = (moduleId: number) => `studio-module-${moduleId}-script`;
+
 /** Scripts, slides, reading and quiz of every AI module: review and edit before producing the videos. */
-export function ContentStep({ course, jobs, dirty, onDirtyChange, onContinue }: ContentStepProps) {
+export function ContentStep({ course, jobs, dirty, onDirtyChange, onContinue, openModuleId = null }: ContentStepProps) {
   const confirm = useConfirm();
   const { refreshCourse } = useCourseCache();
   const { trackJobs, failed } = useStudioCache();
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<number | null>(openModuleId);
+  // Came to fix a script: its module goes to the top of the screen, with the focus on its (open) toggle.
+  useEffect(() => {
+    if (openModuleId === null) return;
+    const toggle = document.getElementById(scriptToggleId(openModuleId));
+    toggle?.closest("li")?.scrollIntoView({ block: "start" });
+    toggle?.focus({ preventScroll: true });
+  }, [openModuleId]);
 
   // Per AI module: what it is doing (writing its script, producing its video), the job doing it, and whether its
   // script is ready to review (it has one and nothing is rewriting it).
@@ -144,7 +155,7 @@ export function ContentStep({ course, jobs, dirty, onDirtyChange, onContinue }: 
           const expanded = openId === module.id && drafted;
           const writing = write.isPending && write.variables === module.id;
           return (
-            <li key={module.id} className="border border-border bg-white">
+            <li key={module.id} className="scroll-mt-20 border border-border bg-white">
               <div className="flex flex-wrap items-center gap-4 px-5 py-4">
                 <span className="font-display text-2xl font-medium text-accent">{twoDigits(module.order)}</span>
                 <div className="min-w-0 flex-1 basis-60 space-y-1.5">
@@ -156,7 +167,13 @@ export function ContentStep({ course, jobs, dirty, onDirtyChange, onContinue }: 
                     Escribiendo
                   </Badge>
                 ) : drafted ? (
-                  <Button variant="ghost" size="sm" onClick={() => toggle(module.id)} aria-expanded={expanded}>
+                  <Button
+                    id={scriptToggleId(module.id)}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggle(module.id)}
+                    aria-expanded={expanded}
+                  >
                     {expanded ? "Cerrar" : "Revisar guion"}
                     <ChevronDown className={cn("transition-transform", expanded && "rotate-180")} />
                   </Button>
