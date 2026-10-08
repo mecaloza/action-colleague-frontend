@@ -1,4 +1,4 @@
-import { http } from "./client";
+import { ApiError, http } from "./client";
 import type {
   CourseDetail,
   CourseSettings,
@@ -70,6 +70,15 @@ export const coursesApi = {
     http.put<ModuleAdmin[]>(`/courses/${courseId}/modules/order`, { module_ids: moduleIds }),
 
   getEvaluation: (moduleId: number) => http.get<EvaluationAdmin>(`/modules/${moduleId}/evaluation`),
+  /** The module's evaluation, or null while it has none (a 404 says just that). */
+  findEvaluation: async (moduleId: number): Promise<EvaluationAdmin | null> => {
+    try {
+      return await coursesApi.getEvaluation(moduleId);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  },
   saveEvaluation: (moduleId: number, input: EvaluationInput) =>
     http.put<EvaluationAdmin>(`/modules/${moduleId}/evaluation`, input),
   removeEvaluation: (moduleId: number) => http.delete(`/modules/${moduleId}/evaluation`),

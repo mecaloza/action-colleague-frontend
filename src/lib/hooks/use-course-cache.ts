@@ -4,6 +4,7 @@ import { dashboardKeys } from "@/lib/api/dashboard";
 import { pathKeys } from "@/lib/api/paths";
 import { profileKeys } from "@/lib/api/profiles";
 import { rankingKeys } from "@/lib/api/ranking";
+import { revisionKeys } from "@/lib/api/revisions";
 import { userKeys } from "@/lib/api/users";
 import type { CourseDetail, Participant } from "@/lib/api/types";
 
@@ -36,9 +37,13 @@ export function useCourseCache() {
     /** Something under a course changed (modules, participants): refetch it and everything below it. */
     refreshCourse: (courseId: number) => queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId) }),
 
-    /** A module's evaluation changed: refetch it and the course, whose modules carry the question count. */
+    /**
+     * A module's evaluation changed: refetch it, the course (its modules carry the question count) and the module's
+     * changes (a save is one of them; removing the evaluation retires the ones proposed to it).
+     */
     refreshEvaluation: (courseId: number, moduleId: number) => {
       queryClient.invalidateQueries({ queryKey: courseKeys.evaluation(moduleId) });
+      queryClient.invalidateQueries({ queryKey: revisionKeys.all(moduleId) });
       queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId) });
     },
 

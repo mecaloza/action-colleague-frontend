@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronDown, HelpCircle, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, HelpCircle, History, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { QueryError } from "@/components/layout/query-state";
+import { RevisionSheet, type RevisionTab, useRevisionSheet } from "@/components/studio/revision-sheet";
+import { usePendingRevision } from "@/components/studio/revision-status";
+import { useUnsavedEdits } from "@/components/studio/use-revision-cache";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,7 +21,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApiError } from "@/lib/api/client";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import { settingsApi, settingsKeys } from "@/lib/api/settings";
 import type { CourseDetail, EvaluationAdmin, EvaluationDefaults, ModuleAdmin, Question, QuestionType } from "@/lib/api/types";
@@ -61,6 +64,69 @@ function AddQuestionMenu({ onAdd }: { onAdd: (type: QuestionType) => void }) {
   );
 }
 
+/** Opens "Cambios a la evaluación" of the module: a new change (to some questions, or all of them) or its history. */
+type RequestQuizChange = (options?: { questionIds?: string[]; tab?: RevisionTab }) => void;
+
+/** The heading of the module's «Cambios con IA»: the focus lands there when what opened its panel is gone. */
+const quizChangesId = (moduleId: number) => `quiz-changes-${moduleId}`;
+
+interface QuizChangesProps {
+  module: ModuleAdmin;
+  /** The draft has edits not saved: the AI works on the saved quiz. */
+  dirty: boolean;
+  /** The id of the text that says so. */
+  hintId: string;
+  onRequestChange: RequestQuizChange;
+}
+
+/** A change to the saved quiz to ask the AI for (or one waiting for review), and its history. */
+function QuizChanges({ module, dirty, hintId, onRequestChange }: QuizChangesProps) {
+  const pending = usePendingRevision(module, "quiz");
+  const headingId = quizChangesId(module.id);
+  // A proposal waiting can be reviewed anytime (applying it waits for the draft to be saved or discarded).
+  const blocked = dirty && !pending;
+  return (
+    <section aria-labelledby={headingId} className="space-y-3 border-l-2 border-accent bg-accent-soft/50 px-4 py-3">
+      <h3
+        id={headingId}
+        tabIndex={-1}
+        className="text-[11px] font-bold uppercase tracking-label text-ink-700 focus-visible:ring-0"
+      >
+        Cambios con IA
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        {pending
+          ? "Hay un cambio de la IA esperando tu revisión."
+          : "Pide a la IA un ajuste puntual: propone solo lo que cambia y lo revisas antes de aplicarlo."}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onRequestChange()}
+          disabled={blocked}
+          aria-describedby={blocked ? hintId : undefined}
+        >
+          <Sparkles /> {pending ? "Revisar la propuesta" : "Pedir un cambio"}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => onRequestChange({ tab: "history" })}>
+          <History /> Historial de cambios
+        </Button>
+      </div>
+      {/* Also with a proposal waiting: a question's own button asks for a new change, which waits for the draft. */}
+      {dirty && (
+        <p id={hintId} className="text-sm text-muted-foreground">
+          {pending
+            ? "Para pedir otro cambio, primero guarda o descarta lo que editaste: la IA trabaja sobre la evaluación " +
+              "guardada. La propuesta que espera ya puedes revisarla."
+            : "Para pedirle un cambio a la IA, primero guarda o descarta lo que editaste: la IA trabaja sobre la " +
+              "evaluación guardada."}
+        </p>
+      )}
+    </section>
+  );
+}
+
 interface EvaluationFormProps {
   module: ModuleAdmin;
   courseId: number;
@@ -69,10 +135,22 @@ interface EvaluationFormProps {
   /** What a new one starts with (the platform's, from Parámetros): only needed while there is none. */
   defaults?: EvaluationDefaults;
   onDirtyChange: (dirty: boolean) => void;
+  /** Asks the AI for a change to the saved quiz (left out: not offered). */
+  onRequestChange?: RequestQuizChange;
+  /** The id of why the AI can't be asked while the draft has edits (it starts from the saved quiz). */
+  requestHintId: string;
 }
 
 /** Editable draft of a module's evaluation, started from what the server has saved. */
-function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange }: EvaluationFormProps) {
+function EvaluationForm({
+  module,
+  courseId,
+  evaluation,
+  defaults,
+  onDirtyChange,
+  onRequestChange,
+  requestHintId,
+}: EvaluationFormProps) {
   const confirm = useConfirm();
   const { refreshEvaluation } = useCourseCache();
   const [questions, setQuestions] = useState<Question[]>(evaluation?.questions ?? []);
@@ -84,8 +162,10 @@ function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange 
     );
   }, []);
   // Raw text while typing; validated below instead of clamped on every keystroke.
-  const [maxAttempts, setMaxAttempts] = useState(String(evaluation?.max_attempts ?? defaults?.max_attempts ?? ""));
-  const [passingScore, setPassingScore] = useState(String(evaluation?.passing_score ?? defaults?.passing_score ?? ""));
+  const savedAttempts = String(evaluation?.max_attempts ?? defaults?.max_attempts ?? "");
+  const savedScore = String(evaluation?.passing_score ?? defaults?.passing_score ?? "");
+  const [maxAttempts, setMaxAttempts] = useState(savedAttempts);
+  const [passingScore, setPassingScore] = useState(savedScore);
   const attempts = wholeNumberIn(maxAttempts, 1, 20);
   const score = wholeNumberIn(passingScore, 1, 100);
   const problems = questions
@@ -98,6 +178,13 @@ function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange 
   const [startedFrom] = useState(draft);
   const dirty = draft !== startedFrom;
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  // A change asked of the AI starts from the saved quiz, and applying (or undoing) one replaces this draft.
+  useUnsavedEdits({ target: "quiz", moduleId: module.id }, dirty);
+  const discard = () => {
+    setQuestions(evaluation?.questions ?? []);
+    setMaxAttempts(savedAttempts);
+    setPassingScore(savedScore);
+  };
 
   const save = useMutation({
     mutationFn: () =>
@@ -165,6 +252,11 @@ function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange 
           onChange={(next) => setQuestions((list) => replaceAt(list, index, next))}
           onRemove={() => setQuestions((list) => removeAt(list, index))}
           onMove={(direction) => setQuestions((list) => moveItem(list, index, index + direction))}
+          onRequestChange={onRequestChange && (() => onRequestChange({ questionIds: [question.id] }))}
+          requestBlockedBy={dirty ? requestHintId : undefined}
+          // By its place, not by the question's id (a change can give it a new one): once a change is applied and the
+          // draft starts over, the focus comes back to the button in the same place.
+          requestButtonId={`quiz-${module.id}-question-${index + 1}-change`}
         />
       ))}
 
@@ -193,6 +285,11 @@ function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange 
               <Trash2 /> Quitar evaluación
             </Button>
           )}
+          {dirty && (
+            <Button variant="ghost" onClick={discard} disabled={save.isPending}>
+              Descartar cambios
+            </Button>
+          )}
           <Button
             onClick={() => save.mutate()}
             disabled={questions.length === 0 || problemCount > 0 || attempts === null || score === null}
@@ -216,22 +313,20 @@ function EvaluationForm({ module, courseId, evaluation, defaults, onDirtyChange 
 function ModuleEvaluation({
   module,
   courseId,
+  dirty,
   onDirtyChange,
+  onRequestChange,
 }: {
   module: ModuleAdmin;
   courseId: number;
+  /** Its draft has edits not saved. */
+  dirty: boolean;
   onDirtyChange: (dirty: boolean) => void;
+  onRequestChange: RequestQuizChange;
 }) {
   const evaluation = useQuery({
     queryKey: courseKeys.evaluation(module.id),
-    queryFn: async () => {
-      try {
-        return await coursesApi.getEvaluation(module.id);
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
+    queryFn: () => coursesApi.findEvaluation(module.id),
   });
 
   // A new one starts with the platform's defaults: the form waits for them.
@@ -243,17 +338,34 @@ function ModuleEvaluation({
   // Unreadable, it says so: never values made up here, which saving would keep as the evaluation's own.
   if (isNew && !defaults.data) return <QueryError query={defaults} />;
 
-  // Keyed by what is saved: the draft starts over whenever the saved evaluation changes (saved, removed...).
   const saved = evaluation.data ?? null;
+  const requestHintId = `quiz-request-${module.id}-hint`;
   return (
-    <EvaluationForm
-      key={JSON.stringify(saved)}
-      module={module}
-      courseId={courseId}
-      evaluation={saved}
-      defaults={defaults.data?.evaluations}
-      onDirtyChange={onDirtyChange}
-    />
+    <div className="space-y-4">
+      {/* Outside the form: its buttons stay as the draft starts over (a change applied), and get the focus back. */}
+      {saved && <QuizChanges module={module} dirty={dirty} hintId={requestHintId} onRequestChange={onRequestChange} />}
+      {/* Keyed by what is saved: the draft starts over whenever the saved evaluation changes (saved, removed...). */}
+      <EvaluationForm
+        key={JSON.stringify(saved)}
+        module={module}
+        courseId={courseId}
+        evaluation={saved}
+        defaults={defaults.data?.evaluations}
+        onDirtyChange={onDirtyChange}
+        onRequestChange={saved ? onRequestChange : undefined}
+        requestHintId={requestHintId}
+      />
+    </div>
+  );
+}
+
+/** "Cambio por revisar" on a module's quiz, in its header (which opens it: its panel offers to review the change). */
+function PendingQuizTag({ module }: { module: ModuleAdmin }) {
+  if (!usePendingRevision(module, "quiz")) return null;
+  return (
+    <Badge variant="accent" className="self-start sm:self-auto">
+      Cambio por revisar
+    </Badge>
   );
 }
 
@@ -261,6 +373,8 @@ export function EvaluationsTab({ course }: { course: CourseDetail }) {
   const confirm = useConfirm();
   const [openId, setOpenId] = useState<number | null>(course.modules[0]?.id ?? null);
   const [dirty, setDirty] = useState(false);
+  // "Pedir un cambio" to a module's quiz (or to some of its questions), and its history.
+  const revisions = useRevisionSheet();
 
   // Leaving the page (reload, close) with unsaved questions asks first.
   useUnsavedChangesWarning(dirty);
@@ -303,17 +417,32 @@ export function EvaluationsTab({ course }: { course: CourseDetail }) {
                     ? `${plural(module.evaluation.question_count, "pregunta")} · aprueba con ${module.evaluation.passing_score}%`
                     : "Sin evaluación"}
                 </span>
+                <PendingQuizTag module={module} />
               </span>
               <ChevronDown className={cn("h-5 w-5 shrink-0 transition-transform", expanded && "rotate-180")} />
             </button>
             {expanded && (
               <div className="border-t border-border bg-mist/40 p-5">
-                <ModuleEvaluation module={module} courseId={course.id} onDirtyChange={setDirty} />
+                <ModuleEvaluation
+                  module={module}
+                  courseId={course.id}
+                  dirty={dirty}
+                  onDirtyChange={setDirty}
+                  onRequestChange={(options) => revisions.show({ moduleId: module.id, target: "quiz", ...options })}
+                />
               </div>
             )}
           </section>
         );
       })}
+
+      {/* Applying a change replaces the open quiz's draft: not while it has edits not saved. */}
+      <RevisionSheet
+        course={course}
+        {...revisions.sheet}
+        unsaved={dirty && openId === revisions.moduleId}
+        focusFallbackId={({ moduleId }) => quizChangesId(moduleId)}
+      />
     </div>
   );
 }
