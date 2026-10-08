@@ -20,7 +20,7 @@ import {
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { SectionHeader } from "@/components/layout/section-header";
-import { ACTIVITY_LABELS, ActivityPlayer } from "@/components/learn/activities/activity-player";
+import { ACTIVITY_LABELS } from "@/components/learn/activities/activity-player";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -50,6 +50,7 @@ import { twoDigits } from "@/lib/format";
 import { useUpload } from "@/lib/hooks/use-upload";
 import { toastError } from "@/lib/notify";
 import { ActivityForm, TEMPLATES, type AnySpec } from "./activities/activity-form";
+import { ActivityPreview } from "./activity-preview";
 import { focusMoveButton, MoveButtons } from "./move-buttons";
 
 const TYPES: ActivityType[] = ["decision", "inspection", "simulator", "quick"];
@@ -261,6 +262,9 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
         <ol className="space-y-2" aria-label={`Actividades de ${module.title}`}>
           {activities.map((activity, index) => {
             const ready = activity.status === "ready";
+            const cannotPublish = !ready && activity.problems.length > 0;
+            const PublishIcon = ready ? EyeOff : Eye;
+            const publishLabel = ready ? "Despublicar" : "Publicar";
             return (
               <li key={activity.id} className="flex flex-wrap items-center gap-3 border border-border bg-white px-4 py-3">
                 <div className="min-w-0 flex-1">
@@ -322,11 +326,11 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
                     variant={ready ? "ghost" : "accent"}
                     size="sm"
                     className="hidden sm:inline-flex"
-                    disabled={!ready && activity.problems.length > 0}
+                    disabled={cannotPublish}
                     onClick={() => void toggleStatus(activity)}
-                    aria-label={`${ready ? "Despublicar" : "Publicar"} ${activity.title}`}
+                    aria-label={`${publishLabel} ${activity.title}`}
                   >
-                    {ready ? <EyeOff /> : <Eye />} {ready ? "Despublicar" : "Publicar"}
+                    <PublishIcon /> {publishLabel}
                   </Button>
                   <Button
                     variant="ghost"
@@ -347,11 +351,8 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
                       <DropdownMenuItem onSelect={() => setEditing(activity)}>
                         <Pencil /> Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={!ready && activity.problems.length > 0}
-                        onSelect={() => void toggleStatus(activity)}
-                      >
-                        {ready ? <EyeOff /> : <Eye />} {ready ? "Despublicar" : "Publicar"}
+                      <DropdownMenuItem disabled={cannotPublish} onSelect={() => void toggleStatus(activity)}>
+                        <PublishIcon /> {publishLabel}
                       </DropdownMenuItem>
                       <DropdownMenuItem destructive onSelect={() => void remove(activity)}>
                         <Trash2 /> Eliminar
@@ -378,14 +379,11 @@ function ModuleActivities({ courseId, language, module }: { courseId: number; la
         />
       )}
       {trying && (
-        <ActivityPlayer
+        <ActivityPreview
           key={trying.session}
           activity={trying.activity}
-          open
-          onOpenChange={(open) => !open && setTrying(null)}
-          allowUntimed={false}
           language={language}
-          api={{ start: () => activitiesApi.preview(trying.activity.id), move: activitiesApi.previewMove }}
+          onClose={() => setTrying(null)}
         />
       )}
     </section>

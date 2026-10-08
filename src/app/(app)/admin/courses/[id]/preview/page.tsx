@@ -4,15 +4,14 @@ import { useState } from "react";
 import { notFound, useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, HelpCircle } from "lucide-react";
+import { ActivityPreview } from "@/components/courses/activity-preview";
 import { ModuleVideo } from "@/components/courses/module-video";
 import { BackLink } from "@/components/layout/back-link";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageError, PageLoading } from "@/components/layout/query-state";
 import { ActivityBlock } from "@/components/learn/activities/activity-block";
-import { ActivityPlayer } from "@/components/learn/activities/activity-player";
 import { Reading } from "@/components/learn/reading";
 import { Button } from "@/components/ui/button";
-import { activitiesApi } from "@/lib/api/activities";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { LearnerActivitySummary, LearnerModule } from "@/lib/api/types";
 import { formatDuration, plural, twoDigits } from "@/lib/format";
@@ -20,6 +19,7 @@ import { safeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 
 function ModuleContent({ module, onTry }: { module: LearnerModule; onTry: (activity: LearnerActivitySummary) => void }) {
+  const documentUrl = safeHttpUrl(module.document?.url);
   return (
     <article className="space-y-6">
       <div>
@@ -28,9 +28,9 @@ function ModuleContent({ module, onTry }: { module: LearnerModule; onTry: (activ
         {module.description && <p className="mt-3 text-muted-foreground">{module.description}</p>}
       </div>
       <ModuleVideo module={module} />
-      {module.document && safeHttpUrl(module.document.url) && (
+      {documentUrl && (
         <Button variant="outline" asChild>
-          <a href={safeHttpUrl(module.document.url)} target="_blank" rel="noreferrer">
+          <a href={documentUrl} target="_blank" rel="noreferrer">
             <FileText /> Abrir documento
           </a>
         </Button>
@@ -147,14 +147,11 @@ export default function CoursePreviewPage() {
       )}
 
       {trying && (
-        <ActivityPlayer
+        <ActivityPreview
           key={trying.session}
           activity={trying.activity}
-          open
-          onOpenChange={(open) => !open && setTrying(null)}
-          allowUntimed={false}
           language={course.language}
-          api={{ start: () => activitiesApi.preview(trying.activity.id), move: activitiesApi.previewMove }}
+          onClose={() => setTrying(null)}
         />
       )}
     </>

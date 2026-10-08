@@ -201,6 +201,30 @@ interface FormProps<S> {
   onChange: (spec: S) => void;
 }
 
+interface RemoveButtonProps {
+  label: string;
+  disabled?: boolean;
+  title?: string;
+  onClick: () => void;
+}
+
+/** The trash can at the end of a row of a list. */
+function RemoveButton({ label, disabled, title, onClick }: RemoveButtonProps) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={label}
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+    >
+      <Trash2 />
+    </Button>
+  );
+}
+
 function DecisionForm({ spec, onChange }: FormProps<DecisionSpec>) {
   const setNode = (index: number, changes: Partial<NodeSpec>) =>
     onChange({ nodes: replaceAt(spec.nodes, index, { ...spec.nodes[index], ...changes }) });
@@ -336,14 +360,11 @@ function DecisionForm({ spec, onChange }: FormProps<DecisionSpec>) {
           type="button"
           variant="outline"
           onClick={() => {
-            const ids = new Set(spec.nodes.map((node) => node.id));
-            let number = spec.nodes.length + 1;
-            while (ids.has(`s${number}`)) number += 1;
             onChange({
               nodes: [
                 ...spec.nodes,
                 {
-                  id: `s${number}`,
+                  id: freeId("s", spec.nodes),
                   speaker: "Cliente",
                   situation: "Lo que dice o pasa después.",
                   choices: [
@@ -427,17 +448,12 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
                 onChange({ ...spec, verdicts: replaceAt(spec.verdicts, index, { ...verdict, label: event.target.value }) })
               }
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Quitar decisión ${index + 1}`}
+            <RemoveButton
+              label={`Quitar decisión ${index + 1}`}
               disabled={spec.verdicts.length <= 2 || spec.items.some((item) => item.answer === verdict.id)}
               title="Solo se quita una decisión que no es la respuesta de ningún elemento"
               onClick={() => onChange({ ...spec, verdicts: removeAt(spec.verdicts, index) })}
-            >
-              <Trash2 />
-            </Button>
+            />
           </div>
         ))}
         {spec.verdicts.length < 4 && (
@@ -521,16 +537,11 @@ function InspectionForm({ spec, onChange }: FormProps<InspectionSpec>) {
                     setItem(index, { facts: replaceAt(item.facts, at, { ...fact, value: event.target.value }) })
                   }
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Quitar dato ${at + 1} de ${item.label}`}
+                <RemoveButton
+                  label={`Quitar dato ${at + 1} de ${item.label}`}
                   disabled={item.facts.length <= 1}
                   onClick={() => setItem(index, { facts: removeAt(item.facts, at) })}
-                >
-                  <Trash2 />
-                </Button>
+                />
               </div>
             ))}
             {item.facts.length < 5 && (
@@ -831,16 +842,11 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
                 maxLength={80}
                 onChange={(event) => onChange({ ...spec, items: replaceAt(spec.items, index, event.target.value) })}
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Quitar paso ${index + 1}`}
+              <RemoveButton
+                label={`Quitar paso ${index + 1}`}
                 disabled={spec.items.length <= 4}
                 onClick={() => onChange({ ...spec, items: removeAt(spec.items, index) })}
-              >
-                <Trash2 />
-              </Button>
+              />
             </div>
           ))}
           {spec.items.length < 8 && (
@@ -874,16 +880,11 @@ function QuickForm({ spec, onChange }: FormProps<QuickSpec>) {
                   onChange({ ...spec, pairs: replaceAt(spec.pairs, index, { ...pair, right: event.target.value }) })
                 }
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Quitar pareja ${index + 1}`}
+              <RemoveButton
+                label={`Quitar pareja ${index + 1}`}
                 disabled={spec.pairs.length <= 4}
                 onClick={() => onChange({ ...spec, pairs: removeAt(spec.pairs, index) })}
-              >
-                <Trash2 />
-              </Button>
+              />
             </div>
           ))}
           {spec.pairs.length < 8 && (
