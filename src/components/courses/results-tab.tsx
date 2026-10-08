@@ -4,21 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3 } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { QueryError } from "@/components/layout/query-state";
+import { Stat } from "@/components/people/stat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { CourseDetail, ModuleAnalytics } from "@/lib/api/types";
 import { formatPercent, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { questionTypeLabel } from "./question-model";
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col-reverse">
-      <dt className="mt-1 text-[10.5px] font-bold uppercase tracking-label text-muted-foreground">{label}</dt>
-      <dd className="font-display text-4xl font-medium tracking-tightest">{value}</dd>
-    </div>
-  );
-}
 
 function accuracyTone(accuracy: number | null) {
   if (accuracy === null) return "bg-fog";

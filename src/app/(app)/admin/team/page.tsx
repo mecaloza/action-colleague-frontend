@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { KeyRound, MoreHorizontal, Pencil, Search, UserCheck, UserPlus, UserX, Users } from "lucide-react";
+import { Eye, KeyRound, MoreHorizontal, Pencil, Search, UserCheck, UserPlus, UserX, Users } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHero } from "@/components/layout/page-hero";
@@ -147,17 +147,15 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActi
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-ink-800 text-[11px] font-bold text-white">{initials(person.name)}</span>
           <div className="min-w-0">
-            <button
-              type="button"
-              className="-my-2.5 block max-w-[40vw] truncate py-2.5 text-left font-semibold hover:text-accent sm:max-w-[220px]"
-              onClick={(event) => {
-                event.stopPropagation();
-                onOpen(person);
-              }}
+            {/* The name goes to their page; the rest of the row opens the quick view ("Vista rápida" in the menu). */}
+            <Link
+              href={`/admin/team/${person.id}`}
+              className="-my-2.5 block max-w-[40vw] truncate py-2.5 font-semibold hover:text-accent sm:max-w-[220px]"
+              onClick={(event) => event.stopPropagation()}
             >
               {person.name}
               {isSelf && <span className="ml-2 text-xs font-normal text-muted-foreground">(tú)</span>}
-            </button>
+            </Link>
             <p className="max-w-[40vw] truncate text-xs text-muted-foreground sm:max-w-[240px]">{person.email}</p>
             {/* Smaller screens hide the other columns: what they say goes here, under the name. */}
             {job && <p className="max-w-[40vw] truncate text-xs text-muted-foreground md:hidden">{job}</p>}
@@ -198,6 +196,9 @@ function PersonRow({ person, isSelf, onOpen, onEdit, onNewPassword, onToggleActi
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
+            <DropdownMenuItem onSelect={() => onOpen(person)}>
+              <Eye /> Vista rápida
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onEdit(person)}>
               <Pencil /> Editar datos
             </DropdownMenuItem>

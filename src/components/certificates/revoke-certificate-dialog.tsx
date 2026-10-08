@@ -27,10 +27,14 @@ interface RevokeCertificateDialogProps {
   /** Kept by the page while the dialog animates closed. */
   certificate: AdminCertificate | null;
   onClose: () => void;
+  /** Once it is revoked (before closing). */
+  onRevoked?: (certificate: AdminCertificate) => void;
+  /** Where the focus goes as it closes (by default, back to whatever opened it). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /** Revoke a certificate, with an optional reason. The page gives it a new `key` on each opening: it starts empty. */
-export function RevokeCertificateDialog({ open, certificate, onClose }: RevokeCertificateDialogProps) {
+export function RevokeCertificateDialog({ open, certificate, onClose, onRevoked, onCloseAutoFocus }: RevokeCertificateDialogProps) {
   const { refreshCertificates } = useCertificateCache();
   const [reason, setReason] = useState("");
   const revoke = useMutation({
@@ -38,6 +42,7 @@ export function RevokeCertificateDialog({ open, certificate, onClose }: RevokeCe
     onSuccess: (revoked) => {
       void refreshCertificates();
       toast.success(`Certificado ${revoked.code} revocado`);
+      onRevoked?.(revoked);
       onClose();
     },
     onError: toastError,
@@ -46,7 +51,7 @@ export function RevokeCertificateDialog({ open, certificate, onClose }: RevokeCe
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !revoke.isPending && onClose()}>
       {/* On a computer it starts on the reason; on a phone, on the dialog (no keyboard over the question). */}
-      <DialogContent onOpenAutoFocus={keepKeyboardDown}>
+      <DialogContent onOpenAutoFocus={keepKeyboardDown} onCloseAutoFocus={onCloseAutoFocus}>
         {certificate && (
           <form
             noValidate

@@ -344,6 +344,7 @@ test("perfiles: renombrar, ver sus personas en el equipo y eliminarlo sin quitar
   const row = page.getByRole("row").filter({ hasText: member.email });
   await expect(row).toContainText("0 de 1 curso");
   await expect(row).not.toContainText(renamed);
-  await row.getByRole("button", { name: member.name, exact: true }).click();
+  await row.getByRole("button", { name: `Acciones para ${member.name}` }).click();
+  await page.getByRole("menuitem", { name: "Vista rápida" }).click();
   await expect(page.getByRole("dialog", { name: member.name })).toContainText("Sin perfil");
 });

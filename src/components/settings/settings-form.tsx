@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Award, Building2, ClipboardCheck, Loader2 } from "lucide-react";
+import { Award, Building2, ClipboardCheck, Loader2, Trophy } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { SwitchRow } from "@/components/ui/switch-row";
 import { ApiError } from "@/lib/api/client";
 import { type SettingsPatch, settingsApi, settingsKeys } from "@/lib/api/settings";
-import type { CertificateSettings, EvaluationDefaults, GeneralSettings, PlatformSettings } from "@/lib/api/types";
+import type { CertificateSettings, EvaluationDefaults, GeneralSettings, PlatformSettings, RankingSettings } from "@/lib/api/types";
 import { useLeaveGuard } from "@/lib/hooks/use-leave-guard";
 import { toastError } from "@/lib/notify";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ const PASSING = { min: 1, max: 100 };
 const ATTEMPTS = { min: 1, max: 10 };
 const VALIDITY = { min: 1, max: 120 };
 const MIN_SCORE = { min: 0, max: 100 };
+const POINTS = { min: 0, max: 1000 };
 const MAX_NAME = 200;
 
 const MESSAGES = {
@@ -35,6 +36,7 @@ const MESSAGES = {
   maxAttempts: `Escribe un número entero entre ${ATTEMPTS.min} y ${ATTEMPTS.max}.`,
   validityMonths: `Escribe un número de meses entre ${VALIDITY.min} y ${VALIDITY.max}, o déjalo vacío para que no venzan.`,
   minScore: `Escribe una calificación entre ${MIN_SCORE.min} y ${MIN_SCORE.max}, o déjala vacía para aceptar cualquiera.`,
+  points: `Escribe un número entero de puntos entre ${POINTS.min} y ${POINTS.max}.`,
 };
 
 /** A whole number typed (digits only) in [min, max]: null when empty, undefined when it isn't valid. */
@@ -48,7 +50,7 @@ function wholeIn(raw: string, { min, max }: { min: number; max: number }): numbe
 
 /** The form's fields as the parameters are saved. Numbers are the text typed: validated, not clamped. */
 function fieldsOf(settings: PlatformSettings) {
-  const { general, evaluations, certificates } = settings;
+  const { general, evaluations, certificates, ranking } = settings;
   return {
     companyName: general.company_name,
     timezone: general.timezone,
@@ -60,6 +62,11 @@ function fieldsOf(settings: PlatformSettings) {
     minScore: certificates.min_score?.toString() ?? "",
     signerName: certificates.signer_name,
     signerTitle: certificates.signer_title,
+    rankingVisible: ranking.visible_to_learners,
+    fullNames: ranking.show_full_names,
+    pointsModule: String(ranking.points_module),
+    pointsCourse: String(ranking.points_course),
+    pointsPath: String(ranking.points_path),
   };
 }
 
@@ -78,6 +85,9 @@ function valuesOf(fields: Fields, saved: PlatformSettings) {
     minScore: wholeIn(fields.minScore, MIN_SCORE),
     signerName: fields.signerName.trim(),
     signerTitle: fields.signerTitle.trim(),
+    pointsModule: wholeIn(fields.pointsModule, POINTS),
+    pointsCourse: wholeIn(fields.pointsCourse, POINTS),
+    pointsPath: wholeIn(fields.pointsPath, POINTS),
   };
 }
 
@@ -109,10 +119,22 @@ function changesOf(values: Values, fields: Fields, saved: PlatformSettings): Set
   if (values.signerName !== saved.certificates.signer_name) certificates.signer_name = values.signerName;
   if (values.signerTitle !== saved.certificates.signer_title) certificates.signer_title = values.signerTitle;
 
+  const ranking: Partial<RankingSettings> = {};
+  if (fields.rankingVisible !== saved.ranking.visible_to_learners) ranking.visible_to_learners = fields.rankingVisible;
+  if (fields.fullNames !== saved.ranking.show_full_names) ranking.show_full_names = fields.fullNames;
+  if (values.pointsModule != null && values.pointsModule !== saved.ranking.points_module) {
+    ranking.points_module = values.pointsModule;
+  }
+  if (values.pointsCourse != null && values.pointsCourse !== saved.ranking.points_course) {
+    ranking.points_course = values.pointsCourse;
+  }
+  if (values.pointsPath != null && values.pointsPath !== saved.ranking.points_path) ranking.points_path = values.pointsPath;
+
   const patch: SettingsPatch = {};
   if (Object.keys(general).length) patch.general = general;
   if (Object.keys(evaluations).length) patch.evaluations = evaluations;
   if (Object.keys(certificates).length) patch.certificates = certificates;
+  if (Object.keys(ranking).length) patch.ranking = ranking;
   return patch;
 }
 
@@ -206,6 +228,9 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
   const attemptsField = useRef<HTMLInputElement>(null);
   const validityField = useRef<HTMLInputElement>(null);
   const minScoreField = useRef<HTMLInputElement>(null);
+  const pointsModuleField = useRef<HTMLInputElement>(null);
+  const pointsCourseField = useRef<HTMLInputElement>(null);
+  const pointsPathField = useRef<HTMLInputElement>(null);
 
   const values = valuesOf(fields, settings);
   // A wrong value is said as it is typed; a required one left empty, once saving was tried.
@@ -224,6 +249,9 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
     maxAttempts: requiredError(values.maxAttempts, MESSAGES.maxAttempts),
     validityMonths: values.validityMonths === undefined ? MESSAGES.validityMonths : null,
     minScore: values.minScore === undefined ? MESSAGES.minScore : null,
+    pointsModule: requiredError(values.pointsModule, MESSAGES.points),
+    pointsCourse: requiredError(values.pointsCourse, MESSAGES.points),
+    pointsPath: requiredError(values.pointsPath, MESSAGES.points),
   };
   // In the order of the page: the first one gets the focus.
   const problems = [
@@ -232,6 +260,9 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
     { invalid: values.maxAttempts == null, field: attemptsField },
     { invalid: values.validityMonths === undefined, field: validityField },
     { invalid: values.minScore === undefined, field: minScoreField },
+    { invalid: values.pointsModule == null, field: pointsModuleField },
+    { invalid: values.pointsCourse == null, field: pointsCourseField },
+    { invalid: values.pointsPath == null, field: pointsPathField },
   ].filter((problem) => problem.invalid);
 
   const patch = changesOf(values, fields, settings);
@@ -401,6 +432,62 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
           timezone={values.timezone}
           enabled={fields.enabled}
         />
+      </Section>
+
+      <Section
+        id="settings-ranking"
+        icon={<Trophy className="h-5 w-5 text-accent" aria-hidden />}
+        title="Ranking"
+        hint="Quién ve el ranking y cuántos puntos da completar cada cosa. Cambiar los puntos no cambia los que ya se ganaron."
+      >
+        <div className="divide-y divide-border border border-border bg-white">
+          <SwitchRow
+            id="settings-ranking-visible"
+            label="Visible para los colaboradores"
+            hint="Ven quién suma más puntos hoy, en la semana, en el mes y desde siempre, entre todos y en cada una de sus rutas. Tú lo ves siempre, en el panel y en cada ruta."
+            checked={fields.rankingVisible}
+            onCheckedChange={(rankingVisible) => edit({ rankingVisible })}
+          />
+          <SwitchRow
+            id="settings-ranking-names"
+            label="Mostrar nombres completos"
+            hint="Apagado, ven el primer nombre y una inicial: «Ana P.»."
+            checked={fields.fullNames}
+            onCheckedChange={(fullNames) => edit({ fullNames })}
+          />
+        </div>
+        <div>
+          <div className="grid gap-6 sm:grid-cols-3">
+            <NumberField
+              id="settings-points-module"
+              label="Puntos por módulo"
+              value={fields.pointsModule}
+              onChange={(pointsModule) => edit({ pointsModule })}
+              error={errors.pointsModule}
+              inputRef={pointsModuleField}
+            />
+            <NumberField
+              id="settings-points-course"
+              label="Puntos por curso"
+              value={fields.pointsCourse}
+              onChange={(pointsCourse) => edit({ pointsCourse })}
+              error={errors.pointsCourse}
+              inputRef={pointsCourseField}
+            />
+            <NumberField
+              id="settings-points-path"
+              label="Puntos por ruta"
+              value={fields.pointsPath}
+              onChange={(pointsPath) => edit({ pointsPath })}
+              error={errors.pointsPath}
+              inputRef={pointsPathField}
+            />
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Se ganan una sola vez, al completarlo. Además, cada actividad y cada evaluación dan lo que la persona mejora su
+            mejor resultado: hasta 100 puntos cada una.
+          </p>
+        </div>
       </Section>
 
       {/* Always at hand on a long page: what is left to save, and the button. */}

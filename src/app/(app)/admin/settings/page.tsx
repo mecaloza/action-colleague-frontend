@@ -7,7 +7,7 @@ import { SettingsForm } from "@/components/settings/settings-form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { settingsApi, settingsKeys } from "@/lib/api/settings";
 
-/** "Parámetros": what holds for the whole platform (the company, new evaluations, certificates). */
+/** "Parámetros": what holds for the whole platform (the company, new evaluations, certificates, the ranking). */
 export default function SettingsPage() {
   const settings = useQuery({ queryKey: settingsKeys.all, queryFn: settingsApi.get });
   return (
@@ -15,7 +15,7 @@ export default function SettingsPage() {
       <PageHero
         eyebrow="Administración"
         title="Parámetros"
-        description="Lo que vale para toda la plataforma: el nombre de tu empresa, cómo nacen las evaluaciones y cuándo se entregan los certificados."
+        description="Lo que vale para toda la plataforma: el nombre de tu empresa, cómo nacen las evaluaciones, cuándo se entregan los certificados y cómo se ganan los puntos del ranking."
       />
       <div className="container py-4">
         {settings.isPending ? (

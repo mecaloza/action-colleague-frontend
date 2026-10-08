@@ -1,11 +1,12 @@
 import { http } from "./client";
-import type { CertificateSettings, EvaluationDefaults, GeneralSettings, PlatformSettings } from "./types";
+import type { CertificateSettings, EvaluationDefaults, GeneralSettings, PlatformSettings, RankingSettings } from "./types";
 
 /** What a save changes: only the keys sent, section by section (null empties the validity and the minimum score). */
 export interface SettingsPatch {
   general?: Partial<GeneralSettings>;
   evaluations?: Partial<EvaluationDefaults>;
   certificates?: Partial<CertificateSettings>;
+  ranking?: Partial<RankingSettings>;
 }
 
 export const settingsApi = {

@@ -10,16 +10,18 @@ import { PageError, PageLoading } from "@/components/layout/query-state";
 import { PathCoursesTab } from "@/components/paths/path-courses-tab";
 import { PathHeader } from "@/components/paths/path-header";
 import { PathPeopleTab } from "@/components/paths/path-people-tab";
+import { PathRankingTab } from "@/components/paths/path-ranking-tab";
 import { PathSettingsTab } from "@/components/paths/path-settings-tab";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError } from "@/lib/api/client";
 import { pathKeys, pathsApi } from "@/lib/api/paths";
 
-/** The path's sections, in order: `?tab=` opens one (a link to its people, its settings...). */
+/** The path's sections, in order: `?tab=` opens one (a link to its people, its ranking, its settings...). */
 const TABS = [
   { value: "courses", label: "Cursos" },
   { value: "people", label: "Personas" },
+  { value: "ranking", label: "Ranking" },
   { value: "settings", label: "Ajustes" },
 ] as const;
 
@@ -88,6 +90,9 @@ function PathEditor() {
           </TabsContent>
           <TabsContent value="people">
             <PathPeopleTab path={path} />
+          </TabsContent>
+          <TabsContent value="ranking">
+            <PathRankingTab path={path} />
           </TabsContent>
           {/* Kept mounted: switching tabs never loses unsaved settings. */}
           <TabsContent value="settings" forceMount className="data-[state=inactive]:hidden">

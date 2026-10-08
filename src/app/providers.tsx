@@ -18,6 +18,8 @@ const TOAST_OPTIONS = {
 };
 // On a phone, toasts at the top (clear of the notch): at the bottom they would cover a panel's buttons.
 const PHONE_TOAST_OFFSET = { top: "max(16px, env(safe-area-inset-top))" };
+// Elsewhere at the bottom, above a learner's tab bar when there is one (`--tab-bar`, globals.css).
+const TOAST_OFFSET = { bottom: "calc(24px + var(--tab-bar, 0px))" };
 
 const isClientError = (error: unknown) => error instanceof ApiError && error.status >= 400 && error.status < 500;
 
@@ -46,6 +48,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               {children}
               <Toaster
                 position={phone ? "top-center" : "bottom-right"}
+                offset={TOAST_OFFSET}
                 mobileOffset={PHONE_TOAST_OFFSET}
                 toastOptions={TOAST_OPTIONS}
               />

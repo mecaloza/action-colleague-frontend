@@ -449,27 +449,217 @@ export interface CertificateSettings {
   signer_title: string;
 }
 
+/** Who sees the ranking, and the points each completion earns (0-1000; earned once, never paid again). */
+export interface RankingSettings {
+  /** Collaborators see it (admins always do). */
+  visible_to_learners: boolean;
+  /** Else learners read "Ana P.": the first name and the initial of the next one. */
+  show_full_names: boolean;
+  points_module: number;
+  points_course: number;
+  points_path: number;
+}
+
 export interface PlatformSettings {
   general: GeneralSettings;
   evaluations: EvaluationDefaults;
   certificates: CertificateSettings;
+  ranking: RankingSettings;
+}
+
+/** The parameters a learner's app needs. */
+export interface LearnerSettings {
+  ranking_visible: boolean;
+  company_name: string;
+}
+
+// Ranking: who earned the most points in a period, over every course or in a path. Points come from improving one's
+// best in activities and quizzes (up to 100 each) and from completing modules, courses and paths.
+/** Today, this week (from Monday), this month or since ever, in the platform's time zone. */
+export type RankingPeriod = "today" | "week" | "month" | "all";
+
+export interface RankingItem {
+  /** Ties share it (1, 2, 2, 4). */
+  rank: number;
+  user: { id: number; name: string; profile: ProfileRef | null };
+  points: number;
+  /** Completed for the first time in the period (and the path's courses, with a path). */
+  completed_courses: number;
+}
+
+/** The admin's: active collaborators who earned points in the period, best first. */
+export interface Ranking {
+  period: RankingPeriod;
+  /** When the period began, with the platform's offset (null for "all"). */
+  starts_at: string | null;
+  path: PathRef | null;
+  items: RankingItem[];
+  /** Everyone ranked, beyond the items listed. */
+  total_people: number;
+}
+
+export interface LearnerRankingItem {
+  rank: number;
+  /** Full, or "Ana P." when the parameters hide full names. */
+  name: string;
+  initials: string;
+  points: number;
+  is_me: boolean;
+}
+
+/** A learner's: the top 10 and their own place. Hidden by the parameters: `visible` false and nothing else. */
+export interface LearnerRanking {
+  visible: boolean;
+  period: RankingPeriod;
+  starts_at: string | null;
+  path: PathRef | null;
+  items: LearnerRankingItem[];
+  /** Null until they earn points in the period (and the path). */
+  me: { rank: number; points: number } | null;
+  total_people: number;
+}
+
+// A person's overview for admins ("ficha"): who they are, their numbers, paths, courses module by module,
+// certificates and the latest things they did.
+export interface PersonUser {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+  position: string;
+  department: string;
+  profile: ProfileRef | null;
+  is_active: boolean;
+  created_at: string | null;
+  /** Their last sign-in or session refresh (null: never signed in). */
+  last_seen_at: string | null;
+}
+
+export interface PersonKpis {
+  courses_assigned: number;
+  courses_completed: number;
+  /** Mean of their best quiz scores (null: no quiz taken). */
+  average_score: number | null;
+  /** Ever earned. */
+  points: number;
+  /** Valid ones. */
+  certificates: number;
+  /** Different activities played to the end. */
+  activities_played: number;
+}
+
+/** One of their published paths, as they see it, and how they got it. */
+export interface PersonPath extends LearnerPath {
+  source: AssignmentSource;
+}
+
+export interface PersonActivity {
+  activity_id: number;
+  title: string;
+  type: ActivityType;
+  /** Of their finished plays (null: none yet). */
+  best_score: number | null;
+  max_score: number;
+  /** Finished plays. */
+  plays: number;
+  last_played_at: string | null;
+}
+
+export interface PersonModule {
+  module_id: number;
+  title: string;
+  order: number;
+  completed: boolean;
+  completed_at: string | null;
+  /** Null when the module has no quiz. */
+  quiz: QuizSummary | null;
+  /** The module's published activities, in order. */
+  activities: PersonActivity[];
+}
+
+export interface PersonCourse {
+  course_id: number;
+  title: string;
+  /** Of their enrollment. */
+  status: EnrollmentStatus;
+  /** Of the course (learners only see published ones). */
+  course_status: CourseStatus;
+  progress_pct: number;
+  enrolled_at: string | null;
+  completed_at: string | null;
+  /** Kept closed by one of their learning paths. */
+  locked: boolean;
+  /** The one not revoked. */
+  certificate: CertificateRef | null;
+  modules: PersonModule[];
+}
+
+export type RecentKind =
+  | "quiz_passed"
+  | "quiz_failed"
+  | "activity_finished"
+  | "module_completed"
+  | "course_completed"
+  | "certificate_issued"
+  | "path_completed";
+
+export interface RecentEvent {
+  kind: RecentKind;
+  at: string;
+  /** The module, activity, course, certificate or path. */
+  title: string;
+  /** The course it was in, the certificate's code, or "". */
+  detail: string;
+  /** 0-100: a quiz's score, a play's share of its maximum, a certificate's average. */
+  score: number | null;
+}
+
+export interface PersonOverview {
+  user: PersonUser;
+  kpis: PersonKpis;
+  /** Published, oldest assignment first (as they see them). */
+  paths: PersonPath[];
+  /** Newest enrollment first, drafts included. */
+  courses: PersonCourse[];
+  /** Newest first, revoked included. */
+  certificates: AdminCertificate[];
+  /** The latest 25, newest first. */
+  recent: RecentEvent[];
+}
+
+/** A person's attempts at a module's quiz, given back by an admin (their answers stay in the history). */
+export interface QuizReset {
+  attempts_used: number;
+  max_attempts: number;
+}
+
+export type DashboardActivityKind = "passed_quiz" | "failed_quiz" | "completed_course" | "certificate_issued" | "path_completed";
+
+export interface DashboardActivity {
+  kind: DashboardActivityKind;
+  user_id: number;
+  user_name: string;
+  /** A course's (a course certificate's too). Null for a path's, or once the course is gone. */
+  course_id: number | null;
+  /** The course's, or the course certificate's title ("" for a path's). */
+  course_title: string;
+  module_title: string | null;
+  /** A path completed, or a path's certificate (null once that path is gone). */
+  path_id: number | null;
+  path_title: string | null;
+  certificate_code: string | null;
+  score: number | null;
+  at: string | null;
 }
 
 export interface Dashboard {
   courses: { total: number; published: number; draft: number; generating: number };
+  /** Active: took a quiz, completed a module or played an activity in the last 30 days. */
   learners: { total: number; active_30d: number };
   enrollments: { total: number; completed: number; in_progress: number };
   completion_rate: number;
   average_score: number | null;
-  recent_activity: {
-    kind: "passed_quiz" | "failed_quiz" | "completed_course";
-    user_name: string;
-    course_id: number;
-    course_title: string;
-    module_title: string | null;
-    score: number | null;
-    at: string | null;
-  }[];
+  recent_activity: DashboardActivity[];
   top_courses: { id: number; title: string; enrolled_count: number; completion_rate: number }[];
 }
 
