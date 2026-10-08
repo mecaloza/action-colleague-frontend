@@ -19,6 +19,9 @@ import { toastError } from "@/lib/notify";
 import { ModuleMedia } from "./module-media";
 import { ModuleVideo } from "./module-video";
 
+/** The reading changed on the server while the admin edited it here. */
+const READING_CHANGED = "La lectura cambió mientras la editabas (por ejemplo, al aplicar o deshacer un cambio al guion).";
+
 /** What the panel offers for an AI module's script: asking the AI for a change, its history, producing it again. */
 interface ScriptActions {
   /** Opens "Cambios al guion" over this panel, on a new change or on the history. */
@@ -94,6 +97,13 @@ function ModuleForm({
       setInitial((current) => ({ ...current, content_text: module.content_text }));
     }
   }
+  // Edited here while it changed there: saving would replace the new one, so the panel says it (and asks first).
+  const readingOutdated =
+    serverReading !== initial.content_text && content !== initial.content_text && content !== serverReading;
+  const takeNewReading = () => {
+    setContent(serverReading);
+    setInitial((current) => ({ ...current, content_text: serverReading }));
+  };
   // Only what the admin edited here: other fields may have changed on the server meanwhile.
   const changes = {
     ...(title !== initial.title && { title: title.trim() }),
@@ -123,6 +133,19 @@ function ModuleForm({
     },
     onError: toastError,
   });
+
+  const submit = async () => {
+    if (
+      readingOutdated &&
+      !(await confirm({
+        title: "¿Guardar tu versión de la lectura?",
+        description: `${READING_CHANGED} Si guardas, tu versión reemplaza la nueva.`,
+        confirmLabel: "Guardar mi versión",
+      }))
+    )
+      return;
+    save.mutate();
+  };
 
   const remove = useMutation({
     mutationFn: () => coursesApi.removeModule(module.id),
@@ -183,14 +206,25 @@ function ModuleForm({
             onChange={(event) => setContent(event.target.value)}
             className="min-h-[220px] font-[450]"
             placeholder="Texto que acompaña al video o que se lee como módulo de lectura"
+            aria-describedby={readingOutdated ? "module-content-outdated" : undefined}
           />
+          <div aria-live="polite">
+            {readingOutdated && (
+              <p className="mt-2 border-l-2 border-warning bg-amber-50 px-3 py-2 text-sm">
+                <span id="module-content-outdated">{READING_CHANGED} Si guardas, tu versión reemplaza la nueva.</span>{" "}
+                <Button variant="link" className="text-[13px]" onClick={takeNewReading}>
+                  Usar la lectura nueva
+                </Button>
+              </p>
+            )}
+          </div>
         </div>
       </SheetBody>
       <SheetFooter>
         <Button variant="ghost" className="text-destructive hover:bg-red-50" onClick={confirmRemove} loading={remove.isPending}>
           <Trash2 /> Eliminar
         </Button>
-        <Button onClick={() => save.mutate()} disabled={!dirty || !title.trim()} loading={save.isPending}>
+        <Button onClick={() => void submit()} disabled={!dirty || !title.trim()} loading={save.isPending}>
           Guardar cambios
         </Button>
       </SheetFooter>

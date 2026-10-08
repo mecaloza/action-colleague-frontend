@@ -411,10 +411,17 @@ function joined(parts: string[]): string {
   return parts.length < 2 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} y ${parts[parts.length - 1]}`;
 }
 
+/**
+ * The change leaves the module's video behind: it has one, and the change touches its scenes. Said by the scenes, not
+ * by `impact.needs_render`, which was worked out as the AI proposed it (maybe before the video was made).
+ */
+export const leavesVideoBehind = (changes: RevisionChanges, hasVideo: boolean) => hasVideo && changes.scenes.length > 0;
+
 /** What producing the video again takes after the change, in plain Spanish (one sentence per line). */
-function impactLines(impact: RevisionImpact | null, hasVideo: boolean): string[] {
+function impactLines(impact: RevisionImpact | null, hasVideo: boolean, needsRender: boolean): string[] {
   if (!hasVideo) return ["El módulo aún no tiene video: el cambio se verá cuando lo produzcas."];
-  if (!impact?.needs_render) return ["No hace falta volver a producir el video: el cambio no toca sus escenas."];
+  if (!needsRender) return ["No hace falta volver a producir el video: el cambio no toca sus escenas."];
+  if (!impact) return ["El video sigue como está hasta que lo vuelvas a producir."];
   const parts: string[] = [];
   const narrated = impact.narration_scenes.length;
   if (narrated) {
@@ -438,14 +445,14 @@ function impactLines(impact: RevisionImpact | null, hasVideo: boolean): string[]
 }
 
 /** What the change means for the module's video: what producing it again takes, or why it isn't needed. */
-export function RevisionImpactPanel({ impact, hasVideo }: { impact: RevisionImpact | null; hasVideo: boolean }) {
+export function RevisionImpactPanel({ changes, hasVideo }: { changes: RevisionChanges; hasVideo: boolean }) {
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="space-y-1 border border-border bg-mist/60 px-4 py-3 text-sm">
       <h4 id={headingId} className="mb-1.5 text-[11px] font-bold uppercase tracking-label text-ink-700">
         Para el video
       </h4>
-      {impactLines(impact, hasVideo).map((line) => (
+      {impactLines(changes.impact, hasVideo, leavesVideoBehind(changes, hasVideo)).map((line) => (
         <p key={line}>{line}</p>
       ))}
     </section>

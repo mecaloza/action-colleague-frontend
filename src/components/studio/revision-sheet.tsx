@@ -27,10 +27,12 @@ import { revisionKeys, revisionsApi } from "@/lib/api/revisions";
 import { STUDIO_STALE_MS, studioApi, studioKeys } from "@/lib/api/studio";
 import type {
   CourseDetail,
+  Job,
   ModuleAdmin,
   Revision,
   RevisionConflict,
   RevisionStatus,
+  RevisionSummary,
   StoryboardOut,
 } from "@/lib/api/types";
 import { plural, twoDigits } from "@/lib/format";
@@ -43,10 +45,11 @@ import { toggled } from "@/lib/utils";
 import { ChoiceButton } from "./choice-button";
 import { JobStatus } from "./job-status";
 import { inRenderSlot } from "./render-slots";
-import { IgnoredChanges, RevisionDiff, RevisionImpactPanel, sceneTitle } from "./revision-diff";
+import { IgnoredChanges, leavesVideoBehind, RevisionDiff, RevisionImpactPanel, sceneTitle } from "./revision-diff";
 import { isPendingRevision, RevisionHistory } from "./revision-history";
-import { isBusy } from "./steps";
-import { useRevisionCache } from "./use-revision-cache";
+import { type ModuleActivity, moduleActivity } from "./steps";
+import { useConfirmProduce } from "./use-produce-module";
+import { hasUnsavedScript, useRevisionCache } from "./use-revision-cache";
 import { useStudioCache } from "./use-studio-cache";
 
 /** A proposal being prepared is followed this often. */
@@ -62,6 +65,12 @@ const EXAMPLES = [
 
 const UNSAVED_APPLY = "Guarda o descarta los cambios del guion en el editor: aplicar la propuesta los reemplazaría.";
 const UNSAVED_UNDO = "Guarda o descarta los cambios del guion en el editor: deshacer un cambio los reemplazaría.";
+
+/** Why a proposal can't be applied while the module is busy (as the server says it). */
+const BUSY: Record<NonNullable<ModuleActivity>, string> = {
+  rendering: "El video se está produciendo; aplica el cambio cuando termine.",
+  drafting: "El guion se está generando; aplica el cambio cuando termine.",
+};
 
 export type RevisionTab = "change" | "history";
 
@@ -122,8 +131,8 @@ function useFocusOnMount<T extends HTMLElement>(enabled: boolean) {
 interface ComposeState {
   observation: string;
   sceneIds: string[];
-  /** The proposal it replaces ("Pedir otro ajuste"): the admin can go back to it. */
-  replacing: Revision | null;
+  /** The proposal it replaces ("Pedir otro ajuste", a scene's own button): the admin can go back to it. */
+  replacing: Pick<RevisionSummary, "id" | "observation"> | null;
 }
 
 /** What the change tab shows: the form for an observation, or a change (being prepared, to review, failed...). */
@@ -141,6 +150,8 @@ interface RevisionSheetProps {
   onClose: () => void;
   /** The module's script has edits not saved in the editor: applying or undoing would replace them. */
   unsaved?: boolean;
+  /** The course's active jobs, where the page has them: what a busy module is doing (otherwise it is guessed). */
+  jobs?: Job[];
 }
 
 /**
@@ -148,7 +159,15 @@ interface RevisionSheetProps {
  * as a diff with what producing the video again takes -> applied (maybe with the video), asked again or discarded.
  * Its history lists every change to the script, applied ones with «Deshacer».
  */
-export function RevisionSheet({ course, request, open, openingKey, onClose, unsaved = false }: RevisionSheetProps) {
+export function RevisionSheet({
+  course,
+  request,
+  open,
+  openingKey,
+  onClose,
+  unsaved = false,
+  jobs = [],
+}: RevisionSheetProps) {
   const revised = course.modules.find((each) => each.id === request?.moduleId) ?? null;
   return (
     <Sheet open={open && revised !== null} onOpenChange={(next) => !next && onClose()}>
@@ -158,6 +177,7 @@ export function RevisionSheet({ course, request, open, openingKey, onClose, unsa
             key={openingKey}
             course={course}
             module={revised}
+            activity={moduleActivity(revised, jobs)}
             request={request}
             unsaved={unsaved}
             onClose={onClose}
@@ -171,12 +191,13 @@ export function RevisionSheet({ course, request, open, openingKey, onClose, unsa
 interface PanelProps {
   course: CourseDetail;
   module: ModuleAdmin;
+  activity: ModuleActivity;
   request: RevisionRequest;
   unsaved: boolean;
   onClose: () => void;
 }
 
-function RevisionPanel({ course, module, request, unsaved, onClose }: PanelProps) {
+function RevisionPanel({ course, module, activity, request, unsaved, onClose }: PanelProps) {
   const cache = useRevisionCache();
   const unsavedId = useId();
   const [tab, setTab] = useState<RevisionTab>(request.tab ?? "change");
@@ -191,6 +212,8 @@ function RevisionPanel({ course, module, request, unsaved, onClose }: PanelProps
     queryFn: ({ signal }) => inRenderSlot(signal, () => studioApi.storyboard(module.id, signal)),
     gcTime: 0, // the script editor's own copy (same key): dropped as it closes, so it never opens stale
     staleTime: STUDIO_STALE_MS,
+    // A new copy restarts the editor's form: never over its unsaved edits (as the editor itself does).
+    refetchOnMount: !unsaved,
   });
   const numbers = new Map((storyboard.data?.scenes ?? []).map((scene, index) => [scene.id, index + 1]));
 
@@ -208,14 +231,21 @@ function RevisionPanel({ course, module, request, unsaved, onClose }: PanelProps
   });
   const compose = (from?: Partial<ComposeState>) => go(composing(from));
   // As it opens (from the server's answer, not a copy kept from before): a proposal still waiting is shown first
-  // (asking for another replaces it); otherwise the form.
+  // (asking for another replaces it); otherwise the form. A scene's own button opens the form on that scene, saying
+  // which proposal it replaces; not while one is being prepared (another can't be asked until it ends).
   if (view === null && !history.isPending && !history.isFetching) {
     const pending = history.data?.find(isPendingRevision);
-    const first: ViewTarget = pending ? { kind: "revision", id: pending.id } : composing();
+    const first: ViewTarget = !pending
+      ? composing()
+      : request.sceneIds?.length && pending.status === "proposed"
+        ? composing({ replacing: pending })
+        : { kind: "revision", id: pending.id };
     setView({ ...first, serial: 0, focus: false });
   }
+  // The proposal the form replaces, to go back to it.
+  const replaced = view?.kind === "compose" ? view.replacing : null;
 
-  const shared = { course, module, storyboard, numbers };
+  const shared = { course, module, activity, storyboard, numbers };
   return (
     <>
       <SheetHeader className="border-b-0 pb-3">
@@ -239,8 +269,9 @@ function RevisionPanel({ course, module, request, unsaved, onClose }: PanelProps
               {...shared}
               start={view}
               focus={view.focus}
+              unsaved={unsaved}
               onProposed={(revision) => go({ kind: "revision", id: revision.id })}
-              onBack={view.replacing ? () => go({ kind: "revision", id: view.replacing!.id }) : undefined}
+              onBack={replaced ? () => go({ kind: "revision", id: replaced.id }) : undefined}
             />
           ) : (
             <RevisionView
@@ -303,6 +334,8 @@ function BlockedNote({ id, children }: { id: string; children: ReactNode }) {
 interface SharedProps {
   course: CourseDetail;
   module: ModuleAdmin;
+  /** What the module is doing (writing its script, producing its video): nothing is applied meanwhile. */
+  activity: ModuleActivity;
   /** The module's saved script: its scenes to choose from, and their numbers. */
   storyboard: UseQueryResult<StoryboardOut>;
   numbers: Map<string, number>;
@@ -320,13 +353,25 @@ function Asked({ revision, numbers }: { revision: Revision; numbers: Map<string,
 interface ComposeViewProps extends SharedProps {
   start: ComposeState;
   focus: boolean;
+  /** The script has edits not saved in the editor: its list of scenes isn't loaded again over them. */
+  unsaved: boolean;
   onProposed: (revision: Revision) => void;
   /** Back to the proposal the new one would replace. */
   onBack?: () => void;
 }
 
 /** The observation (with examples to start from) and the scenes it is about: the AI proposes, nothing is applied. */
-function ComposeView({ course, module, storyboard, numbers, start, focus, onProposed, onBack }: ComposeViewProps) {
+function ComposeView({
+  course,
+  module,
+  storyboard,
+  numbers,
+  start,
+  focus,
+  unsaved,
+  onProposed,
+  onBack,
+}: ComposeViewProps) {
   const formId = useId();
   const fieldId = useId();
   const examplesId = useId();
@@ -364,8 +409,9 @@ function ComposeView({ course, module, storyboard, numbers, start, focus, onProp
     onError: (problem) => {
       failed(course.id)(problem);
       void cache.refreshChanges(course.id, module.id);
-      // A chosen scene is gone from the script (edited elsewhere): its list is loaded again.
-      if (problem instanceof ApiError && problem.status === 422) void storyboard.refetch();
+      // A chosen scene is gone from the script (edited elsewhere): its list is loaded again, but not over edits not
+      // saved in the open editor (a new copy would restart it).
+      if (problem instanceof ApiError && problem.status === 422 && !unsaved) void storyboard.refetch();
     },
   });
 
@@ -607,21 +653,21 @@ function ProposingView(props: ViewProps) {
 
 /** The AI's proposal: what it changes scene by scene, what it costs in the video, and the admin's decision. */
 function ProposalView(props: ViewProps) {
-  const { course, module, storyboard, numbers, revision, focus, unsaved, onClose, onAnother, onAskAgain } = props;
+  const { course, module, activity, storyboard, numbers, revision, focus, unsaved, onClose, onAnother, onAskAgain } =
+    props;
   const queryClient = useQueryClient();
   const cache = useRevisionCache();
   const { trackJobs, failed } = useStudioCache();
+  const confirmProduce = useConfirmProduce(course);
   const blockedId = useId();
   const discard = useDiscard(props);
   // The script changed in these scenes since the proposal: it can't be applied as it is.
   const [stale, setStale] = useState<RevisionConflict | null>(null);
   const changes = revision.changes;
   const hasVideo = Boolean(module.video);
-  const blocked = unsaved
-    ? UNSAVED_APPLY
-    : isBusy(module)
-      ? "El módulo se está generando; aplica el cambio cuando termine."
-      : null;
+  // Producing the video again is offered only when the change touches what it shows.
+  const needsRender = changes !== null && leavesVideoBehind(changes, hasVideo);
+  const blocked = unsaved ? UNSAVED_APPLY : activity ? BUSY[activity] : null;
 
   const apply = useMutation({
     mutationFn: (render: boolean) => revisionsApi.apply(revision.id, render),
@@ -629,7 +675,7 @@ function ProposalView(props: ViewProps) {
       queryClient.setQueryData(revisionKeys.detail(applied.id), applied);
       if (renderJob) trackJobs(course.id, [renderJob]);
       void cache.refreshScript(course.id, module.id);
-      const videoBehind = !renderJob && hasVideo && applied.changes?.impact?.needs_render;
+      const videoBehind = !renderJob && applied.changes !== null && leavesVideoBehind(applied.changes, hasVideo);
       const notes = [
         applied.changes?.rebased && "Se aplicó sobre las ediciones hechas después de la propuesta.",
         videoBehind && "El video no lo refleja hasta que lo vuelvas a producir.",
@@ -639,7 +685,19 @@ function ProposalView(props: ViewProps) {
         // Undoing while its video is being produced is refused: then it waits in the history.
         action: renderJob
           ? undefined
-          : { label: "Deshacer", onClick: () => void cache.undo(course.id, module.id, applied.id) },
+          : {
+              label: "Deshacer",
+              onClick: (event) => {
+                // The toast outlives the panel: by now the open script may have edits that undoing would replace.
+                // Then it stays, to undo once they are saved or discarded.
+                if (hasUnsavedScript(module.id)) {
+                  event.preventDefault();
+                  toast.error(UNSAVED_UNDO);
+                  return;
+                }
+                void cache.undo(course.id, module.id, applied.id);
+              },
+            },
         duration: 10_000,
       });
       onClose();
@@ -658,6 +716,11 @@ function ProposalView(props: ViewProps) {
   const busy = apply.isPending || discard.isPending;
   const cannotApply = Boolean(blocked) || Boolean(stale) || busy;
   const questions = changes?.affected_question_ids.length ?? 0;
+
+  // As producing the video anywhere else: people taking a published course would get the new video.
+  const applyAndProduce = async () => {
+    if (await confirmProduce(module, "Aplicar y volver a producir")) apply.mutate(true);
+  };
 
   return (
     <>
@@ -703,7 +766,7 @@ function ProposalView(props: ViewProps) {
                 </AlertDescription>
               </Alert>
             )}
-            <RevisionImpactPanel impact={changes.impact} hasVideo={hasVideo} />
+            <RevisionImpactPanel changes={changes} hasVideo={hasVideo} />
           </>
         )}
         {blocked && <BlockedNote id={blockedId}>{blocked}</BlockedNote>}
@@ -725,7 +788,7 @@ function ProposalView(props: ViewProps) {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button
-            variant={hasVideo ? "outline" : "accent"}
+            variant={needsRender ? "outline" : "accent"}
             onClick={() => apply.mutate(false)}
             loading={apply.isPending && !apply.variables}
             disabled={cannotApply}
@@ -733,10 +796,10 @@ function ProposalView(props: ViewProps) {
           >
             <Check /> Aplicar
           </Button>
-          {hasVideo && (
+          {needsRender && (
             <Button
               variant="accent"
-              onClick={() => apply.mutate(true)}
+              onClick={() => void applyAndProduce()}
               loading={apply.isPending && apply.variables}
               disabled={cannotApply}
               aria-describedby={blocked ? blockedId : undefined}

@@ -233,7 +233,12 @@ export function ContentStep({ course, jobs, dirty, onDirtyChange, onContinue, op
       </ol>
 
       {/* Applying a change replaces the open script's copy: not while it has edits not saved. */}
-      <RevisionSheet course={course} {...revisions.sheet} unsaved={dirty && openId === revisions.moduleId} />
+      <RevisionSheet
+        course={course}
+        jobs={jobs}
+        {...revisions.sheet}
+        unsaved={dirty && openId === revisions.moduleId}
+      />
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { NO_VISUAL, narrationSeconds, SceneEditor, sceneVisual } from "./scene-e
 import { videoStyle } from "./steps";
 import { useLayoutWarnings } from "./use-layout-warnings";
 import { useProduceModule } from "./use-produce-module";
+import { useUnsavedScript } from "./use-revision-cache";
 import { useStudioCache } from "./use-studio-cache";
 
 const MAX_SCENES = 40;
@@ -150,6 +151,7 @@ function StoryboardForm({
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   // Closed (or replaced by the AI's rewrite): nothing is left unsaved.
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+  useUnsavedScript(module.id, dirty);
   // What doesn't fit or overlaps on the slides: the saved script's, or the draft's after a pause in the typing.
   const layout = useLayoutWarnings(module.id, scenes, saved);
   const warnings = warningsByScene(layout.warnings);

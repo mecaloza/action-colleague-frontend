@@ -93,6 +93,7 @@ test("un cambio a la escena 2 se revisa escena por escena, se aplica y se deshac
   const impact = sheet.getByRole("region", { name: "Para el video" });
   await expect(impact).toContainText(/Se vuelve a narrar 1 escena \(≈ \d+ caracteres\)\./);
   await expect(impact).toContainText("El video sigue como está hasta que lo vuelvas a producir.");
+  await expect(sheet.getByRole("button", { name: "Aplicar y volver a producir" })).toBeVisible();
 
   // Applied (without producing the video): the panel closes and a toast offers to undo it.
   const [applied] = await Promise.all([
@@ -164,6 +165,17 @@ test("una propuesta espera en el módulo hasta revisarla, y descartarla deja ref
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
   await expect(sceneButton).toBeFocused(); // back where the admin was
+  // Another scene's own button starts a change on that scene, saying which proposal it would replace.
+  await scene(page, 1).getByRole("button", { name: "Pedir un cambio en la escena 1" }).click();
+  await expect(sheet.getByRole("button", { name: "Escena 01 · Seguridad en planta" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(sheet).toContainText(`La propuesta anterior («${observation}») se reemplaza por la que pidas ahora.`);
+  await sheet.getByRole("button", { name: "Volver a la propuesta" }).click();
+  await expect(sheet.getByRole("heading", { name: "Propuesta de la IA" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
   const waiting = page.getByRole("button", { name: `Cambio por revisar: abrir la propuesta de ${MODULE_TITLE}` });
   await waiting.click();
   await expect(sheet.getByRole("heading", { name: "Propuesta de la IA" })).toBeVisible();
@@ -187,6 +199,7 @@ test("otro ajuste reemplaza la propuesta, y aplicarla puede volver a producir el
   const call = await adminApi(request);
   const { courseId, moduleId } = await scriptedCourse(call, "Otro ajuste");
   await produceVideo(call, courseId, moduleId);
+  await call("post", `/courses/${courseId}/publish`); // people taking it would see the new video
   // The module has its video: the studio opens on Producción.
   await page.goto(`/admin/courses/${courseId}/studio`);
   await expect(page.getByRole("heading", { name: "Tu curso está producido." })).toBeVisible();
@@ -213,10 +226,22 @@ test("otro ajuste reemplaza la propuesta, y aplicarla puede volver a producir el
   await expect(reading).toContainText("El casco se usa siempre en la planta.");
   await expect(reading).toContainText("- Revisado.");
 
-  // Applied and produced again in one step: no undo in the toast while the video is being made.
+  // Applied and produced again in one step, once the admin says so (the course is published, as anywhere else a video
+  // is produced): no undo in the toast while the video is being made.
+  const applyAndProduce = sheet.getByRole("button", { name: "Aplicar y volver a producir" });
+  const question = page.getByRole("dialog", { name: "¿Volver a producir el video?" });
+  await applyAndProduce.click();
+  await expect(question).toContainText(
+    `El curso está publicado: quienes lo toman verán el video nuevo de «${MODULE_TITLE}» al terminar.`,
+  );
+  await question.getByRole("button", { name: "Cancelar" }).click();
+  await expect(question).toBeHidden();
+  await expect(applyAndProduce).toBeVisible(); // nothing applied
+  expect(await sceneTitles(call, moduleId)).toEqual(["Seguridad en planta", "Reglas del casco", "Para recordar"]);
+  await applyAndProduce.click();
   const [applied] = await Promise.all([
     page.waitForResponse((response) => isApply(response.request())),
-    sheet.getByRole("button", { name: "Aplicar y volver a producir" }).click(),
+    question.getByRole("button", { name: "Aplicar y volver a producir" }).click(),
   ]);
   expect(applied.request().postDataJSON()).toEqual({ render: true });
   expect((await applied.json()).render_job).toMatchObject({ type: "video.render", module_id: moduleId });
@@ -309,4 +334,148 @@ test("si la IA no puede proponer el cambio, lo dice y deja pedirlo de nuevo", as
   await expect(sheet.getByLabel(FIELD)).toHaveValue("Revisa la escena 2.");
   await expect(sheet.getByLabel(FIELD)).toBeFocused();
   expect(await sceneTitles(call, moduleId)).toEqual(["Seguridad en planta", "Reglas del casco", "Para recordar"]);
+});
+
+test("un cambio que no toca las escenas no ofrece volver a producir el video", async ({ page, request }) => {
+  const call = await adminApi(request);
+  const { courseId, moduleId } = await scriptedCourse(call, "Solo la lectura");
+  await produceVideo(call, courseId, moduleId);
+  // The AI changes only the reading (simulated: the fake one always retitles a scene too).
+  await page.route(new RegExp(`${API}/revisions/\\d+$`), async (route) => {
+    const response = await route.fetch();
+    const revision = await response.json();
+    if (revision.status !== "proposed") return route.fulfill({ response });
+    const impact = { ...revision.changes.impact, narration_scenes: [], narration_chars: 0, needs_render: false };
+    await route.fulfill({ response, json: { ...revision, changes: { ...revision.changes, scenes: [], impact } } });
+  });
+  await page.goto(`/admin/courses/${courseId}`);
+  await rowOf(page).getByRole("button", { name: `Pedir un cambio al guion de ${MODULE_TITLE}` }).click();
+  const sheet = sheetOf(page);
+  await askChange(page, sheet, moduleId, "Agrega una línea a la lectura.");
+  await expect(sheet.getByRole("listitem", { name: "Lectura del módulo" })).toContainText("- Revisado.");
+
+  // Nothing the video shows changes: applying is all there is to do.
+  await expect(sheet.getByRole("region", { name: "Para el video" })).toContainText(
+    "No hace falta volver a producir el video: el cambio no toca sus escenas.",
+  );
+  await expect(sheet.getByRole("button", { name: "Aplicar y volver a producir" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Aplicar", exact: true })).toBeEnabled();
+});
+
+test("lo editado en el guion abierto no se pierde: el panel no lo recarga y «Deshacer» espera", async ({
+  page,
+  request,
+}) => {
+  const call = await adminApi(request);
+  const { courseId, moduleId } = await scriptedCourse(call, "Guion con cambios sin guardar");
+  // A clock the test can move forward: the open script's copy can stop being fresh at once.
+  await page.clock.install();
+  await page.goto(`/admin/courses/${courseId}/studio`);
+  const steps = page.getByRole("navigation", { name: "Pasos del estudio" });
+  await steps.getByRole("button", { name: /Contenido/ }).click();
+  await page.getByRole("button", { name: /Revisar guion/ }).click();
+  const sheet = sheetOf(page);
+
+  // A change to scene 2, left for later; then the admin edits scene 1 and scene 3 changes elsewhere (another tab).
+  await scene(page, 2).getByRole("button", { name: "Pedir un cambio en la escena 2" }).click();
+  await askChange(page, sheet, moduleId, "El título no se entiende.");
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  const narration = scene(page, 1).getByLabel("Narración");
+  const edited = "Bienvenida al módulo del casco.";
+  await narration.fill(edited);
+  const saved = await call<{ scenes: { slide: Record<string, unknown> }[] }>("get", `/modules/${moduleId}/storyboard`);
+  saved.scenes[2].slide.title = "Para recordar siempre";
+  await call("put", `/modules/${moduleId}/storyboard`, { scenes: saved.scenes });
+  await page.clock.fastForward(10_000);
+
+  // The proposal, opened from the module: it can't be applied over the edits, and the script isn't loaded again
+  // (a new copy would restart the editor).
+  const reloads: string[] = [];
+  page.on("request", (sent) => {
+    if (sent.method() === "GET" && sent.url().endsWith(`/modules/${moduleId}/storyboard`)) reloads.push(sent.url());
+  });
+  const waiting = page.getByRole("button", { name: `Cambio por revisar: abrir la propuesta de ${MODULE_TITLE}` });
+  await waiting.click();
+  await expect(sheet.getByRole("heading", { name: "Propuesta de la IA" })).toBeVisible();
+  const apply = sheet.getByRole("button", { name: "Aplicar", exact: true });
+  await expect(apply).toBeDisabled();
+  await expect(apply).toHaveAccessibleDescription(
+    "Guarda o descarta los cambios del guion en el editor: aplicar la propuesta los reemplazaría.",
+  );
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  await expect(narration).toHaveValue(edited);
+  expect(reloads).toEqual([]);
+
+  // The edit discarded, the proposal is applied (over the change made elsewhere): the open script shows it.
+  await page.getByRole("button", { name: "Descartar cambios" }).click();
+  await waiting.click();
+  await apply.click();
+  await expect(sheet).toBeHidden();
+  const toast = page.locator("[data-sonner-toast]").filter({ hasText: "Cambio aplicado" });
+  await expect(toast).toContainText("Se aplicó sobre las ediciones hechas después de la propuesta.");
+  await expect(scene(page, 2).getByLabel("Título")).toHaveValue("Revisado: Reglas del casco");
+
+  // Edited after it: the toast's «Deshacer» waits (it would replace the edit) and stays.
+  await narration.fill(edited);
+  await toast.getByRole("button", { name: "Deshacer" }).click();
+  const unsaved = page.locator("[data-sonner-toast]").filter({ hasText: "Guarda o descarta los cambios del guion" });
+  await expect(unsaved).toBeVisible();
+  await expect(toast).toBeVisible();
+  await expect(narration).toHaveValue(edited);
+  expect(await sceneTitles(call, moduleId)).toEqual([
+    "Seguridad en planta",
+    "Revisado: Reglas del casco",
+    "Para recordar siempre",
+  ]);
+
+  // The edit discarded, the same toast undoes the change (what changed elsewhere stays).
+  await page.getByRole("button", { name: "Descartar cambios" }).click();
+  await unsaved.hover(); // the toasts spread out, the first one in reach
+  await toast.getByRole("button", { name: "Deshacer" }).click();
+  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Cambio deshecho" })).toBeVisible();
+  await expect(scene(page, 2).getByLabel("Título")).toHaveValue("Reglas del casco");
+  expect(await sceneTitles(call, moduleId)).toEqual(["Seguridad en planta", "Reglas del casco", "Para recordar siempre"]);
+});
+
+test("la lectura que cambió mientras se editaba en el panel del módulo no se reemplaza sin avisar", async ({
+  page,
+  request,
+}) => {
+  const call = await adminApi(request);
+  const { courseId, moduleId } = await scriptedCourse(call, "Lectura editada");
+  await page.goto(`/admin/courses/${courseId}`);
+  await rowOf(page).getByRole("button", { name: `Editar ${MODULE_TITLE}` }).click();
+  const modulePanel = page.getByRole("dialog", { name: MODULE_TITLE });
+  const reading = modulePanel.getByLabel("Contenido de lectura");
+  const mine = "El casco se usa siempre, también en la bodega.";
+  await reading.fill(mine);
+
+  // A change that also rewrites the reading, asked and applied over the panel.
+  await modulePanel.getByRole("button", { name: "Pedir un cambio" }).click();
+  const sheet = sheetOf(page);
+  await askChange(page, sheet, moduleId, "Que la lectura nombre las dos reglas.");
+  await sheet.getByRole("button", { name: "Aplicar", exact: true }).click();
+  await expect(sheet).toBeHidden();
+
+  // The panel keeps the edit, says the reading changed meanwhile, and asks before saving over it.
+  const changed = /La lectura cambió mientras la editabas/;
+  await expect(modulePanel.getByText(changed)).toBeVisible();
+  await expect(reading).toHaveValue(mine);
+  await expect(reading).toHaveAccessibleDescription(changed);
+  const save = modulePanel.getByRole("button", { name: "Guardar cambios" });
+  await save.click();
+  const question = page.getByRole("dialog", { name: "¿Guardar tu versión de la lectura?" });
+  await expect(question).toContainText("Si guardas, tu versión reemplaza la nueva.");
+  await question.getByRole("button", { name: "Cancelar" }).click();
+  await expect(question).toBeHidden();
+
+  // The new one instead: nothing left to save.
+  const course = await call<{ modules: { content_text: string }[] }>("get", `/courses/${courseId}`);
+  expect(course.modules[0].content_text).toContain("- Revisado.");
+  await modulePanel.getByRole("button", { name: "Usar la lectura nueva" }).click();
+  await expect(reading).toHaveValue(course.modules[0].content_text);
+  await expect(modulePanel.getByText(changed)).toBeHidden();
+  await expect(save).toBeDisabled();
 });

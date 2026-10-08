@@ -1,12 +1,31 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { courseKeys } from "@/lib/api/courses";
 import { revisionKeys, revisionsApi } from "@/lib/api/revisions";
 import { studioKeys } from "@/lib/api/studio";
 import { toastError } from "@/lib/notify";
+
+// The modules whose script has edits not saved in an open editor, in this tab. Undoing a change to one would replace
+// them (the editor takes the server's new copy): the panel holds its buttons back, and a toast's «Deshacer», which
+// outlives the panel, asks here as it is tapped.
+const unsavedScripts = new Set<number>();
+
+/** The script editor of `moduleId` says whether it has edits not saved. */
+export function useUnsavedScript(moduleId: number, dirty: boolean) {
+  useEffect(() => {
+    if (!dirty) return;
+    unsavedScripts.add(moduleId);
+    return () => {
+      unsavedScripts.delete(moduleId);
+    };
+  }, [moduleId, dirty]);
+}
+
+/** The module's script has edits not saved in the editor right now. */
+export const hasUnsavedScript = (moduleId: number) => unsavedScripts.has(moduleId);
 
 /** What a change to a module's script leaves to refresh, and undoing one (also from a toast, once its panel closed). */
 export function useRevisionCache() {

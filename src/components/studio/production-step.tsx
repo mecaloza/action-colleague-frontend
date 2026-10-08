@@ -266,7 +266,7 @@ export function ProductionStep({ course, jobs, onFixScript }: ProductionStepProp
         ))}
       </ol>
 
-      <RevisionSheet course={course} {...revisions.sheet} />
+      <RevisionSheet course={course} jobs={jobs} {...revisions.sheet} />
 
       <Dialog open={watching !== null} onOpenChange={(open) => !open && setWatching(null)}>
         <DialogContent className="max-w-4xl">
