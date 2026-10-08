@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Save } from "lucide-react";
+import { Plus, RefreshCw, Save, Sparkles } from "lucide-react";
 import { QueryError } from "@/components/layout/query-state";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -27,6 +27,7 @@ import { NO_VISUAL, narrationSeconds, SceneEditor, sceneVisual } from "./scene-e
 import { videoStyle } from "./steps";
 import { useLayoutWarnings } from "./use-layout-warnings";
 import { useProduceModule } from "./use-produce-module";
+import { useUnsavedScript } from "./use-revision-cache";
 import { useStudioCache } from "./use-studio-cache";
 
 const MAX_SCENES = 40;
@@ -70,10 +71,19 @@ interface StoryboardEditorProps {
   /** The script has edits not saved yet. */
   dirty: boolean;
   onDirtyChange: (dirty: boolean) => void;
+  /** Asks the AI for a change to the saved script ("Pedir un cambio"), to some scenes or (none given) to all of it. */
+  onRequestChange?: (sceneIds?: string[]) => void;
 }
 
 /** The module's script scene by scene; saving applies to the next video production. */
-export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChange }: StoryboardEditorProps) {
+export function StoryboardEditor({
+  course,
+  module,
+  rendering,
+  dirty,
+  onDirtyChange,
+  onRequestChange,
+}: StoryboardEditorProps) {
   // Out here: a new copy from elsewhere remounts the form, and the instructions must survive it.
   const [feedback, setFeedback] = useState("");
   // The copy this form saved itself: the form already shows it, so it isn't remounted (nor the page scrolled up).
@@ -104,6 +114,7 @@ export function StoryboardEditor({ course, module, rendering, dirty, onDirtyChan
       feedback={feedback}
       onFeedbackChange={setFeedback}
       onDirtyChange={onDirtyChange}
+      onRequestChange={onRequestChange}
     />
   );
 }
@@ -126,6 +137,7 @@ function StoryboardForm({
   feedback,
   onFeedbackChange: setFeedback,
   onDirtyChange,
+  onRequestChange,
 }: StoryboardFormProps) {
   const queryClient = useQueryClient();
   const { refreshCourse } = useCourseCache();
@@ -139,6 +151,7 @@ function StoryboardForm({
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   // Closed (or replaced by the AI's rewrite): nothing is left unsaved.
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+  useUnsavedScript(module.id, dirty);
   // What doesn't fit or overlaps on the slides: the saved script's, or the draft's after a pause in the typing.
   const layout = useLayoutWarnings(module.id, scenes, saved);
   const warnings = warningsByScene(layout.warnings);
@@ -153,6 +166,8 @@ function StoryboardForm({
     ...videoStyle(course.settings),
   });
   const seconds = scenes.reduce((total, scene) => total + narrationSeconds(scene.narration), 0);
+  // The AI changes the saved script, and applying its change replaces the form's copy: not over unsaved edits.
+  const requestHintId = `request-${module.id}-hint`;
 
   /** Takes the admin to a scene's first field with a warning (to its layout, when no field causes it). */
   const showScene = (sceneId: string) => {
@@ -211,6 +226,16 @@ function StoryboardForm({
               Descartar cambios
             </Button>
           )}
+          {onRequestChange && (
+            <Button
+              variant="outline"
+              onClick={() => onRequestChange()}
+              disabled={dirty}
+              aria-describedby={dirty ? requestHintId : undefined}
+            >
+              <Sparkles /> Pedir un cambio
+            </Button>
+          )}
           <Button
             onClick={() => save.mutate()}
             disabled={rendering || !dirty || scenes.some((scene) => !scene.narration.trim())}
@@ -220,6 +245,11 @@ function StoryboardForm({
           </Button>
         </div>
       </div>
+      {onRequestChange && dirty && (
+        <p id={requestHintId} className="text-sm text-muted-foreground">
+          Para pedirle un cambio a la IA, primero guarda o descarta lo que editaste: la IA trabaja sobre lo guardado.
+        </p>
+      )}
       {rendering && (
         <p role="status" className="border-l-2 border-warning bg-amber-50 px-4 py-3 text-sm">
           El video se está produciendo; edita el guion cuando termine.
@@ -250,6 +280,8 @@ function StoryboardForm({
             context={context(index)}
             warnings={warnings.get(scene.id) ?? NO_WARNINGS}
             onPictureReady={savedVisuals.get(scene.id) === JSON.stringify(scene.visual) ? layout.recheck : undefined}
+            onRequestChange={onRequestChange && (() => onRequestChange([scene.id]))}
+            requestBlockedBy={dirty ? requestHintId : undefined}
             onChange={(next) => setScenes((list) => replaceAt(list, index, next))}
             onMove={(to) => setScenes((list) => moveItem(list, index, to))}
             onDuplicate={() => setScenes((list) => duplicateScene(list, index))}
@@ -284,10 +316,16 @@ function StoryboardForm({
           >
             <RefreshCw /> Reescribir con IA
           </Button>
-          {dirty && (
+          {dirty ? (
             <p id={`rewrite-${module.id}-hint`} className="mt-1 text-xs text-muted-foreground">
               Guarda o descarta tus cambios: la IA parte del guion guardado.
             </p>
+          ) : (
+            onRequestChange && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Reescribe todo el guion y la lectura. Para un ajuste puntual, usa «Pedir un cambio».
+              </p>
+            )
           )}
         </div>
       </div>

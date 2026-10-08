@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, History, Sparkles, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/layout/confirm-dialog";
+import type { RevisionTab } from "@/components/studio/revision-sheet";
+import { StaleVideoNotice } from "@/components/studio/revision-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,16 +19,66 @@ import { toastError } from "@/lib/notify";
 import { ModuleMedia } from "./module-media";
 import { ModuleVideo } from "./module-video";
 
+/** The reading changed on the server while the admin edited it here. */
+const READING_CHANGED = "La lectura cambió mientras la editabas (por ejemplo, al aplicar o deshacer un cambio al guion).";
+
+/** What the panel offers for an AI module's script: asking the AI for a change, its history, producing it again. */
+interface ScriptActions {
+  /** Opens "Cambios al guion" over this panel, on a new change or on the history. */
+  onRequestChange: (moduleId: number, tab: RevisionTab) => void;
+  /** Produces the module's video again (the script changed since it was made). */
+  onProduce: (module: ModuleAdmin) => void;
+  producingId: number | null;
+}
+
 interface ModuleFormProps {
   module: ModuleAdmin;
   courseId: number;
   startRecording: boolean;
+  script?: ScriptActions;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onUploadingChange: (uploading: boolean) => void;
 }
 
-function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange, onUploadingChange }: ModuleFormProps) {
+/** An AI module's script: a change to ask the AI for (or one waiting), its history, a video that no longer matches. */
+function ScriptChanges({ module, script }: { module: ModuleAdmin; script: ScriptActions }) {
+  return (
+    <section aria-labelledby="module-script-changes" className="space-y-3 border-l-2 border-accent bg-accent-soft/50 px-4 py-3">
+      <h3 id="module-script-changes" className="text-[11px] font-bold uppercase tracking-label text-ink-700">
+        Guion del video
+      </h3>
+      <StaleVideoNotice
+        module={module}
+        onProduce={() => script.onProduce(module)}
+        producing={script.producingId === module.id}
+      />
+      <p className="text-sm text-muted-foreground">
+        {module.revision_pending
+          ? "Hay un cambio de la IA esperando tu revisión."
+          : "Pide a la IA un ajuste puntual: propone solo lo que cambia y lo revisas antes de aplicarlo."}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => script.onRequestChange(module.id, "change")}>
+          <Sparkles /> Pedir un cambio
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => script.onRequestChange(module.id, "history")}>
+          <History /> Historial de cambios
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function ModuleForm({
+  module,
+  courseId,
+  startRecording,
+  script,
+  onClose,
+  onDirtyChange,
+  onUploadingChange,
+}: ModuleFormProps) {
   const confirm = useConfirm();
   const { refreshCourse } = useCourseCache();
   const [initial, setInitial] = useState(module); // the values this form started from (or last saved)
@@ -35,6 +87,23 @@ function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange, 
   const [title, setTitle] = useState(module.title);
   const [description, setDescription] = useState(module.description);
   const [content, setContent] = useState(module.content_text);
+  // The reading changed on the server while this panel was open (a change to the script applied or undone over it):
+  // shown, unless it was edited here.
+  const [serverReading, setServerReading] = useState(module.content_text);
+  if (module.content_text !== serverReading) {
+    setServerReading(module.content_text);
+    if (content === initial.content_text) {
+      setContent(module.content_text);
+      setInitial((current) => ({ ...current, content_text: module.content_text }));
+    }
+  }
+  // Edited here while it changed there: saving would replace the new one, so the panel says it (and asks first).
+  const readingOutdated =
+    serverReading !== initial.content_text && content !== initial.content_text && content !== serverReading;
+  const takeNewReading = () => {
+    setContent(serverReading);
+    setInitial((current) => ({ ...current, content_text: serverReading }));
+  };
   // Only what the admin edited here: other fields may have changed on the server meanwhile.
   const changes = {
     ...(title !== initial.title && { title: title.trim() }),
@@ -64,6 +133,19 @@ function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange, 
     },
     onError: toastError,
   });
+
+  const submit = async () => {
+    if (
+      readingOutdated &&
+      !(await confirm({
+        title: "¿Guardar tu versión de la lectura?",
+        description: `${READING_CHANGED} Si guardas, tu versión reemplaza la nueva.`,
+        confirmLabel: "Guardar mi versión",
+      }))
+    )
+      return;
+    save.mutate();
+  };
 
   const remove = useMutation({
     mutationFn: () => coursesApi.removeModule(module.id),
@@ -101,6 +183,7 @@ function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange, 
         ) : (
           <ModuleMedia module={module} startRecording={startRecording} onUploadingChange={setUploading} />
         )}
+        {module.source === "ai" && module.scene_count > 0 && script && <ScriptChanges module={module} script={script} />}
         <div>
           <Label htmlFor="module-title">Título</Label>
           <Input id="module-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={300} />
@@ -123,14 +206,25 @@ function ModuleForm({ module, courseId, startRecording, onClose, onDirtyChange, 
             onChange={(event) => setContent(event.target.value)}
             className="min-h-[220px] font-[450]"
             placeholder="Texto que acompaña al video o que se lee como módulo de lectura"
+            aria-describedby={readingOutdated ? "module-content-outdated" : undefined}
           />
+          <div aria-live="polite">
+            {readingOutdated && (
+              <p className="mt-2 border-l-2 border-warning bg-amber-50 px-3 py-2 text-sm">
+                <span id="module-content-outdated">{READING_CHANGED} Si guardas, tu versión reemplaza la nueva.</span>{" "}
+                <Button variant="link" className="text-[13px]" onClick={takeNewReading}>
+                  Usar la lectura nueva
+                </Button>
+              </p>
+            )}
+          </div>
         </div>
       </SheetBody>
       <SheetFooter>
         <Button variant="ghost" className="text-destructive hover:bg-red-50" onClick={confirmRemove} loading={remove.isPending}>
           <Trash2 /> Eliminar
         </Button>
-        <Button onClick={() => save.mutate()} disabled={!dirty || !title.trim()} loading={save.isPending}>
+        <Button onClick={() => void submit()} disabled={!dirty || !title.trim()} loading={save.isPending}>
           Guardar cambios
         </Button>
       </SheetFooter>
@@ -142,12 +236,15 @@ export function ModuleSheet({
   module,
   courseId,
   startRecording = false,
+  script,
   onClose,
 }: {
   module: ModuleAdmin | null;
   courseId: number;
   /** Open the recording studio as soon as the sheet opens ("Grabarme"). */
   startRecording?: boolean;
+  /** What it offers for an AI module's script. */
+  script?: ScriptActions;
   onClose: () => void;
 }) {
   const confirm = useConfirm();
@@ -191,6 +288,7 @@ export function ModuleSheet({
             module={module}
             courseId={courseId}
             startRecording={startRecording}
+            script={script}
             onClose={() => {
               dirty.current = false;
               onClose();

@@ -17,6 +17,8 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSo
 import { Film, Loader2, Plus } from "lucide-react";
 import { EmptyState } from "@/components/layout/empty-state";
 import { SectionHeader } from "@/components/layout/section-header";
+import { RevisionSheet, useRevisionSheet } from "@/components/studio/revision-sheet";
+import { useProduceModule } from "@/components/studio/use-produce-module";
 import { Button } from "@/components/ui/button";
 import { courseKeys, coursesApi } from "@/lib/api/courses";
 import type { CourseDetail } from "@/lib/api/types";
@@ -34,6 +36,9 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
   // The module open in the sheet; `startRecording` opens its recording studio at once ("Grabarme").
   const [opened, setOpened] = useState<{ id: number; startRecording: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
+  // "Pedir un cambio" to an AI module's script (over its panel, when asked from there), and its video produced again.
+  const revisions = useRevisionSheet();
+  const { produce, producingId } = useProduceModule(course);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -144,6 +149,9 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
                   onMove={(direction) => move(index, direction)}
                   moving={reorder.isPending}
                   onOpen={() => setOpened({ id: module.id, startRecording: false })}
+                  onRequestChange={() => revisions.show({ moduleId: module.id })}
+                  onProduce={() => void produce(module)}
+                  producing={producingId === module.id}
                 />
               ))}
             </ol>
@@ -164,8 +172,14 @@ export function ModulesTab({ course }: { course: CourseDetail }) {
         module={openModule}
         courseId={course.id}
         startRecording={opened?.startRecording}
+        script={{
+          onRequestChange: (moduleId, tab) => revisions.show({ moduleId, tab }),
+          onProduce: (module) => void produce(module),
+          producingId,
+        }}
         onClose={() => setOpened(null)}
       />
+      <RevisionSheet course={course} {...revisions.sheet} />
     </div>
   );
 }

@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { JobFailure, JobStatus } from "./job-status";
 import { isError, summaryLines } from "./layout-warnings";
 import { inRenderSlot } from "./render-slots";
+import { RevisionSheet, useRevisionSheet } from "./revision-sheet";
+import { PendingChangeBadge, StaleVideoNotice } from "./revision-status";
 import { aiModules, type ModuleActivity, moduleActivity, moduleJob } from "./steps";
 import { useProduceModule } from "./use-produce-module";
 
@@ -189,6 +191,7 @@ interface ProductionStepProps {
 export function ProductionStep({ course, jobs, onFixScript }: ProductionStepProps) {
   const [watching, setWatching] = useState<ModuleAdmin | null>(null);
   const { produce, producingId } = useProduceModule(course);
+  const revisions = useRevisionSheet();
   // Per AI module: what it is doing (producing its video, or writing its script) and the job doing it.
   const rows = aiModules(course).map((module) => ({
     module,
@@ -222,27 +225,48 @@ export function ProductionStep({ course, jobs, onFixScript }: ProductionStepProp
             <div className="min-w-0 flex-1 basis-60 space-y-1.5">
               <p className="font-semibold">{module.title}</p>
               <VideoState module={module} activity={activity} job={job} />
+              {/* The row's own button produces it again. */}
+              <StaleVideoNotice module={module} />
               {/* Its saved script's slides (one being rewritten has no warnings to show yet). */}
               {module.scene_count > 0 && activity !== "drafting" && (
                 <ScriptWarnings module={module} onFix={() => onFixScript(module.id)} />
               )}
             </div>
-            {/* Any module with a script can be produced (again, e.g. after editing it) unless it's being produced;
-                while its script is being written the button waits. */}
-            {module.scene_count > 0 && activity !== "rendering" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => produce(module)}
-                loading={producingId === module.id}
-                disabled={activity === "drafting"}
-              >
-                <RotateCcw /> {module.video ? "Volver a producir" : "Producir"}
-              </Button>
+            {module.scene_count > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                {activity !== "drafting" && (
+                  <>
+                    <PendingChangeBadge module={module} onReview={() => revisions.show({ moduleId: module.id })} />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => revisions.show({ moduleId: module.id })}
+                      aria-label={`Pedir un cambio al guion de ${module.title}`}
+                    >
+                      <Sparkles /> Pedir un cambio
+                    </Button>
+                  </>
+                )}
+                {/* Any module with a script can be produced (again, e.g. after editing it) unless it's being
+                    produced; while its script is being written the button waits. */}
+                {activity !== "rendering" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => produce(module)}
+                    loading={producingId === module.id}
+                    disabled={activity === "drafting"}
+                  >
+                    <RotateCcw /> {module.video ? "Volver a producir" : "Producir"}
+                  </Button>
+                )}
+              </div>
             )}
           </li>
         ))}
       </ol>
+
+      <RevisionSheet course={course} jobs={jobs} {...revisions.sheet} />
 
       <Dialog open={watching !== null} onOpenChange={(open) => !open && setWatching(null)}>
         <DialogContent className="max-w-4xl">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, RefreshCw, X } from "lucide-react";
+import { Plus, RefreshCw, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,7 @@ import { ListEditor } from "./list-editor";
 import { RowActions } from "./row-actions";
 import { SlidePreview } from "./slide-preview";
 
-const LAYOUTS: { value: SlideLayout; label: string }[] = [
+export const LAYOUTS: { value: SlideLayout; label: string }[] = [
   { value: "cover", label: "Portada" },
   { value: "bullets", label: "Viñetas" },
   { value: "steps", label: "Pasos" },
@@ -499,6 +499,10 @@ interface SceneEditorProps {
    * Left out while the scene's visual has unsaved changes: only what is saved is drawn.
    */
   onPictureReady?: () => Promise<void>;
+  /** Asks the AI for a change to this scene of the saved script (left out: not offered). */
+  onRequestChange?: () => void;
+  /** The id of why the AI can't be asked now (edits not saved yet: it starts from the saved script). */
+  requestBlockedBy?: string;
   onChange: (scene: StoryboardScene) => void;
   onMove: (to: number) => void;
   onDuplicate: () => void;
@@ -517,6 +521,8 @@ export function SceneEditor({
   courseId,
   warnings,
   onPictureReady,
+  onRequestChange,
+  requestBlockedBy,
   onChange,
   onMove,
   onDuplicate,
@@ -570,14 +576,32 @@ export function SceneEditor({
           </Select>
         </div>
         <WarningsBadge warnings={warnings} />
-        <RowActions
-          noun="escena"
-          index={index}
-          total={total}
-          onMove={onMove}
-          onDuplicate={onDuplicate}
-          onRemove={onRemove}
-        />
+        <div className="ml-auto flex items-center gap-1">
+          {onRequestChange && (
+            // Only the icon on a phone, where the header is short of room; its name says what it does.
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onRequestChange}
+              disabled={Boolean(requestBlockedBy)}
+              aria-describedby={requestBlockedBy}
+              aria-label={`Pedir un cambio en la escena ${index + 1}`}
+              className="min-w-10 px-2.5 sm:px-3"
+            >
+              <Sparkles />
+              <span className="hidden sm:inline">Pedir un cambio</span>
+            </Button>
+          )}
+          <RowActions
+            noun="escena"
+            index={index}
+            total={total}
+            onMove={onMove}
+            onDuplicate={onDuplicate}
+            onRemove={onRemove}
+          />
+        </div>
       </header>
       <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <SlidePreview
