@@ -35,7 +35,8 @@ interface PublishProblemsDialogProps {
 }
 
 function PublishProblemsDialog({ course, problems, onClose, onReview }: PublishProblemsDialogProps) {
-  const reviews = (problems ?? []).map((problem) => reviewProblem(problem, course));
+  // Each problem with the video's review it is about, if any.
+  const listed = (problems ?? []).map((problem) => ({ problem, reviewed: reviewProblem(problem, course) }));
   return (
     <Dialog open={problems !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
@@ -44,13 +45,13 @@ function PublishProblemsDialog({ course, problems, onClose, onReview }: PublishP
           <DialogDescription>Resuelve esto y vuelve a intentarlo:</DialogDescription>
         </DialogHeader>
         <ul className="space-y-3">
-          {problems?.map((problem, index) => (
+          {listed.map(({ problem, reviewed }, index) => (
             <li key={index} className="flex items-start gap-3 text-sm">
               <span className="mt-1.5 h-2 w-2 shrink-0 rotate-45 bg-accent" />
               <div className="min-w-0 space-y-1">
                 <p className="break-words">{problem.message}</p>
-                {reviews[index] !== null && (
-                  <Button variant="link" className="text-[13px]" onClick={() => onReview(reviews[index]!)}>
+                {reviewed !== null && (
+                  <Button variant="link" className="text-[13px]" onClick={() => onReview(reviewed)}>
                     Ver la revisión
                   </Button>
                 )}
@@ -62,7 +63,7 @@ function PublishProblemsDialog({ course, problems, onClose, onReview }: PublishP
         <CourseQaSummary
           course={course}
           onOpen={onReview}
-          linked={reviews.filter((moduleId): moduleId is number => moduleId !== null)}
+          linked={listed.flatMap(({ reviewed }) => (reviewed === null ? [] : [reviewed]))}
           className="mt-6 border-t border-border pt-4"
         />
         <DialogFooter>

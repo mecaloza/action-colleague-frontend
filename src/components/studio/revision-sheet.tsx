@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { skipToken, useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, Check, Info, RotateCcw, Sparkles } from "lucide-react";
 import { QueryError } from "@/components/layout/query-state";
@@ -500,13 +500,22 @@ function PanelBody({ course, module, busy, request, unsaved, onClose, subject }:
   // As it opens (from the server's answer, not a copy kept from before): a proposal still waiting is shown first
   // (asking for another replaces it); otherwise the form. A scene's or question's own button, or a finding of the
   // video's review («Corregir», with its observation), opens the form on it, saying which proposal it replaces; not
-  // while one is being prepared (another can't be asked until it ends), nor over the same finding's proposal.
-  if (view === null && !history.isPending && !history.isFetching) {
-    const pending = history.data?.find(isPendingRevision);
-    const asked = { observation: request.observation ?? "", qaIssue: request.qaIssue ?? null };
+  // while one is being prepared (another can't be asked until it ends), nor over the proposal asked for that same
+  // finding (even reworded; another finding may suggest the same words).
+  const opening = view === null && !history.isPending && !history.isFetching;
+  const pending = opening ? history.data?.find(isPendingRevision) : undefined;
+  const asked = { observation: request.observation ?? "", qaIssue: request.qaIssue ?? null };
+  // Which finding a proposal waiting was asked for: the change says it, the history's list doesn't. (Only that is read
+  // from it, and it never changes: a copy kept from before will do.)
+  const waitingFixId = asked.qaIssue && pending?.status === "proposed" && pending.source === "qa" ? pending.id : null;
+  const waitingFix = useQuery({
+    queryKey: revisionKeys.detail(waitingFixId ?? 0),
+    queryFn: waitingFixId === null ? skipToken : () => revisionsApi.get(waitingFixId),
+  });
+  if (opening && !waitingFix.isLoading) {
     const ownRequest = requested.length > 0 || asked.qaIssue !== null;
-    const sameFinding =
-      asked.qaIssue !== null && pending?.source === "qa" && pending.observation === asked.observation.trim();
+    // Not known when it can't be read: then the form says which proposal it replaces, and goes back to it.
+    const sameFinding = asked.qaIssue !== null && waitingFix.data?.scope.qa_issue_id === asked.qaIssue.id;
     const first: ViewTarget = !pending
       ? composing(asked)
       : ownRequest && pending.status === "proposed" && !sameFinding

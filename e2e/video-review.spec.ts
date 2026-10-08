@@ -1,14 +1,16 @@
 import { test, expect, type Page, type Request } from "@playwright/test";
-import { adminApi } from "./fixtures/api";
+import { adminApi, API } from "./fixtures/api";
 import {
   BLACK,
   CUT,
   CUT_FIX,
   fakeReview,
   fakeReviews,
+  jsonReply,
   MARKED,
   MARKED_FIX,
   MISMATCH,
+  OVERLAP,
   reviewedCourse,
 } from "./fixtures/reviews";
 import { MODULE_TITLE, scriptedCourse } from "./fixtures/scripts";
@@ -124,16 +126,33 @@ test("la revisión encuentra un problema crítico: se ve en los fotogramas y en 
     await page.keyboard.press("Escape");
     await expect(chipOf(page)).toContainText("1 crítico");
 
-    // Parámetros: critical findings keep a course from being published.
+    // Parámetros: each video is reviewed as it is produced (turned off and saved, then on again: this video was
+    // reviewed already, and no other spec waits for a review), and critical findings keep a course from being published.
     await page.goto("/admin/settings");
     const qa = page.getByRole("region", { name: "Revisión de calidad" });
-    await expect(qa.getByRole("switch", { name: "Revisar cada video al producirlo" })).toBeChecked();
+    const auto = qa.getByRole("switch", { name: "Revisar cada video al producirlo" });
     const block = qa.getByRole("switch", { name: "Los problemas críticos impiden publicar" });
-    if (!(await block.isChecked())) {
-      await block.click();
-      await page.getByRole("button", { name: "Guardar cambios" }).click();
-      await expect(page.getByText("Parámetros guardados")).toBeVisible();
-    }
+    /** Saves the form: what it sent, once saved. */
+    const saveSettings = async () => {
+      const [sent] = await Promise.all([
+        page.waitForRequest((sent) => sent.url().endsWith("/settings") && sent.method() === "PATCH"),
+        page.getByRole("button", { name: "Guardar cambios" }).click(),
+      ]);
+      await expect(page.getByText("Todo guardado.")).toBeVisible();
+      return sent.postDataJSON();
+    };
+    await expect(auto).toBeChecked();
+    await auto.click();
+    await expect(page.getByText("Cambios sin guardar.")).toBeVisible();
+    expect(await saveSettings()).toEqual({ qa: { auto_review: false } });
+    await expect(page.getByText("Parámetros guardados")).toBeVisible();
+    await expect(auto).not.toBeChecked();
+    expect((await call<typeof before>("get", "/settings")).qa.auto_review).toBe(false);
+    await auto.click();
+    const blocking = await block.isChecked();
+    if (!blocking) await block.click();
+    const turnedOn = blocking ? { auto_review: true } : { auto_review: true, block_publish: true };
+    expect(await saveSettings()).toEqual({ qa: turnedOn });
     expect((await call<typeof before>("get", "/settings")).qa).toEqual({ auto_review: true, block_publish: true });
 
     // Publishing says why it can't, with a way to the review.
@@ -199,7 +218,7 @@ test("la revisión encuentra un problema crítico: se ve en los fotogramas y en 
     await page.keyboard.press("Escape");
     await expect(chipOf(page)).toContainText("1 crítico");
   } finally {
-    await call("patch", "/settings", { qa: { block_publish: before.qa.block_publish } });
+    await call("patch", "/settings", { qa: before.qa });
   }
 });
 
@@ -310,4 +329,157 @@ test("el panel sigue la revisión mientras se hace, dice si falla, deja revisar 
   await expect(studioRow.getByRole("button", { name: /^Revisión de calidad de / })).toContainText("1 crítico");
   await summary.getByRole("button", { name: `Ver la revisión de ${MODULE_TITLE}` }).click();
   await expect(sheet.getByRole("heading", { name: "Hay problemas por corregir" })).toBeVisible();
+});
+
+test("«Corregir» vuelve a la propuesta pedida para su hallazgo aunque se haya reescrito, nunca a la de otro hallazgo con la misma sugerencia", async ({
+  page,
+  request,
+}) => {
+  const call = await adminApi(request);
+  const { courseId, moduleId } = await scriptedCourse(call, "Corregir dos hallazgos");
+  // Scene 2 has two findings that suggest the very same change: each «Corregir» is about its own.
+  const found = fakeReview(903, moduleId);
+  const [cut] = found.issues;
+  const overlap = { ...cut, id: "903-4", category: "overlap", at_seconds: 7.9, frame_index: 4, description: OVERLAP };
+  await fakeReviews(page, courseId, moduleId, fakeReview(903, moduleId, { issues: [...found.issues, overlap] }));
+  const asked: unknown[] = [];
+  page.on("request", (sent) => {
+    if (isProposal(moduleId)(sent)) asked.push(sent.postDataJSON());
+  });
+
+  await page.goto(`/admin/courses/${courseId}`);
+  await openFromChip(page);
+  const sheet = sheetOf(page);
+  const change = page.getByRole("dialog", { name: "Cambios al guion" });
+  const field = change.getByLabel("¿Qué quieres cambiar?");
+  const proposal = change.getByRole("heading", { name: "Propuesta de la IA" });
+  /** «Corregir» on the finding: the change's panel opens over the review. */
+  const fix = async (description: string) => {
+    await sheet.getByRole("listitem", { name: description }).getByRole("button", { name: "Corregir" }).click();
+    await expect(change).toBeVisible();
+  };
+  /** Asks for the change, waits for the AI's proposal (it waits for review) and closes the panel. */
+  const ask = async () => {
+    await change.getByRole("button", { name: "Pedir propuesta" }).click();
+    await expect(proposal).toBeVisible({ timeout: 60_000 });
+    await page.keyboard.press("Escape");
+    await expect(change).toBeHidden();
+  };
+
+  // The first finding's change, asked as suggested.
+  await fix(CUT);
+  await expect(field).toHaveValue(CUT_FIX);
+  await ask();
+  expect(asked).toEqual([{ target: "script", observation: CUT_FIX, scene_ids: ["s2"], qa_issue_id: "903-1" }]);
+
+  // The other finding suggests the same words: its own form, saying it replaces the proposal waiting.
+  await fix(OVERLAP);
+  await expect(field).toHaveValue(CUT_FIX);
+  await expect(change).toContainText(`Corrige lo que encontró la revisión de calidad: «${OVERLAP.replace(/\.$/, "")}».`);
+  await expect(change).toContainText(`La propuesta anterior («${CUT_FIX}») se reemplaza por la que pidas ahora.`);
+  // Reworded before asking.
+  const reworded = `${CUT_FIX} Que el título no tape ningún punto.`;
+  await field.fill(reworded);
+  await ask();
+  expect(asked[1]).toEqual({ target: "script", observation: reworded, scene_ids: ["s2"], qa_issue_id: "903-4" });
+
+  // «Corregir» on it again: the proposal asked for it, still waiting (nothing is asked, nor replaced).
+  await fix(OVERLAP);
+  await expect(proposal).toBeVisible();
+  await expect(change).toContainText(`Pediste: «${reworded}»`);
+  await expect(field).toHaveCount(0);
+  expect(asked).toHaveLength(2);
+});
+
+test("ignorar espera al servidor sin perder el foco ni dejar corregir, dos hallazgos ignorados seguidos quedan ignorados y una revisión que no se pudo leer no ofrece otra", async ({
+  page,
+  request,
+}) => {
+  const call = await adminApi(request);
+  const { courseId, moduleId } = await scriptedCourse(call, "Ignorar hallazgos");
+  const fake = await fakeReviews(page, courseId, moduleId, fakeReview(904, moduleId));
+  const dismissal = new RegExp(`${API}/reviews/904/issues/[^/]+/dismiss$`);
+  /** A request held until the test lets it go. */
+  const held = () => {
+    let release = () => {};
+    const until = new Promise<void>((resolve) => (release = resolve));
+    return { until, release };
+  };
+
+  // The review can't be read at first (the server fails): it says so, and offers no review of the video meanwhile
+  // (it may have one already: another would be made, and paid for).
+  let unreadable = true;
+  await page.route(`${API}/modules/${moduleId}/review`, (route) =>
+    unreadable && route.request().method() === "GET"
+      ? route.fulfill(jsonReply({ detail: "Error interno del servidor" }, 500))
+      : route.fallback(),
+  );
+  await page.goto(`/admin/courses/${courseId}`);
+  await openFromChip(page);
+  const sheet = sheetOf(page);
+  await expect(sheet.getByText("No pudimos cargar esta información.")).toBeVisible({ timeout: 15_000 }); // after a retry
+  await expect(sheet.getByRole("button", { name: /^Revisar (ahora|de nuevo)$/ })).toHaveCount(0);
+  unreadable = false;
+  await sheet.getByRole("button", { name: "Reintentar" }).click();
+  await expect(sheet.getByRole("heading", { name: "Hay problemas por corregir" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Revisar de nuevo" })).toBeVisible();
+
+  // Ignoring waits for the server, and meanwhile no change is asked for the finding; if it fails, the focus is still
+  // on «Ignorar», to try again.
+  const failing = held();
+  await page.route(
+    dismissal,
+    async (route) => {
+      await failing.until;
+      await route.fulfill(jsonReply({ detail: "Error interno del servidor" }, 500));
+    },
+    { times: 1 },
+  );
+  const cut = sheet.getByRole("listitem", { name: CUT });
+  const fixIt = cut.getByRole("button", { name: "Corregir" });
+  const ignore = cut.getByRole("button", { name: "Ignorar" });
+  await ignore.click();
+  await expect(ignore).toHaveAttribute("aria-busy", "true");
+  await expect(ignore).toBeFocused();
+  await expect(fixIt).toBeDisabled();
+  failing.release();
+  await expect(ignore).not.toHaveAttribute("aria-busy", "true");
+  await expect(ignore).toBeFocused();
+  await expect(fixIt).toBeEnabled();
+  await expect(cut).not.toContainText("Ignorado");
+
+  // Two findings ignored one right after the other, the first answer coming last: with the review as the server had it
+  // then (the second finding still open). Both stay ignored, and the focus stays on the second one.
+  const black = sheet.getByRole("listitem", { name: BLACK });
+  const first = held();
+  await page.route(
+    dismissal,
+    async (route) => {
+      const [, issueId] = /\/issues\/([^/]+)\/dismiss$/.exec(route.request().url())!;
+      const issue = fake.review!.issues.find((each) => each.id === decodeURIComponent(issueId))!;
+      issue.status = "dismissed";
+      const answer = jsonReply(fake.review); // the review as it is now
+      if (issue.description === CUT) await first.until;
+      await route.fulfill(answer);
+    },
+    { times: 2 },
+  );
+  // The review read again once the second one is saved (its module's count changed), before the first answer comes.
+  const readAgain = page.waitForResponse(
+    async (response) =>
+      response.url().endsWith(`/modules/${moduleId}/review`) &&
+      response.request().method() === "GET" &&
+      (await response.json()).issues.some(
+        (issue: { description: string; status: string }) => issue.description === BLACK && issue.status === "dismissed",
+      ),
+  );
+  await ignore.click();
+  await black.getByRole("button", { name: "Ignorar" }).click();
+  await expect(black).toContainText("Ignorado");
+  await readAgain;
+  first.release();
+  await expect(cut.locator('[aria-busy="true"]')).toHaveCount(0); // its answer came
+  await expect(cut).toContainText("Ignorado");
+  await expect(black).toContainText("Ignorado");
+  await expect(black.getByRole("button", { name: "Reabrir" })).toBeFocused();
 });

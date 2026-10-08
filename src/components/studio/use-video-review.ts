@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { courseKeys } from "@/lib/api/courses";
 import { reviewKeys, reviewsApi } from "@/lib/api/reviews";
 import { studioKeys } from "@/lib/api/studio";
-import type { ModuleAdmin } from "@/lib/api/types";
+import type { ModuleAdmin, VideoReview } from "@/lib/api/types";
 import { toastError } from "@/lib/notify";
 import { isReviewing, reviewEnded } from "./qa";
 import { useStudioCache } from "./use-studio-cache";
@@ -76,18 +76,28 @@ export type IssueAction = "dismiss" | "reopen";
 /** Dismisses a finding of the review, or opens it again (one dismissed, or fixed by a change that didn't fix it). */
 export function useIssueAction(courseId: number, moduleId: number) {
   const queryClient = useQueryClient();
+  const reviewKey = reviewKeys.module(moduleId);
   return useMutation({
     mutationFn: ({ reviewId, issueId, action }: { reviewId: number; issueId: string; action: IssueAction }) =>
       action === "dismiss" ? reviewsApi.dismiss(reviewId, issueId) : reviewsApi.reopen(reviewId, issueId),
-    onSuccess: (review, { action }) => {
-      queryClient.setQueryData(reviewKeys.module(moduleId), review);
+    // A read of the review on its way left before this change: arriving after it, it would undo it on the screen.
+    onMutate: () => queryClient.cancelQueries({ queryKey: reviewKey }),
+    onSuccess: (review, { issueId, action }) => {
+      // Only this finding, as the server left it: each finding is saved on its own, and an answer that comes late has
+      // the others as they were when it left. (The module's new count has the review read again, whole.)
+      const changed = review.issues.find((issue) => issue.id === issueId);
+      queryClient.setQueryData<VideoReview | null>(reviewKey, (shown) =>
+        shown && changed && shown.id === review.id
+          ? { ...shown, issues: shown.issues.map((issue) => (issue.id === issueId ? changed : issue)) }
+          : shown,
+      );
       // Its module counts what is still open (and a course may now be published).
       void refreshBadges(queryClient, courseId);
       toast.success(action === "dismiss" ? "Hallazgo ignorado" : "Hallazgo abierto de nuevo");
     },
     onError: (error) => {
       toastError(error);
-      void queryClient.invalidateQueries({ queryKey: reviewKeys.module(moduleId) });
+      void queryClient.invalidateQueries({ queryKey: reviewKey });
     },
   });
 }

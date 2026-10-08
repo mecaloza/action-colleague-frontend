@@ -77,6 +77,8 @@ export const CUT = "El segundo punto se corta en el borde derecho.";
 export const CUT_FIX = "En la escena 2, acorta el segundo punto para que quepa completo.";
 export const BLACK = "La pantalla queda en negro 1.2 s desde el 0:11.";
 export const MISMATCH = "La narración habla de guantes y la diapositiva no.";
+/** What a review may also find in scene 2, suggesting the very same change as `CUT` (findings of a scene often do). */
+export const OVERLAP = "El título se monta sobre el primer punto.";
 
 function issues(reviewId: number) {
   return [
@@ -157,7 +159,8 @@ export const queued = (id: number, moduleId: number) =>
     finished_at: null,
   });
 
-const json = (body: unknown, status = 200) => ({
+/** What a faked endpoint answers (the API is on another origin). */
+export const jsonReply = (body: unknown, status = 200) => ({
   status,
   contentType: "application/json",
   headers: { "access-control-allow-origin": "*" },
@@ -214,21 +217,22 @@ export async function fakeReviews(page: Page, courseId: number, moduleId: number
     if (route.request().method() === "POST") {
       fake.asked += 1;
       fake.review = fake.next(fake.asked);
-      return route.fulfill(json({ review: fake.review, job: job(fake.review.job_id, {}) }, 202));
+      return route.fulfill(jsonReply({ review: fake.review, job: job(fake.review.job_id, {}) }, 202));
     }
-    return route.fulfill(fake.review ? json(fake.review) : json({ detail: "Este video aún no tiene revisión" }, 404));
+    const answer = fake.review ? jsonReply(fake.review) : jsonReply({ detail: "Este video aún no tiene revisión" }, 404);
+    return route.fulfill(answer);
   });
   await page.route(new RegExp(`${API}/reviews/\\d+/issues/[^/]+/(dismiss|reopen)$`), async (route) => {
     const [, issueId, action] = /\/issues\/([^/]+)\/(dismiss|reopen)$/.exec(route.request().url())!;
     const issue = fake.review?.issues.find((each) => each.id === decodeURIComponent(issueId));
-    if (!issue) return route.fulfill(json({ detail: "Hallazgo no encontrado" }, 404));
+    if (!issue) return route.fulfill(jsonReply({ detail: "Hallazgo no encontrado" }, 404));
     issue.status = action === "dismiss" ? "dismissed" : "open";
-    return route.fulfill(json(fake.review));
+    return route.fulfill(jsonReply(fake.review));
   });
   // A review being made: its job is where the AI looks at the frames.
   await page.route(new RegExp(`${API}/jobs/e2e-review-\\d+$`), (route) =>
     route.fulfill(
-      json(
+      jsonReply(
         job(route.request().url().split("/").pop()!, {
           status: "running",
           progress: 40,

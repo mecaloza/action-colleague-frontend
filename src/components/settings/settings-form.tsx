@@ -511,7 +511,7 @@ export function SettingsForm({ settings }: { settings: PlatformSettings }) {
         id="settings-qa"
         icon={<ScanEye className="h-5 w-5 text-accent" aria-hidden />}
         title="Revisión de calidad"
-        hint="La IA revisa los videos producidos con IA antes de que los vea tu equipo. Solo avisa: un video nunca cambia sin que tú lo pidas."
+        hint="La IA revisa cada video producido con IA apenas está listo y te avisa lo que encuentra. Solo avisa: un video nunca cambia sin que tú lo pidas."
       >
         <div className="divide-y divide-border border border-border bg-white">
           <SwitchRow

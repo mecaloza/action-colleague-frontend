@@ -44,7 +44,7 @@ import { inRenderSlot } from "./render-slots";
 import { sceneTitle } from "./revision-diff";
 import { RevisionSheet, useRevisionSheet } from "./revision-sheet";
 import { moduleActivity, type ModuleActivity } from "./steps";
-import { useIssueAction, useRequestReview, useVideoReview } from "./use-video-review";
+import { type IssueAction, useIssueAction, useRequestReview, useVideoReview } from "./use-video-review";
 
 /** Open state of a `QaReportSheet`: `show` opens it on a module, each time afresh. */
 export function useQaSheet() {
@@ -129,6 +129,8 @@ function QaPanel({ course, module, jobs, busy }: PanelProps) {
   const scenes = new Map((storyboard.data?.scenes ?? []).map((scene) => [scene.id, scene]));
 
   const data = review.data ?? null;
+  // It couldn't be read: whether the video has a review isn't known (asking for one would make another, and pay for it).
+  const unreadable = review.isError && review.data === undefined;
   const reviewing = isReviewing(data);
   // Asking for it (again) waits while it is being made, while the video is produced again, and without the AI.
   const wait = reviewing
@@ -177,7 +179,7 @@ function QaPanel({ course, module, jobs, busy }: PanelProps) {
       <SheetBody className="space-y-8">
         {review.isPending ? (
           <Skeleton className="h-64" />
-        ) : review.isError && review.data === undefined ? (
+        ) : unreadable ? (
           <QueryError query={review} />
         ) : data === null ? (
           <NoReview headingRef={statusHeading} />
@@ -213,7 +215,7 @@ function QaPanel({ course, module, jobs, busy }: PanelProps) {
           </>
         )}
       </SheetBody>
-      {!review.isPending && (
+      {!review.isPending && !unreadable && (
         <SheetFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           <p id={waitId} className="min-w-0 text-sm text-muted-foreground">
             {wait ?? "Toma fotogramas nuevos del video publicado."}
@@ -418,6 +420,7 @@ interface IssueCardProps {
  */
 function IssueCard({ course, module, review, issue, onFix, onSee, onFrame }: IssueCardProps) {
   const action = useIssueAction(course.id, module.id);
+  const card = useRef<HTMLLIElement>(null);
   const first = useRef<HTMLButtonElement>(null);
   const textId = `qa-issue-${issue.id}`;
   const open = isOpen(issue);
@@ -425,23 +428,37 @@ function IssueCard({ course, module, review, issue, onFix, onSee, onFrame }: Iss
   const fixable = open && Boolean(issue.suggested_observation.trim()) && module.scene_count > 0;
   const frame = issue.frame_index === null ? undefined : review.frames.find((each) => each.index === issue.frame_index);
   const seeable = issue.at_seconds !== null && Boolean(module.video);
-  const act = (kind: "dismiss" | "reopen") => {
-    if (action.isPending) return;
+  const saving = action.isPending;
+  const act = (kind: IssueAction) => {
+    if (saving) return;
     action.mutate(
       { reviewId: review.id, issueId: issue.id, action: kind },
-      // The button pressed may be gone (an ignored finding has no «Ignorar»): the focus stays on the finding.
-      { onSuccess: () => first.current?.focus() },
+      {
+        // The button pressed may be gone (an ignored finding has no «Ignorar»): the focus stays on the finding, also when
+        // it fell to what holds it (the panel). Not when it went to another finding meanwhile (ignored right after).
+        onSuccess: () => {
+          const focused = document.activeElement;
+          if (!focused || focused.contains(card.current) || card.current?.contains(focused)) first.current?.focus();
+        },
+      },
     );
+  };
+  // No change is asked for a finding while it is being ignored.
+  const fix = () => {
+    if (!saving) onFix();
   };
   // The first button stays the same element whatever it does: the focus stays on it as the finding changes.
   const primary = !open
-    ? { label: "Reabrir", icon: <Undo2 />, variant: "outline" as const, run: () => act("reopen") }
+    ? { label: "Reabrir", icon: <Undo2 />, variant: "outline" as const, saves: true, run: () => act("reopen") }
     : fixable
-      ? { label: "Corregir", icon: <Wrench />, variant: "accent" as const, run: onFix }
-      : { label: "Ignorar", icon: <EyeOff />, variant: "outline" as const, run: () => act("dismiss") };
+      ? { label: "Corregir", icon: <Wrench />, variant: "accent" as const, saves: false, run: fix }
+      : { label: "Ignorar", icon: <EyeOff />, variant: "outline" as const, saves: true, run: () => act("dismiss") };
+  // While it saves, its buttons wait. Never `disabled`: the one pressed keeps the focus, also when saving fails.
+  const waiting = cn(saving && "pointer-events-none opacity-45");
   const severity = SEVERITIES[issue.severity];
   return (
     <li
+      ref={card}
       aria-labelledby={textId}
       className={cn("space-y-3 border border-border p-4", open ? "bg-white" : "bg-mist/60")}
       data-status={issue.status}
@@ -481,17 +498,18 @@ function IssueCard({ course, module, review, issue, onFix, onSee, onFrame }: Iss
         <p className="text-sm text-muted-foreground">Un cambio al guion no lo arregla: vuelve a producir el video.</p>
       )}
       <div className="flex flex-wrap gap-2">
-        {/* Never `disabled` while it saves: it keeps the focus. */}
         <Button
           ref={first}
           id={actionId(issue)}
           size="sm"
           variant={primary.variant}
           onClick={primary.run}
-          aria-busy={action.isPending || undefined}
+          aria-disabled={saving || undefined}
+          aria-busy={(saving && primary.saves) || undefined}
           aria-describedby={textId}
+          className={waiting}
         >
-          {action.isPending && primary.label !== "Corregir" ? <Loader2 className="animate-spin" aria-hidden /> : primary.icon}
+          {saving && primary.saves ? <Loader2 className="animate-spin" aria-hidden /> : primary.icon}
           {primary.label}
         </Button>
         {seeable && (
@@ -504,10 +522,12 @@ function IssueCard({ course, module, review, issue, onFix, onSee, onFrame }: Iss
             size="sm"
             variant="ghost"
             onClick={() => act("dismiss")}
-            loading={action.isPending}
+            aria-disabled={saving || undefined}
+            aria-busy={saving || undefined}
             aria-describedby={textId}
+            className={waiting}
           >
-            <EyeOff /> Ignorar
+            {saving ? <Loader2 className="animate-spin" aria-hidden /> : <EyeOff />} Ignorar
           </Button>
         )}
       </div>
