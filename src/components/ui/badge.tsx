@@ -3,32 +3,41 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-sm px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.1em]",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-gradient-to-r from-violet-600 to-purple-600 text-white",
-        secondary:
-          "border-transparent bg-white/10 text-secondary-foreground",
-        destructive:
-          "border-transparent bg-red-500/20 text-red-400",
-        outline: "border-white/10 text-foreground",
-        success: "border-transparent bg-emerald-500/20 text-emerald-400",
+        default: "bg-ink-800 text-white",
+        secondary: "bg-mist text-ink-700",
+        outline: "border border-border text-ink-700",
+        accent: "bg-accent-soft text-accent",
+        success: "bg-green-50 text-success",
+        warning: "bg-amber-50 text-warning",
+        destructive: "bg-red-50 text-destructive",
+        inverse: "bg-white/10 text-white",
       },
     },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
+    defaultVariants: { variant: "default" },
+  },
 );
 
-export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
+export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement>, VariantProps<typeof badgeVariants> {
+  /** Adds a small pulsing dot, for "in progress" states. */
+  pulse?: boolean;
+}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+function Badge({ className, variant, pulse, children, ...props }: BadgeProps) {
+  return (
+    <span className={cn(badgeVariants({ variant }), className)} {...props}>
+      {pulse && (
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
+        </span>
+      )}
+      {children}
+    </span>
+  );
 }
 
 export { Badge, badgeVariants };

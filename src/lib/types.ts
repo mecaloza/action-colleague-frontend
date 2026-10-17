@@ -8,8 +8,6 @@ export interface User {
   avatar?: string;
   department?: string;
   position?: string;
-  leader_id?: string;
-  leader_name?: string;
   is_active?: boolean;
 }
 
@@ -32,7 +30,6 @@ export interface CreateUserRequest {
   role: Role;
   department?: string;
   position?: string;
-  leader_id?: string;
 }
 
 export interface UpdateUserRequest {
@@ -41,7 +38,6 @@ export interface UpdateUserRequest {
   role?: Role;
   department?: string;
   position?: string;
-  leader_id?: string;
   is_active?: boolean;
 }
 

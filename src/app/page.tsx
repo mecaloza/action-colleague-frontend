@@ -2,30 +2,17 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/auth-context";
-import { Loader2 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { SplashScreen } from "@/components/layout/splash-screen";
+import { homeFor, useAuth } from "@/contexts/auth-context";
 
 export default function Home() {
-  const t = useTranslations("common");
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { user, status } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
-    if (!isAuthenticated) {
-      router.push("/login");
-    } else if (user?.role === "admin") {
-      router.push("/admin/dashboard");
-    } else {
-      router.push("/dashboard");
-    }
-  }, [isAuthenticated, isLoading, user, router]);
+    if (status === "anonymous") router.replace("/login");
+    else if (status === "authenticated") router.replace(homeFor(user));
+  }, [status, user, router]);
 
-  return (
-    <div className="flex h-screen items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      <span className="sr-only">{t("loading")}</span>
-    </div>
-  );
+  return <SplashScreen />;
 }

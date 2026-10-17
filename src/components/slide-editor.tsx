@@ -121,8 +121,7 @@ export function SlideEditor({ onSlidesComplete, className = "" }: SlideEditorPro
       }
 
       onSlidesComplete(slideImages);
-    } catch (error) {
-      console.error("Error generating slides:", error);
+    } catch {
       alert("Error al generar las slides. Por favor, intenta de nuevo.");
     } finally {
       setIsGenerating(false);

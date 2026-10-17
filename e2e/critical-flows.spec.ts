@@ -1,142 +1,55 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from "@playwright/test";
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+/** Collects uncaught page errors so each test can assert the screen didn't crash. */
+function trackErrors(page: Page): Error[] {
+  const errors: Error[] = [];
+  page.on("pageerror", (error) => errors.push(error));
+  return errors;
+}
 
-test.describe('Critical Flows - Action Colleague', () => {
-  
-  // Cursos
-  test('should load courses page without errors', async ({ page }) => {
-    const errors: Error[] = [];
-    page.on('pageerror', err => errors.push(err));
-    
-    await page.goto(`${BASE_URL}/admin/courses`);
-    await page.waitForLoadState('networkidle');
-    
-    // Verificar que carga
-    await expect(page.locator('h1')).toBeVisible();
-    
-    // No debe tener errores
+test.describe("Admin (sesión iniciada)", () => {
+  test("el panel carga sin errores", async ({ page }) => {
+    const errors = trackErrors(page);
+    await page.goto("/admin");
+    await expect(page.locator("h1").first()).toBeVisible();
     expect(errors).toHaveLength(0);
   });
 
-  // Curso específico
-  test('should load course detail without crashing', async ({ page }) => {
-    const errors: Error[] = [];
-    page.on('pageerror', err => errors.push(err));
-    
-    await page.goto(`${BASE_URL}/admin/courses/15`);
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-    
-    // Verificar que NO hay TypeError
+  test("la biblioteca de cursos carga sin errores", async ({ page }) => {
+    const errors = trackErrors(page);
+    await page.goto("/admin/courses");
+    await expect(page.locator("h1").first()).toBeVisible();
     expect(errors).toHaveLength(0);
   });
 
-  // Evaluaciones
-  test('should render evaluation analytics without errors', async ({ page }) => {
-    const errors: Error[] = [];
-    page.on('pageerror', err => errors.push(err));
-    
-    await page.goto(`${BASE_URL}/admin/courses/15`);
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000);
-    
-    // No debe crashear
+  test("el equipo carga y muestra la tabla", async ({ page }) => {
+    const errors = trackErrors(page);
+    await page.goto("/admin/team");
+    await expect(page.locator("table")).toBeVisible();
     expect(errors).toHaveLength(0);
   });
 
-  // REGRESIÓN BUG: filtro "Por empleado" en evaluaciones
-  test('should filter evaluations by employee without map error', async ({ page }) => {
-    const mapErrors: Error[] = [];
-    page.on('pageerror', err => {
-      if (err.message.includes('map is not a function')) {
-        mapErrors.push(err);
-      }
-    });
-    
-    await page.goto(`${BASE_URL}/admin/courses/15`);
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000);
-    
-    // Ir a tab de Resultados
-    const resultsTab = page.getByRole('tab', { name: /resultados/i });
-    if (await resultsTab.isVisible()) {
-      await resultsTab.click();
-      await page.waitForTimeout(500);
-    }
-    
-    // Click en filtro "Por empleado" / "Por Empleado"
-    const employeeFilter = page.getByRole('button', { name: /por empleado/i });
-    if (await employeeFilter.isVisible()) {
-      await employeeFilter.click();
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(1000);
-    }
-    
-    // NO debe haber errores de .map
-    expect(mapErrors).toHaveLength(0);
+  test("las URLs anteriores redirigen a las nuevas", async ({ page }) => {
+    await page.goto("/admin/employees");
+    await expect(page).toHaveURL(/\/admin\/team$/);
+    await page.goto("/admin/dashboard");
+    await expect(page).toHaveURL(/\/admin$/);
+    await page.goto("/admin/documents");
+    await expect(page).toHaveURL(/\/admin$/);
   });
 
-  // Empleados (el que está crasheando ahora)
-  test('should load employees page without map error', async ({ page }) => {
-    const mapErrors: Error[] = [];
-    page.on('pageerror', err => {
-      if (err.message.includes('map is not a function')) {
-        mapErrors.push(err);
-      }
-    });
-    
-    await page.goto(`${BASE_URL}/admin/employees`);
-    await page.waitForLoadState('networkidle');
-    
-    expect(mapErrors).toHaveLength(0);
-  });
+  test("el menú móvil se abre, navega y se cierra con Escape", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/admin");
+    await page.getByRole("button", { name: "Abrir menú" }).click();
+    const menu = page.getByRole("dialog", { name: "Menú principal" });
+    await expect(menu).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
 
-  // Empleados - debe renderear tabla
-  test('should render employees table', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/employees`);
-    await page.waitForLoadState('networkidle');
-    
-    // Debe existir tabla
-    const table = page.locator('table');
-    await expect(table).toBeVisible();
-  });
-
-  // Dashboard
-  test('should load admin dashboard', async ({ page }) => {
-    const errors: Error[] = [];
-    page.on('pageerror', err => errors.push(err));
-    
-    await page.goto(`${BASE_URL}/admin/dashboard`);
-    await page.waitForLoadState('networkidle');
-    
-    await expect(page.locator('h1')).toBeVisible();
-    expect(errors).toHaveLength(0);
-  });
-
-  // Documentos
-  test('should load documents page', async ({ page }) => {
-    const errors: Error[] = [];
-    page.on('pageerror', err => errors.push(err));
-    
-    await page.goto(`${BASE_URL}/admin/documents`);
-    await page.waitForLoadState('domcontentloaded');
-    
-    // Verificar que tabla carga
-    const table = page.locator('table');
-    await expect(table).toBeVisible({ timeout: 10000 });
-    
-    expect(errors).toHaveLength(0);
-  });
-
-  // Cursos lista completa
-  test('should load all courses without crash', async ({ page }) => {
-    const errors: Error[] = [];
-    page.on('pageerror', err => errors.push(err));
-    
-    await page.goto(`${BASE_URL}/admin/courses`);
-    await page.waitForLoadState('networkidle');
-    
-    expect(errors).toHaveLength(0);
+    await page.getByRole("button", { name: "Abrir menú" }).click();
+    await menu.getByRole("link", { name: "Cursos" }).click();
+    await expect(page).toHaveURL(/\/admin\/courses$/);
+    await expect(menu).toBeHidden();
   });
 });

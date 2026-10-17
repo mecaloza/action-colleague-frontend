@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  // Single light theme; "class" keeps stray `dark:` utilities inert (the class is never set).
   darkMode: ["class"],
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -10,10 +11,8 @@ const config: Config = {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
+      padding: { DEFAULT: "1rem", sm: "1.5rem", lg: "2.5rem" },
+      screens: { "2xl": "1360px" },
     },
     extend: {
       colors: {
@@ -41,6 +40,8 @@ const config: Config = {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
+          hover: "#e54400",
+          soft: "#fff1ea",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",
@@ -50,40 +51,52 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        ink: {
+          950: "#0b0b0b",
+          900: "#121212",
+          800: "#1d1d1d",
+          700: "#292929",
+          600: "#3a3a3a",
+          500: "#5c5c5c",
+        },
+        mist: "#f4f4f4",
+        fog: "#ebebeb",
+        success: "#15803d",
+        warning: "#b45309",
+      },
+      fontFamily: {
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-sans)", "system-ui", "sans-serif"],
+      },
+      letterSpacing: {
+        label: "0.14em",
+        tightest: "-0.035em",
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "var(--radius)",
+        sm: "var(--radius)",
       },
       keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-        "fade-in": {
-          from: { opacity: "0" },
-          to: { opacity: "1" },
-        },
+        "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
         "slide-up": {
           from: { opacity: "0", transform: "translateY(12px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
-        "slide-in": {
-          from: { opacity: "0", transform: "translateX(-12px)" },
-          to: { opacity: "1", transform: "translateX(0)" },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "progress-indeterminate": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(300%)" },
         },
       },
       animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-        "fade-in": "fade-in 0.4s ease-out",
-        "slide-up": "slide-up 0.5s ease-out",
-        "slide-in": "slide-in 0.4s ease-out",
+        "fade-in": "fade-in 0.3s ease-out",
+        "slide-up": "slide-up 0.45s cubic-bezier(0.22, 1, 0.36, 1)",
+        shimmer: "shimmer 1.6s linear infinite",
+        "progress-indeterminate": "progress-indeterminate 1.4s ease-in-out infinite",
       },
     },
   },

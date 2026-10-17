@@ -69,13 +69,11 @@ export function CourseCreationManual({
     video_id: number;
     storage_url: string;
   }) => {
-    console.log("Video uploaded:", data);
     setVideoData(data);
     setCanProceed(true);
   };
 
   const handleSlidesComplete = (slideImages: Blob[]) => {
-    console.log("Slides generated:", slideImages.length);
     setSlideBlobs(slideImages);
     setCanProceed(true);
   };
@@ -134,7 +132,6 @@ export function CourseCreationManual({
       }
 
       const result = await response.json();
-      console.log("Video composed:", result);
 
       const composedVideoUrl = result.video_url || result.storage_url;
       setFinalVideoId(result.video_id || videoData.video_id);
@@ -147,7 +144,6 @@ export function CourseCreationManual({
         onComplete?.(result.video_id || videoData.video_id);
       }
     } catch (error) {
-      console.error("Composition error:", error);
       setProcessingError(
         error instanceof Error
           ? error.message
@@ -187,13 +183,11 @@ export function CourseCreationManual({
       }
 
       const courseData = await courseResponse.json();
-      console.log("Course created:", courseData);
       
       setCreatedCourseId(courseData.id);
       setProcessingState("success");
       onComplete?.(courseData.id);
     } catch (error) {
-      console.error("Course creation error:", error);
       setProcessingError(
         error instanceof Error
           ? error.message
@@ -387,7 +381,7 @@ export function CourseCreationManual({
                     Esto puede tomar unos minutos. Por favor, espera.
                   </p>
                 </div>
-                <Progress value={undefined} className="w-full max-w-md" />
+                <Progress indeterminate className="w-full max-w-md" />
               </div>
             )}
 

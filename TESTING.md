@@ -1,104 +1,43 @@
-# Testing - Action Colleague Frontend 🧪
+# Pruebas — Action Colleague (frontend)
 
-## Setup
+## Estáticas
 
 ```bash
-npm install -D @playwright/test
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+## End-to-end (Playwright)
+
+Se corren contra un backend local con datos de prueba (nunca contra producción).
+
+```bash
+# 1. Backend (repo action-colleague-backend): SQLite local + usuarios de prueba
+SEED_PASSWORD='elige-una-clave' .venv/bin/python -m scripts.seed_dev
+.venv/bin/uvicorn app.main:app --port 8001
+
+# 2. Frontend apuntando a ese backend
+NEXT_PUBLIC_API_URL=http://localhost:8001/api/v1 npm run dev
+
+# 3. Pruebas (otra terminal)
 npx playwright install chromium
-```
-
-## Running Tests
-
-### Local Development
-```bash
-# Asegúrate de tener el servidor corriendo en :3001
-npm run dev
-
-# En otra terminal:
-PLAYWRIGHT_BASE_URL=http://localhost:3001 npm run test:e2e
-```
-
-### Production
-```bash
+E2E_ADMIN_EMAIL=admin@local.test E2E_ADMIN_PASSWORD='elige-una-clave' \
+E2E_LEARNER_EMAIL=colaborador@local.test E2E_LEARNER_PASSWORD='elige-una-clave' \
 npm run test:e2e
-# Default: https://action-colleague.vercel.app
 ```
 
-### Headed Mode (ver el browser)
-```bash
-npm run test:e2e:headed
-```
+Variables (nunca en el repo):
 
-### Ver Reporte
-```bash
-npm run test:e2e:report
-```
+| Variable | Uso |
+|---|---|
+| `PLAYWRIGHT_BASE_URL` | URL del frontend (por defecto `http://localhost:3001`). |
+| `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD` | Admin de prueba. La sesión se guarda en `playwright/.auth/` (ignorado por git). |
+| `E2E_LEARNER_EMAIL`, `E2E_LEARNER_PASSWORD` | Colaborador de prueba (opcional; sin ellas se omite su prueba). |
 
-## Test Coverage
+Otros comandos: `npm run test:e2e:headed` (con navegador visible) y `npm run test:e2e:report`.
 
-### Critical Flows ✅
-- Cursos: lista, detalle, creación
-- Empleados: lista, mapeo seguro (fix bug s.map)
-- Evaluaciones: analytics sin crashes
-- Dashboard: carga correcta
-- Documentos: tabla visible
-- Navegación general
+## Qué cubren
 
-### Authentication
-Los tests usan credenciales admin:
-- Email: `admin@actioncolleague.com`
-- Password: `admin123`
-
-Estado guardado en `playwright/.auth/user.json`
-
-## Verification Workflow
-
-Antes de marcar un fix como DONE:
-
-```bash
-./scripts/verify-fix.sh
-```
-
-Este script:
-1. ✅ Build local
-2. ✅ Tests E2E local
-3. ✅ Deploy a Vercel
-4. ✅ Tests E2E en producción
-
-**SOLO si pasan todos → DONE** 🎯
-
-## Bug Fix Log
-
-### 2026-03-25: s.map is not a function
-
-**Error reportado:**
-```
-TypeError: s.map is not a function
-at ec (page-10921728000b0368.js:1:25633)
-```
-
-**Causa:**
-API `getUsers()` podía devolver algo que no era array.
-
-**Fix aplicado:**
-1. Guard en API layer (`src/lib/api.ts`):
-   ```typescript
-   if (!Array.isArray(raw)) {
-     console.error('[API] getUsers returned non-array:', raw);
-     return [];
-   }
-   ```
-
-2. Guard en component layer (`src/app/admin/employees/page.tsx`):
-   ```typescript
-   const safeUsers = Array.isArray(users) ? users : [];
-   ```
-
-**Verificación:**
-- Build: ✅
-- Tests E2E local: ✅ 9/9
-- Deploy: ✅
-- Tests E2E producción: ✅ 9/9
-
-**Status:** ✅ DONE
-**Deployed:** https://action-colleague.vercel.app
+- `e2e/critical-flows.spec.ts`: panel, biblioteca de cursos, equipo, redirecciones de URLs viejas y menú móvil (con sesión de admin).
+- `e2e/session.spec.ts`: login con `next`, protección contra redirecciones a otros dominios, error de contraseña en español, cierre de sesión y acceso de colaboradores a `/admin`.
